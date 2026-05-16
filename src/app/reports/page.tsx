@@ -1,7 +1,9 @@
-import { AppShell } from "@/components/AppShell";
-import { MetricCard, StatusPill } from "@/components/ui";
-import { appointments, customers, orders, services, staff } from "@/lib/seed";
-import { dashboardMetrics } from "@/lib/analytics";
-import { currency } from "@/lib/utils";
+export const dynamic = "force-dynamic";
 
-export default function ReportsPage() { const metrics = dashboardMetrics(new Date("2026-05-15T12:00:00+08:00"), appointments, orders, customers, services, staff); const avg = orders.length ? metrics.monthRevenue / orders.length : 0; return <AppShell title="報表分析" subtitle="日 / 月營收、服務排行、技師排行、回訪率、客單價、來源與庫存消耗分析。"><section className="grid gap-4 md:grid-cols-3"><MetricCard label="月營收" value={currency.format(metrics.monthRevenue)} hint="本月已建立訂單"/><MetricCard label="客單價" value={currency.format(avg)} hint="訂單平均金額"/><MetricCard label="回訪率" value={`${Math.round(metrics.returningCustomers / customers.length * 100)}%`} hint="有 lastVisit 的客戶比例"/></section><section className="mt-5 grid gap-5 lg:grid-cols-2"><div className="card p-5"><h2 className="font-bold text-plum">預約來源</h2>{["LINE", "Instagram", "電話", "現場", "官網"].map((source) => <div key={source} className="mt-3 flex justify-between rounded-2xl bg-white p-4"><span>{source}</span><StatusPill>{appointments.filter((item) => item.source === source).length} 筆</StatusPill></div>)}</div><div className="card p-5"><h2 className="font-bold text-plum">服務銷售排行</h2>{metrics.serviceRanking.map((item) => <div key={item.name} className="mt-3 flex justify-between rounded-2xl bg-white p-4"><span>{item.name}</span><strong>{item.count}</strong></div>)}</div></section></AppShell>; }
+import { ReportsView } from "@/components/ModuleViews";
+import { loadAppData } from "@/lib/app-data";
+
+export default async function ReportsPage() {
+  const data = await loadAppData();
+  return <ReportsView data={data} />;
+}
