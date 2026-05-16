@@ -34,7 +34,7 @@ export async function loginAction(formData: FormData) {
   }
 
   try {
-    await ensureOwnerWorkspaceForUser(result.data.user);
+    await ensureOwnerWorkspaceForUser(result.data.user, supabase);
   } catch {
     redirect(`/login?${params({ error: "auth_bootstrap_failed", next })}`);
   }
