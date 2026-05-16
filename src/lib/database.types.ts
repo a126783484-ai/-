@@ -389,7 +389,7 @@ export type Database = {
           id: string;
           workspace_id: string;
           staff_id: string;
-          date: string;
+          shift_date: string;
           start_time: string;
           end_time: string;
           leave: boolean;
@@ -398,7 +398,7 @@ export type Database = {
           id?: string;
           workspace_id: string;
           staff_id: string;
-          date: string;
+          shift_date: string;
           start_time: string;
           end_time: string;
           leave?: boolean;
@@ -407,7 +407,7 @@ export type Database = {
           id?: string;
           workspace_id?: string;
           staff_id?: string;
-          date?: string;
+          shift_date?: string;
           start_time?: string;
           end_time?: string;
           leave?: boolean;
