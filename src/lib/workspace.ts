@@ -2,10 +2,11 @@ import type { User } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
+type WorkspaceRow = Database['public']['Tables']['workspaces']['Row'];
 type WorkspaceInsert = Database['public']['Tables']['workspaces']['Insert'];
 type WorkspaceMemberInsert = Database['public']['Tables']['workspace_members']['Insert'];
 
-export async function createWorkspace(input: WorkspaceInsert) {
+export async function createWorkspace(input: WorkspaceInsert): Promise<WorkspaceRow> {
   const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
@@ -18,7 +19,7 @@ export async function createWorkspace(input: WorkspaceInsert) {
     throw error;
   }
 
-  return data;
+  return data as WorkspaceRow;
 }
 
 export async function createWorkspaceOwner(input: WorkspaceMemberInsert) {
