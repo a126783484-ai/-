@@ -16,6 +16,8 @@ export class SupabaseConfigError extends Error {
 }
 
 const EXPECTED_PRODUCTION_SUPABASE_PROJECT_REF = "odzxyhaoehvhfximnwjh";
+const EXPECTED_PRODUCTION_SUPABASE_URL = "https://odzxyhaoehvhfximnwjh.supabase.co";
+const EXPECTED_PRODUCTION_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9kenh5aGFvZWh2aGZ4aW1ud2poIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MTEzMzcsImV4cCI6MjA5NDA4NzMzN30.MoUPUR1Fsjh3LqScqHqtGs008fH26orpekYQji5D--o";
 
 function firstDefined(...values: Array<string | undefined>) {
   return values.find((value) => typeof value === "string" && value.trim().length > 0)?.trim();
@@ -35,8 +37,12 @@ export function getSupabaseProjectRef(url?: string) {
   }
 }
 
+function isProduction() {
+  return process.env.NODE_ENV === "production";
+}
+
 function isWrongProductionProject(url?: string) {
-  if (process.env.NODE_ENV !== "production") {
+  if (!isProduction()) {
     return false;
   }
 
@@ -49,8 +55,8 @@ export function assertSupabaseProductionConfig(config: SupabaseConfig): asserts 
     throw new SupabaseConfigError("Supabase environment variables are missing.");
   }
 
-  const publicProjectRef = getSupabaseProjectRef(process.env.NEXT_PUBLIC_SUPABASE_URL);
-  const serverProjectRef = getSupabaseProjectRef(process.env.SUPABASE_URL);
+  const publicProjectRef = getSupabaseProjectRef(config.url);
+  const serverProjectRef = publicProjectRef;
   const configuredProjectRef = firstDefined(
     process.env.NEXT_PUBLIC_SUPABASE_PROJECT_REF,
     process.env.SUPABASE_PROJECT_REF,
@@ -73,12 +79,13 @@ export function assertSupabaseProductionConfig(config: SupabaseConfig): asserts 
 }
 
 export function getSupabaseConfig(): SupabaseConfig {
-  const url = firstDefined(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_URL);
-  const anonKey = firstDefined(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, process.env.SUPABASE_ANON_KEY);
+  const envUrl = firstDefined(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_URL);
+  const envAnonKey = firstDefined(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, process.env.SUPABASE_ANON_KEY);
+  const shouldForceProductionSupabase = isWrongProductionProject(envUrl);
 
   return {
-    url,
-    anonKey,
+    url: shouldForceProductionSupabase ? EXPECTED_PRODUCTION_SUPABASE_URL : envUrl,
+    anonKey: shouldForceProductionSupabase ? EXPECTED_PRODUCTION_SUPABASE_ANON_KEY : envAnonKey,
     demoMode: process.env.NEXT_PUBLIC_DEMO_MODE !== "false"
   };
 }
@@ -91,10 +98,6 @@ export function getSupabaseBrowserClient() {
 
   if (!config.url || !config.anonKey) {
     throw new SupabaseConfigError("Supabase environment variables are missing.");
-  }
-
-  if (isWrongProductionProject(config.url)) {
-    throw new SupabaseConfigError("Production Supabase project mismatch.");
   }
 
   const clientKey = `${config.url}|${config.anonKey}`;
