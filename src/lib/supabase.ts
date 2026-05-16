@@ -8,25 +8,81 @@ export interface SupabaseConfig {
   demoMode: boolean;
 }
 
+export class SupabaseConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SupabaseConfigError";
+  }
+}
+
+function firstDefined(...values: Array<string | undefined>) {
+  return values.find((value) => typeof value === "string" && value.trim().length > 0)?.trim();
+}
+
+export function getSupabaseProjectRef(url?: string) {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const hostname = new URL(url).hostname;
+    const [projectRef, ...rest] = hostname.split(".");
+    return rest.join(".") === "supabase.co" && projectRef ? projectRef : null;
+  } catch {
+    return null;
+  }
+}
+
+export function assertSupabaseProductionConfig(config: SupabaseConfig): asserts config is SupabaseConfig & { url: string; anonKey: string } {
+  if (!config.url || !config.anonKey) {
+    throw new SupabaseConfigError("Supabase environment variables are missing.");
+  }
+
+  const publicProjectRef = getSupabaseProjectRef(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const serverProjectRef = getSupabaseProjectRef(process.env.SUPABASE_URL);
+  const configuredProjectRef = firstDefined(
+    process.env.NEXT_PUBLIC_SUPABASE_PROJECT_REF,
+    process.env.SUPABASE_PROJECT_REF
+  );
+
+  if (publicProjectRef && serverProjectRef && publicProjectRef !== serverProjectRef) {
+    throw new SupabaseConfigError(
+      "Supabase URL mismatch: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_URL point to different projects."
+    );
+  }
+
+  const actualProjectRef = getSupabaseProjectRef(config.url);
+
+  if (configuredProjectRef && actualProjectRef && configuredProjectRef !== actualProjectRef) {
+    throw new SupabaseConfigError(
+      "Supabase project mismatch: configured project ref does not match the Supabase URL."
+    );
+  }
+}
+
 export function getSupabaseConfig(): SupabaseConfig {
   return {
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    url: firstDefined(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_URL),
+    anonKey: firstDefined(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, process.env.SUPABASE_ANON_KEY),
     demoMode: process.env.NEXT_PUBLIC_DEMO_MODE !== "false"
   };
 }
 
 let browserClient: SupabaseClient<Database> | null = null;
+let browserClientKey: string | null = null;
 
 export function getSupabaseBrowserClient() {
   const config = getSupabaseConfig();
 
   if (!config.url || !config.anonKey) {
-    throw new Error("Supabase environment variables are missing.");
+    throw new SupabaseConfigError("Supabase environment variables are missing.");
   }
 
-  if (!browserClient) {
-    browserClient = createBrowserClient<Database>(config.url, config.anonKey);
+  const clientKey = `${config.url}|${config.anonKey}`;
+
+  if (!browserClient || browserClientKey !== clientKey) {
+    browserClient = createBrowserClient<Database, "public">(config.url, config.anonKey);
+    browserClientKey = clientKey;
   }
 
   return browserClient;

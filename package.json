@@ -10,7 +10,8 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "db:types": "echo 'Supabase types can be generated with: supabase gen types typescript --project-id <id> > src/lib/database.types.ts'"
+    "db:types": "echo 'Supabase types can be generated with: supabase gen types typescript --project-id <id> > src/lib/database.types.ts'",
+    "verify:production-env": "node scripts/verify-production-env.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "0.7.0",
