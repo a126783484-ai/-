@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { normalizeAuthRedirectTarget } from "@/lib/auth-routes";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { ensureOwnerWorkspaceForUser } from "@/lib/workspace";
 
 function readRequired(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -28,8 +29,14 @@ export async function loginAction(formData: FormData) {
 
   const result = await supabase.auth.signInWithPassword({ email, password: secret });
 
-  if (result.error) {
+  if (result.error || !result.data.user || !result.data.session) {
     redirect(`/login?${params({ error: "invalid_login", next })}`);
+  }
+
+  try {
+    await ensureOwnerWorkspaceForUser(result.data.user);
+  } catch {
+    redirect(`/login?${params({ error: "auth_bootstrap_failed", next })}`);
   }
 
   redirect(next);
