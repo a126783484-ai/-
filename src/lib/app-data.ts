@@ -42,6 +42,22 @@ function emptyWorkspace(): Workspace {
   };
 }
 
+function emptyAppData(user: { id: string; email: string | null }): AppData {
+  return {
+    user,
+    workspace: emptyWorkspace(),
+    currentMember: null,
+    staff: [],
+    services: [],
+    customers: [],
+    appointments: [],
+    orders: [],
+    inventory: [],
+    shifts: [],
+    needsWorkspace: true
+  };
+}
+
 function toWorkspace(row: WorkspaceRow): Workspace {
   return {
     id: row.id,
@@ -180,8 +196,14 @@ async function getUser() {
 
 export async function loadAppData(): Promise<AppData> {
   const { supabase, user } = await getUser();
+  const userSummary = { id: user.id, email: user.email ?? null };
 
-  await ensureOwnerWorkspaceForUser(user);
+  try {
+    await ensureOwnerWorkspaceForUser(user);
+  } catch (error) {
+    console.error("workspace bootstrap failed", error);
+    return emptyAppData(userSummary);
+  }
 
   const { data: memberships, error: membershipError } = await supabase
     .from("workspace_members")
@@ -191,30 +213,19 @@ export async function loadAppData(): Promise<AppData> {
     .order("created_at", { ascending: true });
 
   if (membershipError) {
-    throw membershipError;
+    console.error("workspace membership query failed", membershipError);
+    return emptyAppData(userSummary);
   }
 
   const currentMembership = memberships?.[0] ?? null;
 
   if (!currentMembership) {
-    return {
-      user: { id: user.id, email: user.email ?? null },
-      workspace: emptyWorkspace(),
-      currentMember: null,
-      staff: [],
-      services: [],
-      customers: [],
-      appointments: [],
-      orders: [],
-      inventory: [],
-      shifts: [],
-      needsWorkspace: true
-    };
+    return emptyAppData(userSummary);
   }
 
   const workspaceId = currentMembership.workspace_id;
   const [workspaceResult, staffResult, categoriesResult, servicesResult, customersResult, appointmentsResult, appointmentServicesResult, ordersResult, orderLinesResult, inventoryResult, shiftsResult] = await Promise.all([
-    supabase.from("workspaces").select("*").eq("id", workspaceId).single(),
+    supabase.from("workspaces").select("*").eq("id", workspaceId).maybeSingle(),
     supabase.from("workspace_members").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: true }),
     supabase.from("service_categories").select("*").eq("workspace_id", workspaceId).order("sort_order", { ascending: true }),
     supabase.from("services").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
@@ -231,18 +242,19 @@ export async function loadAppData(): Promise<AppData> {
     .find((result) => result.error)?.error;
 
   if (firstError) {
-    throw firstError;
+    console.error("workspace data query failed", firstError);
+    return emptyAppData(userSummary);
   }
 
   if (!workspaceResult.data) {
-    throw new Error("Workspace was not found for the authenticated membership.");
+    return emptyAppData(userSummary);
   }
 
   const appointmentIds = new Set((appointmentsResult.data ?? []).map((appointment) => appointment.id));
   const orderIds = new Set((ordersResult.data ?? []).map((order) => order.id));
 
   return {
-    user: { id: user.id, email: user.email ?? null },
+    user: userSummary,
     workspace: toWorkspace(workspaceResult.data),
     currentMember: toStaff(currentMembership),
     staff: (staffResult.data ?? []).map(toStaff),
