@@ -4,6 +4,8 @@ const required = [
   "NEXT_PUBLIC_SUPABASE_ANON_KEY"
 ];
 
+const expectedProductionProjectRef = "odzxyhaoehvhfximnwjh";
+
 function firstDefined(...values) {
   return values.find((value) => typeof value === "string" && value.trim().length > 0)?.trim();
 }
@@ -31,7 +33,8 @@ const publicRef = projectRefFromUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const serverRef = projectRefFromUrl(process.env.SUPABASE_URL);
 const expectedRef = firstDefined(
   process.env.NEXT_PUBLIC_SUPABASE_PROJECT_REF,
-  process.env.SUPABASE_PROJECT_REF
+  process.env.SUPABASE_PROJECT_REF,
+  expectedProductionProjectRef
 );
 
 if (!publicRef) {
@@ -45,7 +48,7 @@ if (serverRef && serverRef !== publicRef) {
 }
 
 if (expectedRef && expectedRef !== publicRef) {
-  console.error("SUPABASE_PROJECT_REF does not match NEXT_PUBLIC_SUPABASE_URL.");
+  console.error(`Supabase project mismatch: expected ${expectedRef}, got ${publicRef}.`);
   process.exit(1);
 }
 
