@@ -10,6 +10,11 @@ function metadataString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
+function defaultWorkspaceName(user: User) {
+  const emailPrefix = user.email?.split("@")[0]?.trim();
+  return emailPrefix ? `${emailPrefix} 的店鋪` : "我的店鋪";
+}
+
 export async function createWorkspace(input: WorkspaceInsert): Promise<WorkspaceRow> {
   const supabase = await createSupabaseServerClient();
 
@@ -63,17 +68,13 @@ export async function bootstrapOwnerWorkspace(params: {
 }
 
 export async function ensureOwnerWorkspaceForUser(user: User) {
-  const workspaceName = metadataString(user.user_metadata?.workspace_name);
-
-  if (!workspaceName) {
-    return null;
-  }
+  const workspaceName = metadataString(user.user_metadata?.workspace_name) ?? defaultWorkspaceName(user);
 
   return bootstrapOwnerWorkspace({
     user,
     workspaceName,
     phone: metadataString(user.user_metadata?.phone),
-    displayName: metadataString(user.user_metadata?.display_name)
+    displayName: metadataString(user.user_metadata?.display_name) ?? user.email ?? "Owner"
   });
 }
 
