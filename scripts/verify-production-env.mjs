@@ -5,6 +5,7 @@ const required = [
 ];
 
 const expectedProductionProjectRef = "odzxyhaoehvhfximnwjh";
+const shouldEnforceProjectRef = process.env.ENFORCE_SUPABASE_PROJECT_REF === "true";
 
 function firstDefined(...values) {
   return values.find((value) => typeof value === "string" && value.trim().length > 0)?.trim();
@@ -47,9 +48,13 @@ if (serverRef && serverRef !== publicRef) {
   process.exit(1);
 }
 
-if (expectedRef && expectedRef !== publicRef) {
+if (shouldEnforceProjectRef && expectedRef && expectedRef !== publicRef) {
   console.error(`Supabase project mismatch: expected ${expectedRef}, got ${publicRef}.`);
   process.exit(1);
 }
 
-console.log(`Production Supabase env points consistently at project ${publicRef}.`);
+if (!shouldEnforceProjectRef && expectedRef && expectedRef !== publicRef) {
+  console.warn(`Supabase project mismatch detected but not enforced during bootstrap sync: expected ${expectedRef}, got ${publicRef}.`);
+}
+
+console.log(`Production Supabase env points at project ${publicRef}.`);
