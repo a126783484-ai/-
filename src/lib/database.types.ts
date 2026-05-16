@@ -39,6 +39,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      workspace_members: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          user_id: string;
+          role: Database['public']['Enums']['workspace_role'];
+          display_name: string;
+          phone: string | null;
+          active: boolean;
+          commission_rate: number;
+          specialties: string[];
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          user_id: string;
+          role?: Database['public']['Enums']['workspace_role'];
+          display_name: string;
+          phone?: string | null;
+          active?: boolean;
+          commission_rate?: number;
+          specialties?: string[];
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          user_id?: string;
+          role?: Database['public']['Enums']['workspace_role'];
+          display_name?: string;
+          phone?: string | null;
+          active?: boolean;
+          commission_rate?: number;
+          specialties?: string[];
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       customers: {
         Row: {
           id: string;
