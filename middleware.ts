@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { isProtectedAppRoute } from "@/src/lib/auth-routes";
+import { isProtectedAppRoute } from "@/lib/auth-routes";
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
