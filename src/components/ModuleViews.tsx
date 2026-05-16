@@ -3,6 +3,7 @@
 import { AppShell } from "@/components/AppShell";
 import { updateWorkspaceSettingsAction } from "@/app/settings/actions";
 import { createCustomerAction } from "@/app/customers/actions";
+import { createServiceAction } from "@/app/services/actions";
 import { ModuleTable } from "@/components/ModuleTable";
 import { FormNotice } from "@/components/FormNotice";
 import { MetricCard, StatusPill, EmptyState } from "@/components/ui";
@@ -129,8 +130,55 @@ export function CustomersView({ data, notice }: { data: AppData; notice?: { kind
   );
 }
 
-export function ServicesView({ data }: { data: AppData }) {
-  return <AppShell title="服務項目管理" subtitle="分類、價格、所需時間、說明、啟用狀態與加購項目管理。" {...shellProps(data)}><ModuleTable rows={data.services} searchPlaceholder="搜尋服務名稱、分類、說明" filterOptions={["美甲", "美睫", "美容", "SPA", "霧眉", "加購"]} emptyTitle="尚未建立服務項目" columns={[{ key: "name", label: "服務", render: (row) => <><strong>{row.name}</strong><p className="text-ink/60">{row.description}</p></> }, { key: "category", label: "分類", render: (row) => <StatusPill>{row.category}</StatusPill> }, { key: "price", label: "價格", sortValue: (row) => row.price, render: (row) => currency.format(row.price) }, { key: "duration", label: "時間", sortValue: (row) => row.durationMin, render: (row) => `${row.durationMin} 分鐘` }, { key: "addon", label: "加購", render: (row) => row.addOn ? <StatusPill tone="amber">加購</StatusPill> : "主服務" }, { key: "enabled", label: "狀態", render: (row) => row.enabled ? <StatusPill tone="sage">啟用</StatusPill> : <StatusPill>停用</StatusPill> }]} /></AppShell>;
+export function ServicesView({ data, notice }: { data: AppData; notice?: { kind: "error" | "success"; message: string } }) {
+  const canEditServices = !data.needsWorkspace && (data.currentMember ? ["owner", "admin"].includes(data.currentMember.role) : true);
+
+  return (
+    <AppShell title="服務項目管理" subtitle="分類、價格、所需時間、說明、啟用狀態與加購項目管理。" {...shellProps(data)}>
+      <div className="grid gap-5">
+        {notice ? <FormNotice kind={notice.kind}>{notice.message}</FormNotice> : null}
+        {canEditServices ? (
+          <form action={createServiceAction} className="card p-5">
+            <h2 className="text-lg font-bold text-plum">新增服務項目</h2>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <label className="block text-sm font-semibold text-plum">
+                服務名稱
+                <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="name" required />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                分類
+                <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="category" placeholder="例如：美甲" />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                價格
+                <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="price" type="number" min="0" step="1" required />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                所需時間
+                <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="durationMin" type="number" min="1" step="1" required />
+              </label>
+              <label className="block text-sm font-semibold text-plum md:col-span-2">
+                說明
+                <textarea className="mt-2 min-h-24 w-full rounded-2xl border border-champagne p-3" name="description" />
+              </label>
+              <label className="flex items-center gap-3 text-sm font-semibold text-plum">
+                <input type="checkbox" name="addOn" />
+                加購項目
+              </label>
+              <label className="flex items-center gap-3 text-sm font-semibold text-plum">
+                <input type="checkbox" name="enabled" defaultChecked />
+                啟用
+              </label>
+            </div>
+            <button type="submit" className="mobile-tap mt-5 rounded-2xl bg-plum font-semibold text-white">
+              建立服務
+            </button>
+          </form>
+        ) : null}
+        <ModuleTable rows={data.services} searchPlaceholder="搜尋服務名稱、分類、說明" filterOptions={["美甲", "美睫", "美容", "SPA", "霧眉", "加購"]} emptyTitle="尚未建立服務項目" columns={[{ key: "name", label: "服務", render: (row) => <><strong>{row.name}</strong><p className="text-ink/60">{row.description}</p></> }, { key: "category", label: "分類", render: (row) => <StatusPill>{row.category}</StatusPill> }, { key: "price", label: "價格", sortValue: (row) => row.price, render: (row) => currency.format(row.price) }, { key: "duration", label: "時間", sortValue: (row) => row.durationMin, render: (row) => `${row.durationMin} 分鐘` }, { key: "addon", label: "加購", render: (row) => row.addOn ? <StatusPill tone="amber">加購</StatusPill> : "主服務" }, { key: "enabled", label: "狀態", render: (row) => row.enabled ? <StatusPill tone="sage">啟用</StatusPill> : <StatusPill>停用</StatusPill> }]} />
+      </div>
+    </AppShell>
+  );
 }
 
 export function CheckoutView({ data }: { data: AppData }) {
