@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+body { @apply bg-blush text-ink antialiased; }
+button, a, input, select, textarea { @apply focus:outline-none focus:ring-2 focus:ring-rose/40 focus:ring-offset-2; }
+.card { @apply rounded-[1.75rem] border border-white/70 bg-white/85 shadow-soft backdrop-blur; }
+.mobile-tap { @apply min-h-11 px-4 py-3; }
