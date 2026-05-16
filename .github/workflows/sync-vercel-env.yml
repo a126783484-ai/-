@@ -42,30 +42,41 @@ jobs:
           mkdir -p .vercel
           printf '{"orgId":"%s","projectId":"%s"}' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
 
-      - name: Replace Vercel production env
+      - name: Upsert Vercel production env through REST API
+        shell: bash
         run: |
-          set -e
-          add_env () {
-            name="$1"
-            value="$2"
-            vercel env rm "$name" production --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE" || true
-            sleep 2
-            printf "%s" "$value" | vercel env add "$name" production --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE"
+          set -euo pipefail
+
+          upsert_env () {
+            local key="$1"
+            local value="$2"
+            local payload
+            payload=$(jq -n \
+              --arg key "$key" \
+              --arg value "$value" \
+              '{key:$key,value:$value,type:"plain",target:["production"]}')
+
+            curl --fail-with-body \
+              --request POST \
+              --url "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?upsert=true&teamId=${VERCEL_ORG_ID}" \
+              --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+              --header "Content-Type: application/json" \
+              --data "$payload"
           }
 
-          add_env NEXT_PUBLIC_SUPABASE_URL "$TARGET_SUPABASE_URL"
-          add_env SUPABASE_URL "$TARGET_SUPABASE_URL"
-          add_env NEXT_PUBLIC_SUPABASE_ANON_KEY "$TARGET_SUPABASE_ANON_KEY"
-          add_env SUPABASE_ANON_KEY "$TARGET_SUPABASE_ANON_KEY"
-          add_env SUPABASE_PUBLISHABLE_KEY "$TARGET_SUPABASE_PUBLISHABLE_KEY"
-          add_env NEXT_PUBLIC_SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
-          add_env SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
+          upsert_env NEXT_PUBLIC_SUPABASE_URL "$TARGET_SUPABASE_URL"
+          upsert_env SUPABASE_URL "$TARGET_SUPABASE_URL"
+          upsert_env NEXT_PUBLIC_SUPABASE_ANON_KEY "$TARGET_SUPABASE_ANON_KEY"
+          upsert_env SUPABASE_ANON_KEY "$TARGET_SUPABASE_ANON_KEY"
+          upsert_env SUPABASE_PUBLISHABLE_KEY "$TARGET_SUPABASE_PUBLISHABLE_KEY"
+          upsert_env NEXT_PUBLIC_SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
+          upsert_env SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
 
-      - name: List production env after sync
+      - name: List production env after API sync
         run: vercel env ls production --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE"
 
       - name: Wait for Vercel env propagation
-        run: sleep 45
+        run: sleep 60
 
       - name: Deploy production
         run: vercel deploy --prod --force --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE"
