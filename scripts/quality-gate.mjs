@@ -1,8 +1,14 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = process.cwd();
 const sourceDirs = ['src/app', 'src/components', 'src/lib'];
+const requiredFiles = [
+  {
+    path: 'docs/deployment-readiness.md',
+    message: 'Deployment readiness rules must be documented.'
+  }
+];
 const blockedPatterns = [
   {
     pattern: /登入\s*Demo\s*Workspace/i,
@@ -34,6 +40,12 @@ function walk(dir) {
 }
 
 const failures = [];
+
+for (const required of requiredFiles) {
+  if (!existsSync(join(root, required.path))) {
+    failures.push(`${required.path}: ${required.message}`);
+  }
+}
 
 for (const dir of sourceDirs) {
   for (const file of walk(dir)) {
