@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { signInAction } from "@/app/account/actions";
+import { loginAction } from "@/app/login/actions";
 
 interface LoginPageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -36,7 +36,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </div>
         ) : null}
 
-        <form action={signInAction} className="mt-6 space-y-3">
+        <form action={loginAction} className="mt-6 space-y-3">
           <input type="hidden" name="next" value={next} />
           <input
             className="mobile-tap w-full rounded-2xl border border-champagne"
