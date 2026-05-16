@@ -54,11 +54,10 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Commit / push status
 
-- Pending commit for the current appointment CRUD round.
-- Previous commit: `4da959b` - `Add service creation flow`
+- Current round commit: `1d3803b` - `Improve beauty OS operational readiness`
 - Pushed to: `origin/codex/beauty-os-auto-work`
-- Current round commit hash: pending
-- Current round push status: pending
+- Current round push status: completed
+- Previous commit: `4da959b` - `Add service creation flow`
 
 ## Remaining issues
 
