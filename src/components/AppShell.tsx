@@ -56,8 +56,19 @@ export function AppShell({
           {children}
         </section>
       </div>
-      <nav className="fixed inset-x-3 bottom-3 z-20 grid grid-cols-5 rounded-[1.5rem] bg-white/90 p-2 shadow-soft backdrop-blur lg:hidden">
-        {nav.slice(0, 5).map((item) => <Link key={item.href} href={item.href} className="grid place-items-center gap-1 rounded-2xl py-2 text-[11px] font-semibold text-ink/60"><item.icon size={18}/>{item.label}</Link>)}
+      <nav className="fixed inset-x-3 bottom-3 z-20 rounded-[1.5rem] bg-white/90 p-2 shadow-soft backdrop-blur lg:hidden">
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {nav.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="grid min-w-[4.75rem] shrink-0 place-items-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-semibold text-ink/60"
+            >
+              <item.icon size={18} />
+              {item.label}
+            </Link>
+          ))}
+        </div>
       </nav>
     </main>
   );
