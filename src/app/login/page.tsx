@@ -1,23 +1,21 @@
 import Link from "next/link";
 import { loginAction } from "@/app/login/actions";
+import { AuthSubmitButton } from "@/components/AuthSubmitButton";
+import { getAuthError, getAuthMessage, readAuthParam } from "@/lib/auth-feedback";
 
 interface LoginPageProps {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
-function readValue(value: string | string[] | undefined) {
-  return typeof value === "string" ? value : undefined;
-}
-
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = searchParams ? await searchParams : undefined;
-  const error = readValue(params?.error);
-  const message = readValue(params?.message);
-  const next = readValue(params?.next) ?? "/";
+  const error = getAuthError(readAuthParam(params?.error));
+  const message = getAuthMessage(readAuthParam(params?.message));
+  const next = readAuthParam(params?.next) ?? "/";
 
   return (
     <main className="grid min-h-screen place-items-center bg-blush p-4">
-      <section className="card w-full max-w-md p-6">
+      <section className="card w-full max-w-md p-5 sm:p-6">
         <p className="text-sm font-semibold text-rose">Beauty OS</p>
         <h1 className="mt-2 text-3xl font-bold text-plum">登入店鋪後台</h1>
         <p className="mt-2 text-sm text-ink/60">
@@ -25,14 +23,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         </p>
 
         {message ? (
-          <div className="mt-4 rounded-2xl bg-sage/15 p-4 text-sm font-semibold text-plum">
-            {message === "check_email" ? "帳號已建立，請完成 email 驗證後登入。" : "已安全登出。"}
+          <div className="mt-4 rounded-2xl bg-sage/15 p-4 text-sm font-semibold text-plum" role="status">
+            {message}
           </div>
         ) : null}
 
         {error ? (
-          <div className="mt-4 rounded-2xl bg-rose/10 p-4 text-sm font-semibold text-rose">
-            {decodeURIComponent(error)}
+          <div className="mt-4 rounded-2xl bg-rose/10 p-4 text-sm font-semibold text-rose" role="alert">
+            {error}
           </div>
         ) : null}
 
@@ -55,9 +53,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             required
             minLength={8}
           />
-          <button className="mobile-tap w-full rounded-2xl bg-plum text-center font-semibold text-white" type="submit">
-            登入 Workspace
-          </button>
+          <AuthSubmitButton
+            className="mobile-tap w-full rounded-2xl bg-plum text-center font-semibold text-white disabled:cursor-wait disabled:opacity-70"
+            idleText="登入 Workspace"
+            pendingText="正在登入並檢查 workspace…"
+          />
         </form>
 
         <Link className="mt-4 block text-center text-sm font-semibold text-rose" href="/register">
