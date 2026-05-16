@@ -9,6 +9,7 @@ export const authErrorText: Record<string, string> = {
   auth_config_missing: "系統登入設定尚未完成，請聯絡管理員檢查 Supabase 環境變數。",
   invalid_login: "Email 或密碼不正確，或帳號尚未完成 email 驗證。",
   signup_failed: "帳號建立失敗，請確認 email 尚未註冊且密碼符合規則。",
+  supabase_project_mismatch: "Production 後端設定指向錯誤 Supabase 專案。請將 Vercel 環境變數統一到正式 Beauty OS Supabase project 後重新部署。",
   workspace_bootstrap_failed: "帳號已建立，但店鋪 workspace 初始化失敗。請完成 email 驗證後登入；若仍失敗請聯絡管理員。"
 };
 
