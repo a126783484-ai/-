@@ -2,6 +2,11 @@ name: Sync Vercel Env
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/sync-vercel-env.yml
 
 permissions:
   contents: read
@@ -9,25 +14,22 @@ permissions:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    environment: Production
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-      TARGET_SUPABASE_URL: ${{ secrets.TARGET_SUPABASE_URL }}
-      TARGET_SUPABASE_ANON_KEY: ${{ secrets.TARGET_SUPABASE_ANON_KEY }}
-      TARGET_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.TARGET_SUPABASE_PUBLISHABLE_KEY }}
+      VERCEL_ORG_ID: team_yUAeyZBvygQMUAiBkjZvtHAg
+      VERCEL_PROJECT_ID: prj_PLocj0NLT9Zoygol5qCRqPyFlvAa
       TARGET_SUPABASE_PROJECT_REF: odzxyhaoehvhfximnwjh
+      TARGET_SUPABASE_URL: https://odzxyhaoehvhfximnwjh.supabase.co
+      TARGET_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9kenh5aGFvZWh2aGZ4aW1ud2poIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MTEzMzcsImV4cCI6MjA5NDA4NzMzN30.MoUPUR1Fsjh3LqScqHqtGs008fH26orpekYQji5D--o
+      TARGET_SUPABASE_PUBLISHABLE_KEY: sb_publishable_dAql5aMJG_C2fqSBC-wdLA_vC5Z4jZg
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate secrets
+      - name: Validate configuration
         run: |
           test -n "$VERCEL_TOKEN"
           test -n "$VERCEL_ORG_ID"
           test -n "$VERCEL_PROJECT_ID"
-          test -n "$TARGET_SUPABASE_URL"
-          test -n "$TARGET_SUPABASE_ANON_KEY"
           test "$TARGET_SUPABASE_URL" = "https://odzxyhaoehvhfximnwjh.supabase.co"
 
       - name: Install Vercel CLI
@@ -48,13 +50,11 @@ jobs:
             printf "%s" "$value" | vercel env add "$name" production --token "$VERCEL_TOKEN"
           }
 
-          publishable_key="${TARGET_SUPABASE_PUBLISHABLE_KEY:-$TARGET_SUPABASE_ANON_KEY}"
-
           add_env NEXT_PUBLIC_SUPABASE_URL "$TARGET_SUPABASE_URL"
           add_env SUPABASE_URL "$TARGET_SUPABASE_URL"
           add_env NEXT_PUBLIC_SUPABASE_ANON_KEY "$TARGET_SUPABASE_ANON_KEY"
           add_env SUPABASE_ANON_KEY "$TARGET_SUPABASE_ANON_KEY"
-          add_env SUPABASE_PUBLISHABLE_KEY "$publishable_key"
+          add_env SUPABASE_PUBLISHABLE_KEY "$TARGET_SUPABASE_PUBLISHABLE_KEY"
           add_env NEXT_PUBLIC_SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
           add_env SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
 
