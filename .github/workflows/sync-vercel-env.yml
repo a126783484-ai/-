@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_SCOPE: a126783484-2182s-projects
       VERCEL_ORG_ID: team_yUAeyZBvygQMUAiBkjZvtHAg
       VERCEL_PROJECT_ID: prj_PLocj0NLT9Zoygol5qCRqPyFlvAa
       TARGET_SUPABASE_PROJECT_REF: odzxyhaoehvhfximnwjh
@@ -28,6 +29,7 @@ jobs:
       - name: Validate configuration
         run: |
           test -n "$VERCEL_TOKEN"
+          test -n "$VERCEL_SCOPE"
           test -n "$VERCEL_ORG_ID"
           test -n "$VERCEL_PROJECT_ID"
           test "$TARGET_SUPABASE_URL" = "https://odzxyhaoehvhfximnwjh.supabase.co"
@@ -46,8 +48,8 @@ jobs:
           add_env () {
             name="$1"
             value="$2"
-            vercel env rm "$name" production --yes --token "$VERCEL_TOKEN" || true
-            printf "%s" "$value" | vercel env add "$name" production --token "$VERCEL_TOKEN"
+            vercel env rm "$name" production --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE" || true
+            printf "%s" "$value" | vercel env add "$name" production --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE"
           }
 
           add_env NEXT_PUBLIC_SUPABASE_URL "$TARGET_SUPABASE_URL"
@@ -59,4 +61,4 @@ jobs:
           add_env SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
 
       - name: Deploy production
-        run: vercel deploy --prod --yes --token "$VERCEL_TOKEN"
+        run: vercel deploy --prod --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE"
