@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { can } from "@/lib/permissions";
+import type { Role } from "@/lib/types";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
 
 function readRequired(formData: FormData, key: string) {
@@ -49,15 +50,24 @@ export async function createCustomerAction(formData: FormData) {
     redirect(`/customers?${buildSearchParams({ error: "customer_config_missing" })}`);
   }
 
+  let workspaceId = "";
+  let role: Role = "staff";
+
   try {
-    const { workspace, membership } = await getCurrentWorkspaceContext(supabase);
+    const context = await getCurrentWorkspaceContext(supabase);
+    workspaceId = context.workspace.id;
+    role = context.membership.role;
+  } catch {
+    redirect(`/customers?${buildSearchParams({ error: "customer_create_failed" })}`);
+  }
 
-    if (!can(membership.role, "customers")) {
-      redirect(`/customers?${buildSearchParams({ error: "customer_forbidden" })}`);
-    }
+  if (!can(role, "customers")) {
+    redirect(`/customers?${buildSearchParams({ error: "customer_forbidden" })}`);
+  }
 
+  try {
     const { error } = await supabase.from("customers").insert({
-      workspace_id: workspace.id,
+      workspace_id: workspaceId,
       name,
       phone,
       birthday,
