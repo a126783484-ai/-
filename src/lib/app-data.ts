@@ -65,7 +65,10 @@ function toWorkspace(row: WorkspaceRow): Workspace {
     phone: row.phone ?? "",
     address: row.address ?? "",
     brandColor: row.brand_color ?? "#C87486",
-    businessHours: JSON.stringify(row.business_hours ?? {})
+    businessHours:
+      typeof row.business_hours === "string"
+        ? row.business_hours
+        : JSON.stringify(row.business_hours ?? {})
   };
 }
 
