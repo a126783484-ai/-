@@ -4,8 +4,10 @@ import { appointments, customers, orders, services, staff } from "@/lib/seed";
 import { dashboardMetrics } from "@/lib/analytics";
 import { currency, formatTime } from "@/lib/utils";
 import { statusLabel } from "@/lib/appointments";
+import { requireCurrentUser } from "@/lib/session";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  await requireCurrentUser();
   const metrics = dashboardMetrics(new Date("2026-05-15T12:00:00+08:00"), appointments, orders, customers, services, staff);
   return (
     <AppShell title="營運總覽" subtitle="今日預約、營收、技師業績、熱門服務與風險提醒集中管理。">
