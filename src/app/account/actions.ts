@@ -13,6 +13,11 @@ function readRequired(formData: FormData, key: string) {
   return value.trim();
 }
 
+function readOptional(formData: FormData, key: string) {
+  const value = formData.get(key);
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
 function buildSearchParams(input: Record<string, string>) {
   return new URLSearchParams(input).toString();
 }
@@ -21,16 +26,16 @@ export async function signInAction(formData: FormData) {
   const email = readRequired(formData, "email");
   const password = readRequired(formData, "password");
   const next = normalizeAuthRedirectTarget(formData.get("next"));
+  const supabase = await createSupabaseServerClient().catch(() => null);
 
-  try {
-    const supabase = await createSupabaseServerClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (error) {
-      redirect(`/login?${buildSearchParams({ error: error.message, next })}`);
-    }
-  } catch {
+  if (!supabase) {
     redirect(`/login?${buildSearchParams({ error: "auth_config_missing", next })}`);
+  }
+
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    redirect(`/login?${buildSearchParams({ error: "invalid_login", next })}`);
   }
 
   redirect(next);
@@ -49,15 +54,12 @@ export async function createAccountAction(formData: FormData) {
   const workspaceName = readRequired(formData, "workspaceName");
   const email = readRequired(formData, "email");
   const password = readRequired(formData, "password");
-  const phoneValue = formData.get("phone");
-  const displayNameValue = formData.get("displayName");
+  const phone = readOptional(formData, "phone");
+  const displayName = readOptional(formData, "displayName");
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? "http://localhost:3000";
+  const supabase = await createSupabaseServerClient().catch(() => null);
 
-  let supabase;
-
-  try {
-    supabase = await createSupabaseServerClient();
-  } catch {
+  if (!supabase) {
     redirect(`/register?${buildSearchParams({ error: "auth_config_missing" })}`);
   }
 
@@ -68,24 +70,29 @@ export async function createAccountAction(formData: FormData) {
       emailRedirectTo: `${appUrl}/auth/callback?next=/`,
       data: {
         workspace_name: workspaceName,
-        display_name: typeof displayNameValue === "string" ? displayNameValue : undefined
+        display_name: displayName ?? undefined,
+        phone: phone ?? undefined
       }
     }
   });
 
   if (result.error || !result.data.user) {
-    redirect(`/register?${buildSearchParams({ error: result.error?.message ?? "Unable to create account" })}`);
+    redirect(`/register?${buildSearchParams({ error: "signup_failed" })}`);
   }
-
-  await bootstrapOwnerWorkspace({
-    user: result.data.user,
-    workspaceName,
-    phone: typeof phoneValue === "string" && phoneValue.trim() ? phoneValue.trim() : null,
-    displayName: typeof displayNameValue === "string" && displayNameValue.trim() ? displayNameValue.trim() : null
-  });
 
   if (!result.data.session) {
     redirect("/login?message=check_email");
+  }
+
+  try {
+    await bootstrapOwnerWorkspace({
+      user: result.data.user,
+      workspaceName,
+      phone,
+      displayName
+    });
+  } catch {
+    redirect(`/login?${buildSearchParams({ error: "workspace_bootstrap_failed" })}`);
   }
 
   redirect("/");

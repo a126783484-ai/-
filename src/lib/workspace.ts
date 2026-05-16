@@ -2,15 +2,19 @@ import type { User } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
-type WorkspaceRow = Database['public']['Tables']['workspaces']['Row'];
-type WorkspaceInsert = Database['public']['Tables']['workspaces']['Insert'];
-type WorkspaceMemberInsert = Database['public']['Tables']['workspace_members']['Insert'];
+type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
+type WorkspaceInsert = Database["public"]["Tables"]["workspaces"]["Insert"];
+type WorkspaceMemberInsert = Database["public"]["Tables"]["workspace_members"]["Insert"];
+
+function metadataString(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
 
 export async function createWorkspace(input: WorkspaceInsert): Promise<WorkspaceRow> {
   const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
-    .from('workspaces')
+    .from("workspaces")
     .insert(input)
     .select()
     .single();
@@ -26,7 +30,7 @@ export async function createWorkspaceOwner(input: WorkspaceMemberInsert) {
   const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
-    .from('workspace_members')
+    .from("workspace_members")
     .insert(input)
     .select()
     .single();
@@ -44,29 +48,42 @@ export async function bootstrapOwnerWorkspace(params: {
   phone?: string | null;
   displayName?: string | null;
 }) {
-  const workspace = await createWorkspace({
-    name: params.workspaceName,
-    phone: params.phone ?? null
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("bootstrap_owner_workspace", {
+    workspace_name: params.workspaceName,
+    owner_display_name: params.displayName || params.user.email || "Owner",
+    owner_phone: params.phone ?? null
   });
 
-  await createWorkspaceOwner({
-    workspace_id: workspace.id,
-    user_id: params.user.id,
-    role: 'owner',
-    display_name: params.displayName || params.user.email || 'Owner',
-    phone: params.phone ?? null
-  });
+  if (error) {
+    throw error;
+  }
 
-  return workspace;
+  return data as WorkspaceRow;
+}
+
+export async function ensureOwnerWorkspaceForUser(user: User) {
+  const workspaceName = metadataString(user.user_metadata?.workspace_name);
+
+  if (!workspaceName) {
+    return null;
+  }
+
+  return bootstrapOwnerWorkspace({
+    user,
+    workspaceName,
+    phone: metadataString(user.user_metadata?.phone),
+    displayName: metadataString(user.user_metadata?.display_name)
+  });
 }
 
 export async function listWorkspaces() {
   const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
-    .from('workspaces')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .from("workspaces")
+    .select("*")
+    .order("created_at", { ascending: false });
 
   if (error) {
     throw error;
