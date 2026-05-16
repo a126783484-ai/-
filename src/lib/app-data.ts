@@ -154,7 +154,7 @@ function toShift(row: ShiftRow): Shift {
     id: row.id,
     workspaceId: row.workspace_id,
     staffId: row.staff_id,
-    date: row.date,
+    date: row.shift_date,
     startTime: row.start_time,
     endTime: row.end_time,
     leave: row.leave
@@ -224,7 +224,7 @@ export async function loadAppData(): Promise<AppData> {
     supabase.from("orders").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
     supabase.from("order_lines").select("*"),
     supabase.from("inventory_items").select("*").eq("workspace_id", workspaceId).order("name", { ascending: true }),
-    supabase.from("shifts").select("*").eq("workspace_id", workspaceId).order("date", { ascending: false })
+    supabase.from("shifts").select("*").eq("workspace_id", workspaceId).order("shift_date", { ascending: false })
   ]);
 
   const firstError = [workspaceResult, staffResult, categoriesResult, servicesResult, customersResult, appointmentsResult, appointmentServicesResult, ordersResult, orderLinesResult, inventoryResult, shiftsResult]
