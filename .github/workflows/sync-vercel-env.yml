@@ -42,12 +42,38 @@ jobs:
           mkdir -p .vercel
           printf '{"orgId":"%s","projectId":"%s"}' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
 
-      - name: Upsert Vercel production env through REST API
+      - name: Delete all existing Supabase env entries
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body \
+            --request GET \
+            --url "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?decrypt=false&teamId=${VERCEL_ORG_ID}" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+            --header "Content-Type: application/json" \
+            > vercel-env-before.json
+
+          jq -r '.envs[] | select(.key|test("^(NEXT_PUBLIC_SUPABASE_URL|SUPABASE_URL|NEXT_PUBLIC_SUPABASE_ANON_KEY|SUPABASE_ANON_KEY|SUPABASE_PUBLISHABLE_KEY|NEXT_PUBLIC_SUPABASE_PROJECT_REF|SUPABASE_PROJECT_REF|SUPABASE_SERVICE_ROLE_KEY)$")) | [.id, .key, (.target|tostring), (.gitBranch // "")] | @tsv' vercel-env-before.json > env-to-delete.tsv
+
+          if [ ! -s env-to-delete.tsv ]; then
+            echo "No existing Supabase env entries found."
+          else
+            cat env-to-delete.tsv | while IFS=$'\t' read -r env_id key target branch; do
+              echo "Deleting $key id=$env_id target=$target branch=$branch"
+              curl --fail-with-body \
+                --request DELETE \
+                --url "https://api.vercel.com/v9/projects/${VERCEL_PROJECT_ID}/env/${env_id}?teamId=${VERCEL_ORG_ID}" \
+                --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+                --header "Content-Type: application/json"
+            done
+          fi
+
+      - name: Recreate Vercel production env through REST API
         shell: bash
         run: |
           set -euo pipefail
 
-          upsert_env () {
+          create_env () {
             local key="$1"
             local value="$2"
             local payload
@@ -58,21 +84,21 @@ jobs:
 
             curl --fail-with-body \
               --request POST \
-              --url "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?upsert=true&teamId=${VERCEL_ORG_ID}" \
+              --url "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_ORG_ID}" \
               --header "Authorization: Bearer ${VERCEL_TOKEN}" \
               --header "Content-Type: application/json" \
               --data "$payload"
           }
 
-          upsert_env NEXT_PUBLIC_SUPABASE_URL "$TARGET_SUPABASE_URL"
-          upsert_env SUPABASE_URL "$TARGET_SUPABASE_URL"
-          upsert_env NEXT_PUBLIC_SUPABASE_ANON_KEY "$TARGET_SUPABASE_ANON_KEY"
-          upsert_env SUPABASE_ANON_KEY "$TARGET_SUPABASE_ANON_KEY"
-          upsert_env SUPABASE_PUBLISHABLE_KEY "$TARGET_SUPABASE_PUBLISHABLE_KEY"
-          upsert_env NEXT_PUBLIC_SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
-          upsert_env SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
+          create_env NEXT_PUBLIC_SUPABASE_URL "$TARGET_SUPABASE_URL"
+          create_env SUPABASE_URL "$TARGET_SUPABASE_URL"
+          create_env NEXT_PUBLIC_SUPABASE_ANON_KEY "$TARGET_SUPABASE_ANON_KEY"
+          create_env SUPABASE_ANON_KEY "$TARGET_SUPABASE_ANON_KEY"
+          create_env SUPABASE_PUBLISHABLE_KEY "$TARGET_SUPABASE_PUBLISHABLE_KEY"
+          create_env NEXT_PUBLIC_SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
+          create_env SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
 
-      - name: Audit production env after API sync
+      - name: Audit production env after recreate
         shell: bash
         run: |
           set -euo pipefail
@@ -81,19 +107,21 @@ jobs:
             --url "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?decrypt=true&teamId=${VERCEL_ORG_ID}" \
             --header "Authorization: Bearer ${VERCEL_TOKEN}" \
             --header "Content-Type: application/json" \
-            > vercel-env.json
+            > vercel-env-after.json
 
-          jq -r '.envs[] | select((.key|test("SUPABASE")) and ((.target|tostring)|contains("production"))) | [.key, (.target|tostring), (.gitBranch // ""), (.value // "<redacted>")] | @tsv' vercel-env.json \
+          jq -r '.envs[] | select((.key|test("SUPABASE")) and ((.target|tostring)|contains("production"))) | [.key, (.target|tostring), (.gitBranch // ""), (.value // "<redacted>")] | @tsv' vercel-env-after.json \
             | sed -E 's/(eyJ[A-Za-z0-9._-]+|sb_publishable_[A-Za-z0-9_-]+)/<redacted-key>/g'
 
           for key in NEXT_PUBLIC_SUPABASE_URL SUPABASE_URL; do
-            value=$(jq -r --arg key "$key" '.envs[] | select(.key==$key and ((.target|tostring)|contains("production"))) | .value' vercel-env.json | tail -n 1)
-            echo "$key=$value"
+            count=$(jq -r --arg key "$key" '[.envs[] | select(.key==$key and ((.target|tostring)|contains("production")))] | length' vercel-env-after.json)
+            value=$(jq -r --arg key "$key" '.envs[] | select(.key==$key and ((.target|tostring)|contains("production"))) | .value' vercel-env-after.json | tail -n 1)
+            echo "$key count=$count value=$value"
+            test "$count" = "1"
             test "$value" = "$TARGET_SUPABASE_URL"
           done
 
       - name: Wait for Vercel env propagation
-        run: sleep 60
+        run: sleep 90
 
       - name: Deploy production
         run: vercel deploy --prod --force --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE"
