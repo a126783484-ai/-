@@ -49,6 +49,7 @@ jobs:
             name="$1"
             value="$2"
             vercel env rm "$name" production --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE" || true
+            sleep 2
             printf "%s" "$value" | vercel env add "$name" production --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE"
           }
 
@@ -60,5 +61,11 @@ jobs:
           add_env NEXT_PUBLIC_SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
           add_env SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
 
+      - name: List production env after sync
+        run: vercel env ls production --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE"
+
+      - name: Wait for Vercel env propagation
+        run: sleep 45
+
       - name: Deploy production
-        run: vercel deploy --prod --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE"
+        run: vercel deploy --prod --force --yes --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE"
