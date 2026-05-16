@@ -2,6 +2,7 @@
 
 import { AppShell } from "@/components/AppShell";
 import { updateWorkspaceSettingsAction } from "@/app/settings/actions";
+import { createCustomerAction } from "@/app/customers/actions";
 import { ModuleTable } from "@/components/ModuleTable";
 import { FormNotice } from "@/components/FormNotice";
 import { MetricCard, StatusPill, EmptyState } from "@/components/ui";
@@ -60,8 +61,72 @@ export function AppointmentsView({ data }: { data: AppData }) {
   return <AppShell title="預約系統" subtitle="新增、修改、取消預約；日曆 / 列表檢視與技師衝突檢查。" {...shellProps(data)}><div className="mb-4 grid gap-3 md:grid-cols-3"><button type="button" className="mobile-tap rounded-2xl bg-plum font-semibold text-white opacity-60" disabled title="新增預約表單尚未接上 API">＋ 新增預約</button><button type="button" className="mobile-tap rounded-2xl bg-white font-semibold text-plum">日曆檢視</button><button type="button" className="mobile-tap rounded-2xl bg-white font-semibold text-plum">列表檢視</button></div><ModuleTable rows={data.appointments} searchPlaceholder="搜尋客戶、技師、來源、備註" filterOptions={["pending", "confirmed", "completed", "no_show"]} emptyTitle="目前沒有預約" columns={[{ key: "time", label: "日期 / 時間", sortValue: (row) => row.startAt, render: (row) => <><strong>{formatDate(row.startAt)}</strong><p className="text-ink/60">{formatTime(row.startAt)}–{formatTime(row.endAt)}</p></> }, { key: "customer", label: "客戶", render: (row) => data.customers.find((item) => item.id === row.customerId)?.name ?? "-" }, { key: "service", label: "服務", render: (row) => row.serviceIds.map((id) => data.services.find((service) => service.id === id)?.name).filter(Boolean).join("、") || "-" }, { key: "tech", label: "技師", render: (row) => data.staff.find((item) => item.id === row.technicianId)?.name ?? "-" }, { key: "status", label: "狀態", render: (row) => <StatusPill>{statusLabel(row.status)}</StatusPill> }, { key: "actions", label: "快速操作", render: () => <button type="button" className="rounded-xl bg-champagne px-3 py-2 font-semibold text-plum opacity-60" disabled title="狀態更新流程尚未接上後端">更新</button> }]} /></AppShell>;
 }
 
-export function CustomersView({ data }: { data: AppData }) {
-  return <AppShell title="客戶 CRM" subtitle="電話、生日、LINE、偏好、過敏禁忌、會員等級與回訪提醒。" {...shellProps(data)}><ModuleTable rows={data.customers} searchPlaceholder="搜尋姓名、電話、LINE、標籤" filterOptions={["VIP", "VVIP", "新客", "高價值客戶"]} emptyTitle="尚無客戶資料" columns={[{ key: "name", label: "客戶", sortValue: (row) => row.name, render: (row) => <><strong>{row.name}</strong><p className="text-ink/60">{row.phone}｜LINE {row.lineId ?? "-"}</p></> }, { key: "tier", label: "會員", render: (row) => <StatusPill tone="plum">{row.tier}</StatusPill> }, { key: "prefs", label: "偏好紀錄", render: (row) => row.preferences.join("、") || "-" }, { key: "cautions", label: "注意事項", render: (row) => row.cautions.length ? <span className="text-rose">{row.cautions.join("、")}</span> : "無" }, { key: "reminder", label: "回訪提醒", render: (row) => row.nextReminder ?? "-" }, { key: "tags", label: "標記", render: (row) => row.tags.map((tag) => <StatusPill key={tag} tone="sage">{tag}</StatusPill>) }]} /></AppShell>;
+export function CustomersView({ data, notice }: { data: AppData; notice?: { kind: "error" | "success"; message: string } }) {
+  const canEditCustomers = !data.needsWorkspace && (data.currentMember ? ["owner", "admin", "front_desk"].includes(data.currentMember.role) : true);
+
+  return (
+    <AppShell title="客戶 CRM" subtitle="電話、生日、LINE、偏好、過敏禁忌、會員等級與回訪提醒。" {...shellProps(data)}>
+      <div className="grid gap-5">
+        {notice ? <FormNotice kind={notice.kind}>{notice.message}</FormNotice> : null}
+        {canEditCustomers ? (
+          <form action={createCustomerAction} className="card p-5">
+            <h2 className="text-lg font-bold text-plum">新增客戶</h2>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <label className="block text-sm font-semibold text-plum">
+                姓名
+                <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="name" required />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                電話
+                <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="phone" required />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                會員等級
+                <select className="mt-2 w-full rounded-2xl border border-champagne p-3" name="tier" defaultValue="一般">
+                  <option>一般</option>
+                  <option>新客</option>
+                  <option>VIP</option>
+                  <option>VVIP</option>
+                </select>
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                生日
+                <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="birthday" type="date" />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                LINE ID
+                <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="lineId" />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                下次提醒
+                <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="nextReminder" type="date" />
+              </label>
+              <label className="block text-sm font-semibold text-plum md:col-span-2">
+                備註
+                <textarea className="mt-2 min-h-24 w-full rounded-2xl border border-champagne p-3" name="note" />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                偏好
+                <textarea className="mt-2 min-h-24 w-full rounded-2xl border border-champagne p-3" name="preferences" placeholder="例如：裸粉, 短甲" />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                注意事項
+                <textarea className="mt-2 min-h-24 w-full rounded-2xl border border-champagne p-3" name="cautions" placeholder="例如：對酒精氣味敏感" />
+              </label>
+              <label className="block text-sm font-semibold text-plum md:col-span-2">
+                標記
+                <textarea className="mt-2 min-h-24 w-full rounded-2xl border border-champagne p-3" name="tags" placeholder="例如：高價值客戶, 回訪提醒" />
+              </label>
+            </div>
+            <button type="submit" className="mobile-tap mt-5 rounded-2xl bg-plum font-semibold text-white">
+              建立客戶
+            </button>
+          </form>
+        ) : null}
+        <ModuleTable rows={data.customers} searchPlaceholder="搜尋姓名、電話、LINE、標籤" filterOptions={["VIP", "VVIP", "新客", "高價值客戶"]} emptyTitle="尚無客戶資料" columns={[{ key: "name", label: "客戶", sortValue: (row) => row.name, render: (row) => <><strong>{row.name}</strong><p className="text-ink/60">{row.phone}｜LINE {row.lineId ?? "-"}</p></> }, { key: "tier", label: "會員", render: (row) => <StatusPill tone="plum">{row.tier}</StatusPill> }, { key: "prefs", label: "偏好紀錄", render: (row) => row.preferences.join("、") || "-" }, { key: "cautions", label: "注意事項", render: (row) => row.cautions.length ? <span className="text-rose">{row.cautions.join("、")}</span> : "無" }, { key: "reminder", label: "回訪提醒", render: (row) => row.nextReminder ?? "-" }, { key: "tags", label: "標記", render: (row) => row.tags.map((tag) => <StatusPill key={tag} tone="sage">{tag}</StatusPill>) }]} />
+      </div>
+    </AppShell>
+  );
 }
 
 export function ServicesView({ data }: { data: AppData }) {
