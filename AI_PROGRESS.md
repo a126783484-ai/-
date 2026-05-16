@@ -17,6 +17,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Added helper tests for settings and customer feedback mapping.
 - Added service item create form with workspace-scoped server action and success/error feedback.
 - Added helper tests for service feedback mapping.
+- Added appointment creation flow with workspace-scoped server action, conflict detection, and success/error feedback.
+- Added appointment create form and notice handling to the appointments page.
+- Refined appointment duration and conflict helpers to support leaner service row shapes.
 
 ## Files modified
 
@@ -28,8 +31,13 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `src/app/customers/page.tsx`
 - `src/app/services/actions.ts`
 - `src/app/services/page.tsx`
+- `src/app/appointments/actions.ts`
+- `src/app/appointments/page.tsx`
 - `src/components/ModuleViews.tsx`
+- `src/lib/appointments.ts`
 - `src/lib/app-data.ts`
+- `src/lib/appointment-feedback.ts`
+- `src/lib/appointment-feedback.test.ts`
 - `src/lib/customer-feedback.ts`
 - `src/lib/customer-feedback.test.ts`
 - `src/lib/settings-feedback.ts`
@@ -46,24 +54,28 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Commit / push status
 
-- Pending commit for the current service CRUD round.
-- Previous commit: `efc842f` - `Add workspace settings persistence`
+- Pending commit for the current appointment CRUD round.
+- Previous commit: `4da959b` - `Add service creation flow`
 - Pushed to: `origin/codex/beauty-os-auto-work`
+- Current round commit hash: pending
+- Current round push status: pending
 
 ## Remaining issues
 
-- Appointments, services, and staff are still mostly read-only.
-- Most module-level actions are still demo placeholders or disabled buttons.
+- Staff CRUD is still read-only.
+- Some appointment edit/cancel flows are still placeholders.
+- Most module-level actions beyond create flows are still demo placeholders or disabled buttons.
 - Search/filter logic is still client-side and broad.
-- Need real CRUD for appointments, services, and staff.
+- Need real CRUD for appointment updates, cancellation, and status changes.
 - Need per-module validation and better error propagation.
 - Need customer edit/update flows after create is stable.
 - Need service edit/update flows after create is stable.
+- Need staff create/update flows.
 
 ## Next step
 
-- Commit and push the service create flow, then implement appointment CRUD next.
+- Commit and push the appointment create flow, then move to appointment edit/cancel and status transitions.
 
 ## Operational readiness
 
-- Estimated readiness: 60%
+- Estimated readiness: 66%
