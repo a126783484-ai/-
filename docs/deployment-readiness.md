@@ -30,3 +30,16 @@ This repository must be deployed as its own Beauty OS project. Existing restaura
 - Data warnings such as active orders referencing unavailable tables are release blockers.
 - High Vercel function error rate is a release blocker.
 - Demo data must never mask broken live data flows.
+
+## Production Supabase normalization checklist
+
+Use exactly one Beauty OS Supabase project for production. The public browser URL, optional server URL alias, anon keys, and optional project-ref guard must all point to the same Supabase project before redeploying Vercel production.
+
+1. Pull the Vercel production environment locally, then run `npm run verify:production-env` against that environment.
+2. Keep `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` as the canonical production values used by both browser and server clients.
+3. If `SUPABASE_URL` or `SUPABASE_ANON_KEY` are also present for server-side compatibility, they must duplicate the same project as the `NEXT_PUBLIC_` values.
+4. Set `SUPABASE_PROJECT_REF` or `NEXT_PUBLIC_SUPABASE_PROJECT_REF` to the intended Beauty OS Supabase project ref when possible; the app will fail fast if the URL points elsewhere.
+5. Apply all migrations through `supabase/migrations/0005_harden_workspace_bootstrap.sql` to the intended production Supabase project before redeploying.
+6. Redeploy Vercel production after environment normalization so serverless functions read the repaired Supabase configuration.
+
+After redeploy, verify both a fresh registration and an existing authenticated user with no active `workspace_members` row reach the dashboard with a real workspace and no workspace initialization warning.
