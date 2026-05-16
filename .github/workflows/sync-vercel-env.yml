@@ -72,8 +72,25 @@ jobs:
           upsert_env NEXT_PUBLIC_SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
           upsert_env SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
 
-      - name: List production env after API sync
-        run: vercel env ls production --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE"
+      - name: Audit production env after API sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body \
+            --request GET \
+            --url "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?decrypt=true&teamId=${VERCEL_ORG_ID}" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+            --header "Content-Type: application/json" \
+            > vercel-env.json
+
+          jq -r '.envs[] | select((.key|test("SUPABASE")) and ((.target|tostring)|contains("production"))) | [.key, (.target|tostring), (.gitBranch // ""), (.value // "<redacted>")] | @tsv' vercel-env.json \
+            | sed -E 's/(eyJ[A-Za-z0-9._-]+|sb_publishable_[A-Za-z0-9_-]+)/<redacted-key>/g'
+
+          for key in NEXT_PUBLIC_SUPABASE_URL SUPABASE_URL; do
+            value=$(jq -r --arg key "$key" '.envs[] | select(.key==$key and ((.target|tostring)|contains("production"))) | .value' vercel-env.json | tail -n 1)
+            echo "$key=$value"
+            test "$value" = "$TARGET_SUPABASE_URL"
+          done
 
       - name: Wait for Vercel env propagation
         run: sleep 60
