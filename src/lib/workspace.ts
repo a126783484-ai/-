@@ -1,11 +1,16 @@
-import type { User } from "@supabase/supabase-js";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { Database } from "@/lib/database.types";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
+type AppSupabaseClient = SupabaseClient<Database, "public">;
 type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
 type WorkspaceInsert = Database["public"]["Tables"]["workspaces"]["Insert"];
 type WorkspaceMemberRow = Database["public"]["Tables"]["workspace_members"]["Row"];
 type WorkspaceMemberInsert = Database["public"]["Tables"]["workspace_members"]["Insert"];
+
+async function getClient(client?: AppSupabaseClient) {
+  return client ?? createSupabaseServerClient();
+}
 
 function metadataString(value: unknown) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
@@ -25,8 +30,8 @@ function defaultWorkspaceName(user: User) {
   return emailPrefix ? `${emailPrefix} 的店鋪` : "我的店鋪";
 }
 
-export async function createWorkspace(input: WorkspaceInsert): Promise<WorkspaceRow> {
-  const supabase = await createSupabaseServerClient();
+export async function createWorkspace(input: WorkspaceInsert, client?: AppSupabaseClient): Promise<WorkspaceRow> {
+  const supabase = await getClient(client);
 
   const { data, error } = await supabase
     .from("workspaces")
@@ -41,8 +46,8 @@ export async function createWorkspace(input: WorkspaceInsert): Promise<Workspace
   return data as WorkspaceRow;
 }
 
-export async function createWorkspaceOwner(input: WorkspaceMemberInsert) {
-  const supabase = await createSupabaseServerClient();
+export async function createWorkspaceOwner(input: WorkspaceMemberInsert, client?: AppSupabaseClient) {
+  const supabase = await getClient(client);
 
   const { data, error } = await supabase
     .from("workspace_members")
@@ -57,8 +62,8 @@ export async function createWorkspaceOwner(input: WorkspaceMemberInsert) {
   return data;
 }
 
-async function getFirstActiveMembership(userId: string): Promise<WorkspaceMemberRow | null> {
-  const supabase = await createSupabaseServerClient();
+async function getFirstActiveMembership(userId: string, client?: AppSupabaseClient): Promise<WorkspaceMemberRow | null> {
+  const supabase = await getClient(client);
   const { data, error } = await supabase
     .from("workspace_members")
     .select("*")
@@ -79,11 +84,12 @@ async function bootstrapOwnerWorkspaceWithAuthenticatedInserts(params: {
   workspaceName: string;
   phone?: string | null;
   displayName?: string | null;
+  client?: AppSupabaseClient;
 }) {
-  const existingMembership = await getFirstActiveMembership(params.user.id);
+  const existingMembership = await getFirstActiveMembership(params.user.id, params.client);
 
   if (existingMembership) {
-    const supabase = await createSupabaseServerClient();
+    const supabase = await getClient(params.client);
     const { data, error } = await supabase
       .from("workspaces")
       .select("*")
@@ -102,7 +108,7 @@ async function bootstrapOwnerWorkspaceWithAuthenticatedInserts(params: {
   const workspace = await createWorkspace({
     name: params.workspaceName,
     phone: params.phone ?? null
-  });
+  }, params.client);
 
   await createWorkspaceOwner({
     workspace_id: workspace.id,
@@ -110,7 +116,7 @@ async function bootstrapOwnerWorkspaceWithAuthenticatedInserts(params: {
     role: "owner",
     display_name: params.displayName || params.user.email || "Owner",
     phone: params.phone ?? null
-  });
+  }, params.client);
 
   return workspace;
 }
@@ -120,8 +126,9 @@ export async function bootstrapOwnerWorkspace(params: {
   workspaceName: string;
   phone?: string | null;
   displayName?: string | null;
+  client?: AppSupabaseClient;
 }) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await getClient(params.client);
   const { data, error } = await supabase.rpc("bootstrap_owner_workspace", {
     workspace_name: params.workspaceName,
     owner_display_name: params.displayName || params.user.email || "Owner",
@@ -139,14 +146,15 @@ export async function bootstrapOwnerWorkspace(params: {
   return data as WorkspaceRow;
 }
 
-export async function ensureOwnerWorkspaceForUser(user: User) {
+export async function ensureOwnerWorkspaceForUser(user: User, client?: AppSupabaseClient) {
   const workspaceName = metadataString(user.user_metadata?.workspace_name) ?? defaultWorkspaceName(user);
 
   return bootstrapOwnerWorkspace({
     user,
     workspaceName,
     phone: metadataString(user.user_metadata?.phone),
-    displayName: metadataString(user.user_metadata?.display_name) ?? user.email ?? "Owner"
+    displayName: metadataString(user.user_metadata?.display_name) ?? user.email ?? "Owner",
+    client
   });
 }
 
