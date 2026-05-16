@@ -23,9 +23,17 @@ export interface StaffMember {
   specialties: string[];
 }
 
+export interface ServiceCategory {
+  id: string;
+  workspaceId: string;
+  name: string;
+  sortOrder: number;
+}
+
 export interface ServiceItem {
   id: string;
   workspaceId: string;
+  categoryId?: string;
   category: string;
   name: string;
   price: number;
@@ -65,6 +73,7 @@ export interface Appointment {
 }
 
 export interface OrderLine {
+  id?: string;
   serviceId: string;
   name: string;
   quantity: number;

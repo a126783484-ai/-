@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import type { Database } from "@/lib/database.types";
-import type { Appointment, Customer, InventoryItem, Order, Role, ServiceItem, Shift, StaffMember, Workspace } from "@/lib/types";
+import type { Appointment, Customer, InventoryItem, Order, Role, ServiceCategory, ServiceItem, Shift, StaffMember, Workspace } from "@/lib/types";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseConfig } from "@/lib/supabase";
 import { ensureOwnerWorkspaceForUser } from "@/lib/workspace";
@@ -22,6 +22,7 @@ export interface AppData {
   workspace: Workspace;
   currentMember: StaffMember | null;
   staff: StaffMember[];
+  serviceCategories: ServiceCategory[];
   services: ServiceItem[];
   customers: Customer[];
   appointments: Appointment[];
@@ -48,6 +49,7 @@ function emptyAppData(user: { id: string; email: string | null }): AppData {
     workspace: emptyWorkspace(),
     currentMember: null,
     staff: [],
+    serviceCategories: [],
     services: [],
     customers: [],
     appointments: [],
@@ -100,10 +102,20 @@ function toCustomer(row: CustomerRow): Customer {
   };
 }
 
+function toServiceCategory(row: ServiceCategoryRow): ServiceCategory {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    name: row.name,
+    sortOrder: row.sort_order
+  };
+}
+
 function toService(row: ServiceRow, categories: ServiceCategoryRow[]): ServiceItem {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
+    categoryId: row.category_id ?? undefined,
     category: categories.find((category) => category.id === row.category_id)?.name ?? "未分類",
     name: row.name,
     price: row.price,
@@ -137,6 +149,7 @@ function toOrder(row: OrderRow, lines: OrderLineRow[]): Order {
     customerId: row.customer_id,
     technicianId: row.technician_id,
     lines: lines.filter((line) => line.order_id === row.id).map((line) => ({
+      id: line.id,
       serviceId: line.service_id ?? "",
       name: line.name,
       quantity: line.quantity,
@@ -258,6 +271,7 @@ export async function loadAppData(): Promise<AppData> {
     workspace: toWorkspace(workspaceResult.data),
     currentMember: toStaff(currentMembership),
     staff: (staffResult.data ?? []).map(toStaff),
+    serviceCategories: (categoriesResult.data ?? []).map(toServiceCategory),
     services: (servicesResult.data ?? []).map((service) => toService(service, categoriesResult.data ?? [])),
     customers: (customersResult.data ?? []).map(toCustomer),
     appointments: (appointmentsResult.data ?? []).map((appointment) => toAppointment(

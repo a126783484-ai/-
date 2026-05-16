@@ -73,7 +73,7 @@ export function assertSupabaseProductionConfig(config: SupabaseConfig): asserts 
 
   if (configuredProjectRef && actualProjectRef && configuredProjectRef !== actualProjectRef) {
     throw new SupabaseConfigError(
-      "Supabase project mismatch: production must point to the expected Supabase project."
+      "Supabase project mismatch: configured project ref does not match the Supabase URL."
     );
   }
 }
