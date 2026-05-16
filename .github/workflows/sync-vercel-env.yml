@@ -1,0 +1,61 @@
+name: Sync Vercel Env
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      TARGET_SUPABASE_URL: ${{ secrets.TARGET_SUPABASE_URL }}
+      TARGET_SUPABASE_ANON_KEY: ${{ secrets.TARGET_SUPABASE_ANON_KEY }}
+      TARGET_SUPABASE_SERVICE_KEY: ${{ secrets.TARGET_SUPABASE_SERVICE_KEY }}
+      TARGET_SUPABASE_PROJECT_REF: odzxyhaoehvhfximnwjh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate secrets
+        run: |
+          test -n "$VERCEL_TOKEN"
+          test -n "$VERCEL_ORG_ID"
+          test -n "$VERCEL_PROJECT_ID"
+          test -n "$TARGET_SUPABASE_URL"
+          test -n "$TARGET_SUPABASE_ANON_KEY"
+          test -n "$TARGET_SUPABASE_SERVICE_KEY"
+          test "$TARGET_SUPABASE_URL" = "https://odzxyhaoehvhfximnwjh.supabase.co"
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Link Vercel project
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Replace Vercel production env
+        run: |
+          set -e
+          add_env () {
+            name="$1"
+            value="$2"
+            vercel env rm "$name" production --yes --token "$VERCEL_TOKEN" || true
+            printf "%s" "$value" | vercel env add "$name" production --token "$VERCEL_TOKEN"
+          }
+
+          add_env NEXT_PUBLIC_SUPABASE_URL "$TARGET_SUPABASE_URL"
+          add_env SUPABASE_URL "$TARGET_SUPABASE_URL"
+          add_env NEXT_PUBLIC_SUPABASE_ANON_KEY "$TARGET_SUPABASE_ANON_KEY"
+          add_env SUPABASE_ANON_KEY "$TARGET_SUPABASE_ANON_KEY"
+          add_env SUPABASE_PUBLISHABLE_KEY "$TARGET_SUPABASE_ANON_KEY"
+          add_env SUPABASE_SERVICE_ROLE_KEY "$TARGET_SUPABASE_SERVICE_KEY"
+          add_env NEXT_PUBLIC_SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
+          add_env SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
+
+      - name: Deploy production
+        run: vercel deploy --prod --yes --token "$VERCEL_TOKEN"
