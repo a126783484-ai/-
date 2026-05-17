@@ -62,7 +62,6 @@ type AppointmentLookupRow = {
   source: string;
   note: string | null;
 };
-type AppointmentServiceLookupRow = { appointment_id: string; service_id: string };
 
 async function loadContext(client: Awaited<ReturnType<typeof createSupabaseServerClient>>) {
   const context = await getCurrentWorkspaceContext(client);
@@ -161,35 +160,8 @@ export async function updateAppointmentAction(formData: FormData) {
     status: appointment.status,
     source: appointment.source as Appointment["source"],
     note: appointment.note ?? undefined,
-    serviceIds: []
+    serviceIds
   }));
-
-  const appointmentIds = (appointmentsResult?.data ?? []).map((appointment) => appointment.id);
-  let appointmentServicesResult: QueryResult<AppointmentServiceLookupRow[]> | null = null;
-
-  try {
-    appointmentServicesResult = appointmentIds.length
-      ? await supabase
-          .from("appointment_services")
-          .select("appointment_id, service_id")
-          .in("appointment_id", appointmentIds)
-      : { data: [], error: null };
-  } catch (error) {
-    console.error("appointment update service lookup failed", error);
-    fail("appointment_update_failed");
-  }
-
-  if (appointmentServicesResult?.error) {
-    console.error("appointment update service lookup failed", appointmentServicesResult.error);
-    fail("appointment_update_failed");
-  }
-
-  const appointmentServices = appointmentServicesResult?.data ?? [];
-  for (const appointment of appointments) {
-    appointment.serviceIds = appointmentServices
-      .filter((item) => item.appointment_id === appointment.id)
-      .map((item) => item.service_id);
-  }
 
   if (hasTechnicianConflict({ technicianId, startAt: startAt.toISOString(), endAt }, appointments, appointmentId)) {
     fail("appointment_update_conflict");
