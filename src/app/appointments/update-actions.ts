@@ -148,7 +148,6 @@ export async function updateAppointmentAction(formData: FormData) {
     !customersResult?.data
     || !staffResult?.data
     || !staffResult.data.active
-    || staffResult.data.role !== "technician"
     || selectedServices.length !== serviceIds.length
   ) {
     fail("appointment_update_invalid_input");

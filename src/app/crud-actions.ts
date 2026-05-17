@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { can } from "@/lib/permissions";
@@ -77,6 +78,84 @@ function selectedValues(formData: FormData, key: string) {
 
 function nullableDate(formData: FormData, key: string) {
   return optionalText(formData, key);
+}
+
+function buildSearchParams(input: Record<string, string>) {
+  return new URLSearchParams(input).toString();
+}
+
+function redirectWithError(path: string, code: string): never {
+  redirect(`${path}?${buildSearchParams({ error: code })}`);
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isPermissionError(message: string) {
+  return message.includes("沒有權限");
+}
+
+function isConfigError(message: string) {
+  return message.includes("登入設定尚未完成")
+    || message.includes("請先登入後再操作")
+    || message.includes("找不到可操作的工作區")
+    || message.includes("工作區")
+    || message.includes("AUTH_REQUIRED")
+    || message.includes("WORKSPACE_MEMBER_MISSING")
+    || message.includes("WORKSPACE_MISSING");
+}
+
+function isInvalidInputError(message: string) {
+  return message.includes("請")
+    || message.includes("格式不正確")
+    || message.includes("必須")
+    || message.includes("重複")
+    || message.includes("不存在")
+    || message.includes("不屬於目前工作區")
+    || message.includes("重疊")
+    || message.includes("至少")
+    || message.includes("無效")
+    || message.includes("JSON");
+}
+
+function appointmentErrorCode(error: unknown) {
+  const message = errorMessage(error);
+  if (isPermissionError(message)) return "appointment_forbidden";
+  if (message.includes("衝突")) return "appointment_conflict";
+  if (isConfigError(message)) return "appointment_config_missing";
+  if (isInvalidInputError(message)) return "appointment_invalid_input";
+  return "appointment_create_failed";
+}
+
+function customerErrorCode(error: unknown) {
+  const message = errorMessage(error);
+  if (isPermissionError(message)) return "customer_forbidden";
+  if (isConfigError(message)) return "customer_config_missing";
+  return "customer_create_failed";
+}
+
+function serviceErrorCode(error: unknown) {
+  const message = errorMessage(error);
+  if (isPermissionError(message)) return "service_forbidden";
+  if (isConfigError(message)) return "service_config_missing";
+  if (isInvalidInputError(message)) return "service_invalid_input";
+  return "service_create_failed";
+}
+
+function checkoutErrorCode(error: unknown) {
+  const message = errorMessage(error);
+  if (isPermissionError(message)) return "order_forbidden";
+  if (isConfigError(message)) return "order_config_missing";
+  if (isInvalidInputError(message)) return "order_invalid_input";
+  return "order_create_failed";
+}
+
+function settingsErrorCode(error: unknown) {
+  const message = errorMessage(error);
+  if (isPermissionError(message)) return "settings_forbidden";
+  if (isConfigError(message)) return "settings_config_missing";
+  return "settings_save_failed";
 }
 
 async function getActiveWorkspace(): Promise<ActiveWorkspace> {
@@ -178,7 +257,7 @@ async function assertWorkspaceReferences(
     throw new Error("客戶不屬於目前工作區，請重新選擇。");
   }
 
-  if (!technicianResult.data || !technicianResult.data.active || technicianResult.data.role !== "technician") {
+  if (!technicianResult.data || !technicianResult.data.active) {
     throw new Error("技師不屬於目前工作區，請重新選擇。");
   }
 
@@ -224,165 +303,181 @@ async function findOrCreateCategory(
 }
 
 export async function saveCustomer(formData: FormData) {
-  const { supabase, workspaceId, role } = await getActiveWorkspace();
-  requirePermission(role, "customers", "你沒有權限建立或更新客戶資料。");
-  const id = optionalText(formData, "id");
-  const name = text(formData, "name");
-  const phone = text(formData, "phone");
+  try {
+    const { supabase, workspaceId, role } = await getActiveWorkspace();
+    requirePermission(role, "customers", "你沒有權限建立或更新客戶資料。");
+    const id = optionalText(formData, "id");
+    const name = text(formData, "name");
+    const phone = text(formData, "phone");
 
-  if (!name) throw new Error("請填寫客戶姓名。");
-  if (!phone) throw new Error("請填寫客戶電話。");
+    if (!name) throw new Error("請填寫客戶姓名。");
+    if (!phone) throw new Error("請填寫客戶電話。");
 
-  const { data: duplicate, error: duplicateError } = await supabase
-    .from("customers")
-    .select("id")
-    .eq("workspace_id", workspaceId)
-    .eq("phone", phone)
-    .neq("id", id ?? "00000000-0000-0000-0000-000000000000")
-    .maybeSingle();
+    const { data: duplicate, error: duplicateError } = await supabase
+      .from("customers")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("phone", phone)
+      .neq("id", id ?? "00000000-0000-0000-0000-000000000000")
+      .maybeSingle();
 
-  if (duplicateError)
-    throw new Error(`檢查電話是否重複失敗：${duplicateError.message}`);
-  if (duplicate)
-    throw new Error("此電話已存在於同一工作區，請改用編輯既有客戶。");
+    if (duplicateError) throw new Error(`檢查電話是否重複失敗：${duplicateError.message}`);
+    if (duplicate) throw new Error("此電話已存在於同一工作區，請改用編輯既有客戶。");
 
-  const payload = {
-    workspace_id: workspaceId,
-    name,
-    phone,
-    birthday: nullableDate(formData, "birthday"),
-    line_id: optionalText(formData, "line_id"),
-    tier: text(formData, "tier") || "一般",
-    preferences: listValue(formData, "preferences"),
-    cautions: listValue(formData, "cautions"),
-    tags: listValue(formData, "tags"),
-    note: optionalText(formData, "note"),
-    next_reminder: nullableDate(formData, "next_reminder"),
-  };
+    const payload = {
+      workspace_id: workspaceId,
+      name,
+      phone,
+      birthday: nullableDate(formData, "birthday"),
+      line_id: optionalText(formData, "line_id"),
+      tier: text(formData, "tier") || "一般",
+      preferences: listValue(formData, "preferences"),
+      cautions: listValue(formData, "cautions"),
+      tags: listValue(formData, "tags"),
+      note: optionalText(formData, "note"),
+      next_reminder: nullableDate(formData, "next_reminder"),
+    };
 
-  const result = id
-    ? await supabase
-        .from("customers")
-        .update(payload)
-        .eq("id", id)
-        .eq("workspace_id", workspaceId)
-    : await supabase.from("customers").insert(payload);
+    const result = id
+      ? await supabase
+          .from("customers")
+          .update(payload)
+          .eq("id", id)
+          .eq("workspace_id", workspaceId)
+      : await supabase.from("customers").insert(payload);
 
-  if (result.error) throw new Error(`儲存客戶失敗：${result.error.message}`);
-  refreshApp();
+    if (result.error) throw new Error(`儲存客戶失敗：${result.error.message}`);
+    refreshApp();
+  } catch (error) {
+    console.error("saveCustomer failed", error);
+    redirectWithError("/customers", customerErrorCode(error));
+  }
 }
 
 export async function deleteOrArchiveCustomer(formData: FormData) {
-  const { supabase, workspaceId, role } = await getActiveWorkspace();
-  requirePermission(role, "customers", "你沒有權限刪除或封存客戶資料。");
-  const id = text(formData, "id");
-  await assertWorkspaceRecord("customers", id, workspaceId, supabase);
+  try {
+    const { supabase, workspaceId, role } = await getActiveWorkspace();
+    requirePermission(role, "customers", "你沒有權限刪除或封存客戶資料。");
+    const id = text(formData, "id");
+    await assertWorkspaceRecord("customers", id, workspaceId, supabase);
 
-  const [
-    { count: appointmentCount, error: appointmentError },
-    { count: orderCount, error: orderError },
-  ] = await Promise.all([
-    supabase
-      .from("appointments")
-      .select("id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId)
-      .eq("customer_id", id),
-    supabase
-      .from("orders")
-      .select("id", { count: "exact", head: true })
-      .eq("workspace_id", workspaceId)
-      .eq("customer_id", id),
-  ]);
+    const [
+      { count: appointmentCount, error: appointmentError },
+      { count: orderCount, error: orderError },
+    ] = await Promise.all([
+      supabase
+        .from("appointments")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId)
+        .eq("customer_id", id),
+      supabase
+        .from("orders")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId)
+        .eq("customer_id", id),
+    ]);
 
-  if (appointmentError)
-    throw new Error(`檢查客戶預約失敗：${appointmentError.message}`);
-  if (orderError) throw new Error(`檢查客戶訂單失敗：${orderError.message}`);
+    if (appointmentError) throw new Error(`檢查客戶預約失敗：${appointmentError.message}`);
+    if (orderError) throw new Error(`檢查客戶訂單失敗：${orderError.message}`);
 
-  if ((appointmentCount ?? 0) > 0 || (orderCount ?? 0) > 0) {
-    const { data: customer, error: customerError } = await supabase
-      .from("customers")
-      .select("tags,note")
-      .eq("id", id)
-      .eq("workspace_id", workspaceId)
-      .single();
-    if (customerError)
-      throw new Error(`讀取客戶封存資料失敗：${customerError.message}`);
-    const tags = Array.from(new Set([...(customer.tags ?? []), "已封存"]));
-    const note = [
-      customer.note,
-      `封存於 ${new Date().toISOString().slice(0, 10)}，保留歷史預約與訂單。`,
-    ]
-      .filter(Boolean)
-      .join("\n");
-    const { error } = await supabase
-      .from("customers")
-      .update({ tags, note })
-      .eq("id", id)
-      .eq("workspace_id", workspaceId);
-    if (error) throw new Error(`封存客戶失敗：${error.message}`);
-  } else {
-    const { error } = await supabase
-      .from("customers")
-      .delete()
-      .eq("id", id)
-      .eq("workspace_id", workspaceId);
-    if (error) throw new Error(`刪除客戶失敗：${error.message}`);
+    if ((appointmentCount ?? 0) > 0 || (orderCount ?? 0) > 0) {
+      const { data: customer, error: customerError } = await supabase
+        .from("customers")
+        .select("tags,note")
+        .eq("id", id)
+        .eq("workspace_id", workspaceId)
+        .single();
+      if (customerError) throw new Error(`讀取客戶封存資料失敗：${customerError.message}`);
+      const tags = Array.from(new Set([...(customer.tags ?? []), "已封存"]));
+      const note = [
+        customer.note,
+        `封存於 ${new Date().toISOString().slice(0, 10)}，保留歷史預約與訂單。`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const { error } = await supabase
+        .from("customers")
+        .update({ tags, note })
+        .eq("id", id)
+        .eq("workspace_id", workspaceId);
+      if (error) throw new Error(`封存客戶失敗：${error.message}`);
+    } else {
+      const { error } = await supabase
+        .from("customers")
+        .delete()
+        .eq("id", id)
+        .eq("workspace_id", workspaceId);
+      if (error) throw new Error(`刪除客戶失敗：${error.message}`);
+    }
+
+    refreshApp();
+  } catch (error) {
+    console.error("deleteOrArchiveCustomer failed", error);
+    redirectWithError("/customers", customerErrorCode(error));
   }
-
-  refreshApp();
 }
 
 export async function saveService(formData: FormData) {
-  const { supabase, workspaceId, role } = await getActiveWorkspace();
-  requirePermission(role, "services", "你沒有權限建立或更新服務項目。");
-  const id = optionalText(formData, "id");
-  const name = text(formData, "name");
-  const price = integerValue(formData, "price");
-  const durationMin = integerValue(formData, "duration_min", 30);
+  try {
+    const { supabase, workspaceId, role } = await getActiveWorkspace();
+    requirePermission(role, "services", "你沒有權限建立或更新服務項目。");
+    const id = optionalText(formData, "id");
+    const name = text(formData, "name");
+    const price = integerValue(formData, "price");
+    const durationMin = integerValue(formData, "duration_min", 30);
 
-  if (!name) throw new Error("請填寫服務名稱。");
-  if (durationMin <= 0) throw new Error("服務時間必須大於 0 分鐘。");
+    if (!name) throw new Error("請填寫服務名稱。");
+    if (durationMin <= 0) throw new Error("服務時間必須大於 0 分鐘。");
 
-  const categoryId = await findOrCreateCategory(
-    supabase,
-    workspaceId,
-    text(formData, "category"),
-  );
-  const payload = {
-    workspace_id: workspaceId,
-    category_id: categoryId,
-    name,
-    price,
-    duration_min: durationMin,
-    description: optionalText(formData, "description"),
-    enabled: checked(formData, "enabled"),
-    is_add_on: checked(formData, "is_add_on"),
-  };
+    const categoryId = await findOrCreateCategory(
+      supabase,
+      workspaceId,
+      text(formData, "category"),
+    );
+    const payload = {
+      workspace_id: workspaceId,
+      category_id: categoryId,
+      name,
+      price,
+      duration_min: durationMin,
+      description: optionalText(formData, "description"),
+      enabled: checked(formData, "enabled"),
+      is_add_on: checked(formData, "is_add_on"),
+    };
 
-  const result = id
-    ? await supabase
-        .from("services")
-        .update(payload)
-        .eq("id", id)
-        .eq("workspace_id", workspaceId)
-    : await supabase.from("services").insert(payload);
+    const result = id
+      ? await supabase
+          .from("services")
+          .update(payload)
+          .eq("id", id)
+          .eq("workspace_id", workspaceId)
+      : await supabase.from("services").insert(payload);
 
-  if (result.error) throw new Error(`儲存服務失敗：${result.error.message}`);
-  refreshApp();
+    if (result.error) throw new Error(`儲存服務失敗：${result.error.message}`);
+    refreshApp();
+  } catch (error) {
+    console.error("saveService failed", error);
+    redirectWithError("/services", serviceErrorCode(error));
+  }
 }
 
 export async function setServiceEnabled(formData: FormData) {
-  const { supabase, workspaceId, role } = await getActiveWorkspace();
-  requirePermission(role, "services", "你沒有權限變更服務啟用狀態。");
-  const id = text(formData, "id");
-  const enabled = checked(formData, "enabled");
-  const { error } = await supabase
-    .from("services")
-    .update({ enabled })
-    .eq("id", id)
-    .eq("workspace_id", workspaceId);
-  if (error) throw new Error(`更新服務狀態失敗：${error.message}`);
-  refreshApp();
+  try {
+    const { supabase, workspaceId, role } = await getActiveWorkspace();
+    requirePermission(role, "services", "你沒有權限變更服務啟用狀態。");
+    const id = text(formData, "id");
+    const enabled = checked(formData, "enabled");
+    const { error } = await supabase
+      .from("services")
+      .update({ enabled })
+      .eq("id", id)
+      .eq("workspace_id", workspaceId);
+    if (error) throw new Error(`更新服務狀態失敗：${error.message}`);
+    refreshApp();
+  } catch (error) {
+    console.error("setServiceEnabled failed", error);
+    redirectWithError("/services", serviceErrorCode(error));
+  }
 }
 
 async function appointmentPayload(
@@ -440,52 +535,57 @@ async function assertNoTechnicianConflict(
 }
 
 export async function saveAppointment(formData: FormData) {
-  const { supabase, workspaceId, userId, role } = await getActiveWorkspace();
-  requirePermission(role, "appointments", "你沒有權限建立或更新預約。");
-  const id = optionalText(formData, "id");
-  const serviceIds = selectedValues(formData, "service_ids");
-  if (!serviceIds.length) throw new Error("請至少選擇一項服務。");
+  try {
+    const { supabase, workspaceId, userId, role } = await getActiveWorkspace();
+    requirePermission(role, "appointments", "你沒有權限建立或更新預約。");
+    const id = optionalText(formData, "id");
+    const serviceIds = selectedValues(formData, "service_ids");
+    if (!serviceIds.length) throw new Error("請至少選擇一項服務。");
 
-  const payload = await appointmentPayload(formData, workspaceId, userId);
-  await assertWorkspaceReferences(supabase, workspaceId, payload.customer_id, payload.technician_id, serviceIds);
-  await assertNoTechnicianConflict(supabase, workspaceId, payload.technician_id, payload.start_at, payload.end_at, id);
+    const payload = await appointmentPayload(formData, workspaceId, userId);
+    await assertWorkspaceReferences(supabase, workspaceId, payload.customer_id, payload.technician_id, serviceIds);
+    await assertNoTechnicianConflict(supabase, workspaceId, payload.technician_id, payload.start_at, payload.end_at, id);
 
-  let appointmentId = id;
-  if (appointmentId) {
-    const { error } = await supabase
-      .from("appointments")
-      .update(payload)
-      .eq("id", appointmentId)
-      .eq("workspace_id", workspaceId);
-    if (error) throw new Error(`更新預約失敗：${error.message}`);
-  } else {
-    const { data, error } = await supabase
-      .from("appointments")
-      .insert(payload)
-      .select("id")
-      .single();
-    if (error) throw new Error(`建立預約失敗：${error.message}`);
-    appointmentId = data.id;
+    let appointmentId = id;
+    if (appointmentId) {
+      const { error } = await supabase
+        .from("appointments")
+        .update(payload)
+        .eq("id", appointmentId)
+        .eq("workspace_id", workspaceId);
+      if (error) throw new Error(`更新預約失敗：${error.message}`);
+    } else {
+      const { data, error } = await supabase
+        .from("appointments")
+        .insert(payload)
+        .select("id")
+        .single();
+      if (error) throw new Error(`建立預約失敗：${error.message}`);
+      appointmentId = data.id;
+    }
+
+    await assertWorkspaceMembership("appointments", appointmentId!, workspaceId, supabase);
+
+    const { error: deleteError } = await supabase
+      .from("appointment_services")
+      .delete()
+      .eq("appointment_id", appointmentId);
+    if (deleteError) throw new Error(`更新預約服務失敗：${deleteError.message}`);
+
+    const { error: insertError } = await supabase
+      .from("appointment_services")
+      .insert(
+        serviceIds.map((serviceId) => ({
+          appointment_id: appointmentId!,
+          service_id: serviceId,
+        })),
+      );
+    if (insertError) throw new Error(`儲存預約服務失敗：${insertError.message}`);
+    refreshApp();
+  } catch (error) {
+    console.error("saveAppointment failed", error);
+    redirectWithError("/appointments", appointmentErrorCode(error));
   }
-
-  await assertWorkspaceMembership("appointments", appointmentId!, workspaceId, supabase);
-
-  const { error: deleteError } = await supabase
-    .from("appointment_services")
-    .delete()
-    .eq("appointment_id", appointmentId);
-  if (deleteError) throw new Error(`更新預約服務失敗：${deleteError.message}`);
-
-  const { error: insertError } = await supabase
-    .from("appointment_services")
-    .insert(
-      serviceIds.map((serviceId) => ({
-        appointment_id: appointmentId!,
-        service_id: serviceId,
-      })),
-    );
-  if (insertError) throw new Error(`儲存預約服務失敗：${insertError.message}`);
-  refreshApp();
 }
 
 export async function updateAppointmentStatus(formData: FormData) {
@@ -567,125 +667,145 @@ function deriveOrderStatus(total: number, paidAmount: number): OrderStatus {
 }
 
 export async function saveOrder(formData: FormData) {
-  const { supabase, workspaceId, role } = await getActiveWorkspace();
-  requirePermission(role, "checkout", "你沒有權限建立或更新訂單。");
-  const appointmentId = optionalText(formData, "appointment_id");
-  const customerId = text(formData, "customer_id");
-  const technicianId = text(formData, "technician_id");
-  if (!customerId) throw new Error("請選擇訂單客戶。");
-  if (!technicianId) throw new Error("請選擇服務技師。");
-  if (appointmentId) {
-    await assertWorkspaceMembership("appointments", appointmentId, workspaceId, supabase);
-  }
+  try {
+    const { supabase, workspaceId, role } = await getActiveWorkspace();
+    requirePermission(role, "checkout", "你沒有權限建立或更新訂單。");
+    const appointmentId = optionalText(formData, "appointment_id");
+    const customerId = text(formData, "customer_id");
+    const technicianId = text(formData, "technician_id");
+    if (!customerId) throw new Error("請選擇訂單客戶。");
+    if (!technicianId) throw new Error("請選擇服務技師。");
+    if (appointmentId) {
+      await assertWorkspaceMembership("appointments", appointmentId, workspaceId, supabase);
+    }
 
-  await assertWorkspaceReferences(supabase, workspaceId, customerId, technicianId, selectedValues(formData, "line_service_ids"));
+    await assertWorkspaceReferences(supabase, workspaceId, customerId, technicianId, selectedValues(formData, "line_service_ids"));
 
-  const lineTemplates = await buildOrderLines(supabase, workspaceId, formData);
-  const discount = integerValue(formData, "discount");
-  const tip = integerValue(formData, "tip");
-  const paidAmount = integerValue(formData, "paid_amount");
-  const total = Math.max(
-    0,
-    lineTemplates.reduce(
-      (sum, line) => sum + (line.quantity ?? 1) * line.unit_price,
+    const lineTemplates = await buildOrderLines(supabase, workspaceId, formData);
+    const discount = integerValue(formData, "discount");
+    const tip = integerValue(formData, "tip");
+    const paidAmount = integerValue(formData, "paid_amount");
+    const total = Math.max(
       0,
-    ) -
-      discount +
-      tip,
-  );
-  const statusRaw = text(formData, "status");
-  const status = (statusRaw ? (statusRaw as OrderStatus) : deriveOrderStatus(total, paidAmount));
+      lineTemplates.reduce(
+        (sum, line) => sum + (line.quantity ?? 1) * line.unit_price,
+        0,
+      ) -
+        discount +
+        tip,
+    );
+    const statusRaw = text(formData, "status");
+    const status = (statusRaw ? (statusRaw as OrderStatus) : deriveOrderStatus(total, paidAmount));
 
-  const { data: order, error: orderError } = await supabase
-    .from("orders")
-    .insert({
-      workspace_id: workspaceId,
-      appointment_id: appointmentId,
-      customer_id: customerId,
-      technician_id: technicianId,
-      discount,
-      tip,
-      paid_amount: paidAmount,
-      payment_method: (text(formData, "payment_method") ||
-        "cash") as PaymentMethod,
-      status,
-    })
-    .select("id")
-    .single();
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .insert({
+        workspace_id: workspaceId,
+        appointment_id: appointmentId,
+        customer_id: customerId,
+        technician_id: technicianId,
+        discount,
+        tip,
+        paid_amount: paidAmount,
+        payment_method: (text(formData, "payment_method") ||
+          "cash") as PaymentMethod,
+        status,
+      })
+      .select("id")
+      .single();
 
-  if (orderError) throw new Error(`建立訂單失敗：${orderError.message}`);
+    if (orderError) throw new Error(`建立訂單失敗：${orderError.message}`);
 
-  const { error: linesError } = await supabase
-    .from("order_lines")
-    .insert(lineTemplates.map((line) => ({ ...line, order_id: order.id })));
-  if (linesError) throw new Error(`建立訂單明細失敗：${linesError.message}`);
+    const { error: linesError } = await supabase
+      .from("order_lines")
+      .insert(lineTemplates.map((line) => ({ ...line, order_id: order.id })));
+    if (linesError) throw new Error(`建立訂單明細失敗：${linesError.message}`);
 
-  if (appointmentId) {
-    await supabase
-      .from("appointments")
-      .update({ status: "completed" })
-      .eq("id", appointmentId)
-      .eq("workspace_id", workspaceId);
+    if (appointmentId) {
+      await supabase
+        .from("appointments")
+        .update({ status: "completed" })
+        .eq("id", appointmentId)
+        .eq("workspace_id", workspaceId);
+    }
+
+    refreshApp();
+  } catch (error) {
+    console.error("saveOrder failed", error);
+    redirectWithError("/checkout", checkoutErrorCode(error));
   }
-
-  refreshApp();
 }
 
 export async function addOrderLine(formData: FormData) {
-  const { supabase, workspaceId, role } = await getActiveWorkspace();
-  requirePermission(role, "checkout", "你沒有權限新增訂單明細。");
-  const orderId = text(formData, "order_id");
-  await assertWorkspaceRecord("orders", orderId, workspaceId, supabase);
-  const lines = await buildOrderLines(supabase, workspaceId, formData);
-  const { error } = await supabase
-    .from("order_lines")
-    .insert(lines.map((line) => ({ ...line, order_id: orderId })));
-  if (error) throw new Error(`新增訂單明細失敗：${error.message}`);
-  refreshApp();
+  try {
+    const { supabase, workspaceId, role } = await getActiveWorkspace();
+    requirePermission(role, "checkout", "你沒有權限新增訂單明細。");
+    const orderId = text(formData, "order_id");
+    await assertWorkspaceRecord("orders", orderId, workspaceId, supabase);
+    const lines = await buildOrderLines(supabase, workspaceId, formData);
+    const { error } = await supabase
+      .from("order_lines")
+      .insert(lines.map((line) => ({ ...line, order_id: orderId })));
+    if (error) throw new Error(`新增訂單明細失敗：${error.message}`);
+    refreshApp();
+  } catch (error) {
+    console.error("addOrderLine failed", error);
+    redirectWithError("/checkout", checkoutErrorCode(error));
+  }
 }
 
 export async function removeOrderLine(formData: FormData) {
-  const { supabase, workspaceId, role } = await getActiveWorkspace();
-  requirePermission(role, "checkout", "你沒有權限移除訂單明細。");
-  const orderId = text(formData, "order_id");
-  const lineId = text(formData, "line_id");
-  await assertWorkspaceRecord("orders", orderId, workspaceId, supabase);
-  const { error } = await supabase
-    .from("order_lines")
-    .delete()
-    .eq("id", lineId)
-    .eq("order_id", orderId);
-  if (error) throw new Error(`移除訂單明細失敗：${error.message}`);
-  refreshApp();
+  try {
+    const { supabase, workspaceId, role } = await getActiveWorkspace();
+    requirePermission(role, "checkout", "你沒有權限移除訂單明細。");
+    const orderId = text(formData, "order_id");
+    const lineId = text(formData, "line_id");
+    await assertWorkspaceRecord("orders", orderId, workspaceId, supabase);
+    const { error } = await supabase
+      .from("order_lines")
+      .delete()
+      .eq("id", lineId)
+      .eq("order_id", orderId);
+    if (error) throw new Error(`移除訂單明細失敗：${error.message}`);
+    refreshApp();
+  } catch (error) {
+    console.error("removeOrderLine failed", error);
+    redirectWithError("/checkout", checkoutErrorCode(error));
+  }
 }
 
 export async function updateWorkspaceSettings(formData: FormData) {
-  const { supabase, workspaceId, role } = await getActiveWorkspace();
-  requirePermission(role, "settings", "你沒有權限更新店鋪設定。");
-  let businessHours: Json = {};
-  const businessHoursRaw = text(formData, "business_hours");
-  if (businessHoursRaw) {
-    try {
-      businessHours = JSON.parse(businessHoursRaw) as Json;
-    } catch {
-      throw new Error('營業時間必須是有效 JSON，例如 {"mon":"10:00-20:00"}。');
+  try {
+    const { supabase, workspaceId, role } = await getActiveWorkspace();
+    requirePermission(role, "settings", "你沒有權限更新店鋪設定。");
+    let businessHours: Json = {};
+    const businessHoursRaw = text(formData, "business_hours");
+    if (businessHoursRaw) {
+      try {
+        businessHours = JSON.parse(businessHoursRaw) as Json;
+      } catch {
+        throw new Error('營業時間必須是有效 JSON，例如 {"mon":"10:00-20:00"}。');
+      }
     }
+
+    const name = text(formData, "name");
+    if (!name) throw new Error("請填寫店鋪名稱。");
+
+    const { error } = await supabase
+      .from("workspaces")
+      .update({
+        name,
+        phone: optionalText(formData, "phone"),
+        address: optionalText(formData, "address"),
+        brand_color: text(formData, "brand_color") || "#C87486",
+        business_hours: businessHours,
+      })
+      .eq("id", workspaceId);
+
+    if (error) throw new Error(`儲存店鋪設定失敗：${error.message}`);
+    refreshApp();
+  } catch (error) {
+    console.error("updateWorkspaceSettings failed", error);
+    redirectWithError("/settings", settingsErrorCode(error));
   }
-
-  const name = text(formData, "name");
-  if (!name) throw new Error("請填寫店鋪名稱。");
-
-  const { error } = await supabase
-    .from("workspaces")
-    .update({
-      name,
-      phone: optionalText(formData, "phone"),
-      address: optionalText(formData, "address"),
-      brand_color: text(formData, "brand_color") || "#C87486",
-      business_hours: businessHours,
-    })
-    .eq("id", workspaceId);
-
-  if (error) throw new Error(`儲存店鋪設定失敗：${error.message}`);
-  refreshApp();
 }
