@@ -36,6 +36,12 @@ export function CustomersDeferredView({ data, notice }: { data: AppData; notice?
   return <CustomersViewImpl data={data} notice={notice} />;
 }
 
-export function CheckoutDeferredView({ data }: { data: AppData }) {
-  return <CheckoutViewImpl data={data} />;
+export function CheckoutDeferredView({
+  data,
+  notice,
+}: {
+  data: AppData;
+  notice?: { kind: "error" | "success"; message: string };
+}) {
+  return <CheckoutViewImpl data={data} notice={notice} />;
 }
