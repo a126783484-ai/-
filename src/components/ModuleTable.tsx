@@ -1,6 +1,6 @@
 "use client";
 
-import { isValidElement, useMemo, useState, type ReactNode } from "react";
+import { isValidElement, useDeferredValue, useMemo, useState, type ReactNode } from "react";
 import { EmptyState, LoadingState, NoticeBanner } from "./ui";
 
 export interface Column<T> {
@@ -53,18 +53,31 @@ export function ModuleTable<T>({ rows, columns, searchPlaceholder, filterOptions
   const [sortKey, setSortKey] = useState(columns[0]?.key ?? "");
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState("");
+  const deferredQuery = useDeferredValue(query);
+  const normalizedQuery = useMemo(() => deferredQuery.trim().toLowerCase(), [deferredQuery]);
+  const searchIndex = useMemo(
+    () =>
+      rows.map((row) => ({
+        row,
+        text: JSON.stringify(row).toLowerCase()
+      })),
+    [rows]
+  );
   const visibleRows = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return rows
-      .filter((row) => JSON.stringify(row).toLowerCase().includes(normalized))
-      .filter((row) => filter === "全部" || JSON.stringify(row).includes(filter))
+    return searchIndex
+      .filter(({ text }) => text.includes(normalizedQuery))
+      .filter(({ text, row }) => {
+        if (filter === "全部") return true;
+        return text.includes(filter) || JSON.stringify(row).includes(filter);
+      })
+      .map(({ row }) => row)
       .sort((a, b) => {
         const column = columns.find((item) => item.key === sortKey);
         const left = column?.sortValue?.(a) ?? "";
         const right = column?.sortValue?.(b) ?? "";
         return String(left).localeCompare(String(right), "zh-Hant", { numeric: true });
       });
-  }, [columns, filter, query, rows, sortKey]);
+  }, [columns, filter, normalizedQuery, searchIndex, sortKey]);
 
   function handleExport() {
     setNotice("");
