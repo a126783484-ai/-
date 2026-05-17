@@ -422,13 +422,13 @@ export async function loadAppData(): Promise<AppData> {
     appointmentIdList.length
       ? supabase
           .from("appointment_services")
-          .select("*")
+          .select("appointment_id, service_id")
           .in("appointment_id", appointmentIdList)
       : Promise.resolve({ data: [], error: null } as const),
     orderIdList.length
       ? supabase
           .from("order_lines")
-          .select("*")
+          .select("order_id, service_id, name, quantity, unit_price, id")
           .in("order_id", orderIdList)
       : Promise.resolve({ data: [], error: null } as const),
   ]);
