@@ -115,22 +115,19 @@ export async function updateAppointmentAction(formData: FormData) {
   let staffResult: QueryResult<StaffLookupRow | null> | null = null;
   let servicesResult: QueryResult<ServiceLookupRow[]> | null = null;
   let appointmentsResult: QueryResult<AppointmentLookupRow[]> | null = null;
-  let appointmentServicesResult: QueryResult<AppointmentServiceLookupRow[]> | null = null;
-
   try {
-    [customersResult, staffResult, servicesResult, appointmentsResult, appointmentServicesResult] = await Promise.all([
+    [customersResult, staffResult, servicesResult, appointmentsResult] = await Promise.all([
       supabase.from("customers").select("id").eq("workspace_id", workspaceId).eq("id", customerId).maybeSingle(),
       supabase.from("workspace_members").select("id, role, active").eq("workspace_id", workspaceId).eq("id", technicianId).maybeSingle(),
       supabase.from("services").select("id, duration_min").eq("workspace_id", workspaceId).in("id", serviceIds),
-      supabase.from("appointments").select("id, customer_id, technician_id, start_at, end_at, status, source, note").eq("workspace_id", workspaceId),
-      supabase.from("appointment_services").select("appointment_id, service_id")
+      supabase.from("appointments").select("id, customer_id, technician_id, start_at, end_at, status, source, note").eq("workspace_id", workspaceId)
     ]);
   } catch (error) {
     console.error("appointment update lookup failed", error);
     fail("appointment_update_failed");
   }
 
-  const lookupError = [customersResult, staffResult, servicesResult, appointmentsResult, appointmentServicesResult]
+  const lookupError = [customersResult, staffResult, servicesResult, appointmentsResult]
     .filter((result): result is NonNullable<typeof result> => Boolean(result))
     .find((result) => result.error)?.error;
 
@@ -164,10 +161,35 @@ export async function updateAppointmentAction(formData: FormData) {
     status: appointment.status,
     source: appointment.source as Appointment["source"],
     note: appointment.note ?? undefined,
-    serviceIds: (appointmentServicesResult?.data ?? [])
-      .filter((item) => item.appointment_id === appointment.id)
-      .map((item) => item.service_id)
+    serviceIds: []
   }));
+
+  const appointmentIds = (appointmentsResult?.data ?? []).map((appointment) => appointment.id);
+  let appointmentServicesResult: QueryResult<AppointmentServiceLookupRow[]> | null = null;
+
+  try {
+    appointmentServicesResult = appointmentIds.length
+      ? await supabase
+          .from("appointment_services")
+          .select("appointment_id, service_id")
+          .in("appointment_id", appointmentIds)
+      : { data: [], error: null };
+  } catch (error) {
+    console.error("appointment update service lookup failed", error);
+    fail("appointment_update_failed");
+  }
+
+  if (appointmentServicesResult?.error) {
+    console.error("appointment update service lookup failed", appointmentServicesResult.error);
+    fail("appointment_update_failed");
+  }
+
+  const appointmentServices = appointmentServicesResult?.data ?? [];
+  for (const appointment of appointments) {
+    appointment.serviceIds = appointmentServices
+      .filter((item) => item.appointment_id === appointment.id)
+      .map((item) => item.service_id);
+  }
 
   if (hasTechnicianConflict({ technicianId, startAt: startAt.toISOString(), endAt }, appointments, appointmentId)) {
     fail("appointment_update_conflict");

@@ -335,3 +335,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `loadAppData()` now fetches `appointment_services` and `order_lines` by current workspace parent ids instead of loading both tables wholesale.
 - This keeps relation-table hydration aligned with workspace ownership and trims a broader read on the dashboard path.
 - Verified with `npm run typecheck`.
+
+## Appointment relation scoping
+
+- `createAppointmentAction` and `updateAppointmentAction` now fetch `appointment_services` only for the current workspace's appointment ids.
+- This removes a whole-table read from the appointment conflict-check path while keeping the same validation behavior.
+- Verified with `npm run typecheck`.
