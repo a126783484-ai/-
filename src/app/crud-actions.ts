@@ -680,7 +680,7 @@ export async function saveOrder(formData: FormData) {
       await assertWorkspaceMembership("appointments", appointmentId, workspaceId, supabase);
     }
 
-    await assertWorkspaceReferences(supabase, workspaceId, customerId, technicianId, selectedValues(formData, "line_service_ids"));
+    await assertWorkspaceReferences(supabase, workspaceId, customerId, technicianId);
 
     const lineTemplates = await buildOrderLines(supabase, workspaceId, formData);
     const discount = integerValue(formData, "discount");
