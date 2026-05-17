@@ -945,9 +945,9 @@ export function DashboardView({ data }: { data: AppData }) {
         <div className="card p-5">
           <h2 className="text-lg font-bold text-plum">技師業績</h2>
           <div className="mt-4 space-y-3">
-            {metrics.technicianRevenue.map((item) => (
+            {metrics.technicianRevenue.map((item, index) => (
               <div
-                key={item.name}
+                key={`${item.name}-${index}`}
                 className="flex items-center justify-between rounded-2xl bg-white p-4"
               >
                 <span>
@@ -964,9 +964,9 @@ export function DashboardView({ data }: { data: AppData }) {
         <div className="card p-5">
           <h2 className="text-lg font-bold text-plum">熱門服務</h2>
           <div className="mt-4 space-y-3">
-            {metrics.serviceRanking.map((item) => (
+            {metrics.serviceRanking.map((item, index) => (
               <div
-                key={item.name}
+                key={`${item.name}-${index}`}
                 className="flex items-center justify-between rounded-2xl bg-white p-4"
               >
                 <span>{item.name}</span>
@@ -1774,9 +1774,9 @@ export function ReportsView({ data }: { data: AppData }) {
         </div>
         <div className="card p-5">
           <h2 className="font-bold text-plum">服務銷售排行</h2>
-          {metrics.serviceRanking.map((item) => (
+          {metrics.serviceRanking.map((item, index) => (
             <div
-              key={item.name}
+              key={`${item.name}-${index}`}
               className="mt-3 flex justify-between rounded-2xl bg-white p-4"
             >
               <span>{item.name}</span>
