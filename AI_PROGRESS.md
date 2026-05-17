@@ -6,6 +6,11 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Completed in this round
 
+- Added a complete staff management flow with Supabase Auth email invite creation, workspace membership creation, and guarded edit/update support.
+- Added staff-management feedback codes and tests for create/update/invite failure states.
+- Added an in-page staff summary panel with active headcount, technician count, and management-role count.
+- Restricted the staff create/edit UI to roles that actually have `staff` permission.
+- Verified `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` after the staff changes.
 - Fixed the appointment create path so validation errors no longer bubble into 500 responses; server actions now redirect back to the module with a translated error code.
 - Relaxed appointment workspace validation so any active member of the current workspace can be assigned as `technician_id`; the app now matches the real workspace data where the selected member is `Fii｜店主`.
 - Added checkout error feedback wiring so order creation failures can surface as readable notices instead of crashing the page.
@@ -139,6 +144,7 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Remaining issues
 
+- The supplied local test account still returns `401` on password login in the current Supabase project, so authenticated browser verification for the new staff page is currently blocked by account/auth state rather than app code.
 - Search/filter logic is still client-side and broad.
 - Need final cleanup on remaining demo-only entry points and broad client-side filtering.
 - Need per-module validation and better error propagation.
@@ -152,7 +158,7 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Next step
 
-- Continue with checkout order-create validation, settings-save validation, and remaining demo-placeholder cleanup on secondary modules.
+- Continue with inventory movement actions, order-linked stock consumption, and the remaining consistency work for checkout/reports/payroll after the staff flow is settled.
 
 ## Operational readiness
 
