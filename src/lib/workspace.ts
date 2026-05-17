@@ -88,7 +88,7 @@ async function getFirstActiveMembership(userId: string, client?: AppSupabaseClie
 }
 
 export async function hasActiveWorkspaceMembership(userId: string, client?: AppSupabaseClient) {
-  return Boolean(await getFirstActiveMembership(userId, client));
+  return (await getFirstActiveMembership(userId, client)) !== null;
 }
 
 async function bootstrapOwnerWorkspaceWithAuthenticatedInserts(params: {

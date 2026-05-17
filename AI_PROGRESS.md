@@ -301,3 +301,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
   - `npm run typecheck`
   - `npm test -- src/app/login/actions.test.ts`
   - one minimal smoke for login/home/logout
+
+## Membership helper cleanup
+
+- `hasActiveWorkspaceMembership` now returns an explicit boolean check instead of relying on truthiness.
+- This is a tiny clarity cleanup on the auth path and does not change behavior.
+- Verified with `npm run typecheck`.
