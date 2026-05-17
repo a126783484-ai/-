@@ -204,3 +204,4 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Push status: completed
 - Fixed `loadAppData` so it re-checks `workspace_members` after workspace bootstrap; this prevents freshly authenticated users from being dropped into an empty workspace state during preview verification.
 - Updated `loadAppData` to pass the authenticated Supabase client into `ensureOwnerWorkspaceForUser`, so workspace bootstrap uses the live session rather than an unauthenticated fallback client.
+- Updated `signInAction` to run `bootstrapLoggedInWorkspaceAction()` immediately after password login, restoring the workspace bootstrap step that the earlier client-side flow used.

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { normalizeAuthRedirectTarget } from "@/lib/auth-routes";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { bootstrapOwnerWorkspace } from "@/lib/workspace";
+import { bootstrapLoggedInWorkspaceAction } from "@/app/login/actions";
 
 function readRequired(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -36,6 +37,12 @@ export async function signInAction(formData: FormData) {
 
   if (error) {
     redirect(`/login?${buildSearchParams({ error: "invalid_login", next })}`);
+  }
+
+  const bootstrapResult = await bootstrapLoggedInWorkspaceAction();
+
+  if (!bootstrapResult.ok) {
+    redirect(`/login?${buildSearchParams({ error: bootstrapResult.error, next })}`);
   }
 
   redirect(next);
