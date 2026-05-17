@@ -61,13 +61,13 @@ export function DashboardView({ data }: { data: AppData }) {
         <EmptyState
           title="尚未完成 workspace 初始化"
           action={
-            data.staffInvites.length > 0
+            data.staffInviteFeatureEnabled && data.staffInvites.length > 0
               ? "你有待加入的店鋪邀請，請先開啟邀請卡完成加入。"
               : "請重新登入，系統會依註冊資料補齊 workspace、owner profile 與 membership。"
           }
         />
       ) : null}
-      {data.needsWorkspace && data.staffInvites.length > 0 ? (
+      {data.needsWorkspace && data.staffInviteFeatureEnabled && data.staffInvites.length > 0 ? (
         <div className="mt-4 card p-5">
           <h2 className="text-lg font-bold text-plum">你有待加入的店鋪邀請</h2>
           <p className="mt-1 text-sm text-ink/60">先接受邀請，再進入對應店鋪後台。</p>
@@ -651,7 +651,7 @@ export function StaffView({ data, notice }: { data: AppData; notice?: { kind: "e
     <AppShell title="員工 / 班表 / 業績" subtitle="員工資料、技師排班、請假休息日、服務數量、營收與抽成欄位。" {...shellProps(data)}>
       <div className="grid gap-5">
         {notice ? <FormNotice kind={notice.kind}>{notice.message}</FormNotice> : null}
-        {canManageStaff ? (
+        {canManageStaff && data.staffInviteFeatureEnabled ? (
           <form action={createStaffInviteAction} className="card p-5">
             <h2 className="text-lg font-bold text-plum">新增員工邀請</h2>
             <p className="mt-1 text-sm text-ink/60">輸入對方 email 後會產生可分享的加入連結。對方登入並接受後，會成為目前店鋪成員。</p>
@@ -691,8 +691,13 @@ export function StaffView({ data, notice }: { data: AppData; notice?: { kind: "e
               建立邀請連結
             </button>
           </form>
+        ) : canManageStaff ? (
+          <div className="card p-5">
+            <h2 className="text-lg font-bold text-plum">員工邀請</h2>
+            <p className="mt-1 text-sm text-ink/60">目前資料庫尚未啟用邀請表，請先完成 schema 更新。</p>
+          </div>
         ) : null}
-        {pendingInvites.length > 0 ? (
+        {data.staffInviteFeatureEnabled && pendingInvites.length > 0 ? (
           <div className="card p-5">
             <h2 className="text-lg font-bold text-plum">待處理邀請</h2>
             <div className="mt-4 space-y-3">

@@ -166,3 +166,21 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 ## Operational readiness
 
 - Estimated readiness: 99%
+
+## Current round
+
+- Shifted login from client-side `signInWithPassword` to the existing server action path so browser submits now complete through `POST /login` and return a `303` redirect into the authenticated app shell.
+- Kept the staff invite workflow guarded behind schema detection so the missing `workspace_member_invites` table still degrades cleanly to a bilingual-friendly notice instead of crashing the app.
+- Re-verified locally in a real browser on `http://localhost:3003`:
+  - login submit completed through the server action path
+  - authenticated homepage loaded
+  - `/staff`, `/inventory`, and `/reports` all rendered
+  - `/staff/invite/test-token` showed the invite-unavailable fallback
+- Re-ran `npm run typecheck`, `npm run lint`, and `npm test`; all passed.
+- Re-ran `npm run build` with production Supabase env variables; build passed.
+- Found a separate production deployment env mismatch in diagnostics on the public Vercel URL:
+  - `NEXT_PUBLIC_SUPABASE_*` on that deployment points at `ijokerkjysomrtigigtb`
+  - the app’s expected project ref is `odzxyhaoehvhfximnwjh`
+  - this is a deployment/config issue, not a local code failure
+- Commit hash: pending
+- Push status: pending

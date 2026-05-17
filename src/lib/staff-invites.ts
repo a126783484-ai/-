@@ -44,6 +44,10 @@ export async function loadPendingStaffInvitesForEmail(supabase: AppSupabaseClien
   return (data ?? []).map(toStaffInvite);
 }
 
+export function isMissingStaffInviteTableError(error: { code?: string; message?: string } | null | undefined) {
+  return error?.code === "PGRST205" || error?.message?.includes("workspace_member_invites") === true;
+}
+
 export function buildStaffInvitePath(token: string) {
   return `/staff/invite/${encodeURIComponent(token)}`;
 }

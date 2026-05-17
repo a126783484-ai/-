@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { can } from "@/lib/permissions";
 import type { Role } from "@/lib/types";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
+import { isMissingStaffInviteTableError } from "@/lib/staff-invites";
 
 function readRequired(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -101,6 +102,9 @@ export async function createStaffInviteAction(formData: FormData) {
       .maybeSingle();
 
     if (inviteLookupError) {
+      if (isMissingStaffInviteTableError(inviteLookupError)) {
+        fail("staff_invite_unavailable");
+      }
       throw inviteLookupError;
     }
 
@@ -131,6 +135,9 @@ export async function createStaffInviteAction(formData: FormData) {
       throw result.error;
     }
   } catch (error) {
+    if (isMissingStaffInviteTableError(error as { code?: string; message?: string } | null | undefined)) {
+      fail("staff_invite_unavailable");
+    }
     console.error("staff invite create failed", error);
     fail("staff_create_failed");
   }

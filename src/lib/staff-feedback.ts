@@ -10,6 +10,7 @@ export const staffErrorText: Record<string, string> = {
   staff_invalid_input: "員工資料格式不正確，請檢查欄位內容。",
   staff_update_failed: "員工資料更新失敗，請稍後再試。",
   staff_create_failed: "員工邀請建立失敗，請稍後再試。",
+  staff_invite_unavailable: "員工邀請功能尚未啟用，請先完成資料庫更新。",
   staff_invite_invalid: "邀請連結無效或已失效，請向店家重新索取。",
   staff_invite_failed: "接受邀請失敗，請稍後再試。"
 };

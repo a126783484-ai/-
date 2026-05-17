@@ -3,7 +3,7 @@ import type { Database } from "@/lib/database.types";
 import type { Appointment, Customer, InventoryItem, Order, Role, ServiceItem, Shift, StaffInvite, StaffMember, Workspace } from "@/lib/types";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseConfig } from "@/lib/supabase";
-import { loadPendingStaffInvitesForEmail, toStaffInvite } from "@/lib/staff-invites";
+import { isMissingStaffInviteTableError, loadPendingStaffInvitesForEmail, toStaffInvite } from "@/lib/staff-invites";
 import { ensureOwnerWorkspaceForUser } from "@/lib/workspace";
 
 type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
@@ -24,6 +24,7 @@ export interface AppData {
   currentMember: StaffMember | null;
   staff: StaffMember[];
   staffInvites: StaffInvite[];
+  staffInviteFeatureEnabled: boolean;
   services: ServiceItem[];
   customers: Customer[];
   appointments: Appointment[];
@@ -51,6 +52,7 @@ function emptyAppData(user: { id: string; email: string | null }): AppData {
     currentMember: null,
     staff: [],
     staffInvites: [],
+    staffInviteFeatureEnabled: false,
     services: [],
     customers: [],
     appointments: [],
@@ -230,7 +232,8 @@ export async function loadAppData(): Promise<AppData> {
       if (pendingInvites.length > 0) {
         return {
           ...emptyAppData(userSummary),
-          staffInvites: pendingInvites
+          staffInvites: pendingInvites,
+          staffInviteFeatureEnabled: true
         };
       }
 
@@ -260,10 +263,9 @@ export async function loadAppData(): Promise<AppData> {
   }
 
   const workspaceId = currentMembership.workspace_id;
-  const [workspaceResult, staffResult, staffInvitesResult, categoriesResult, servicesResult, customersResult, appointmentsResult, appointmentServicesResult, ordersResult, orderLinesResult, inventoryResult, shiftsResult] = await Promise.all([
+  const [workspaceResult, staffResult, categoriesResult, servicesResult, customersResult, appointmentsResult, appointmentServicesResult, ordersResult, orderLinesResult, inventoryResult, shiftsResult] = await Promise.all([
     supabase.from("workspaces").select("*").eq("id", workspaceId).maybeSingle(),
     supabase.from("workspace_members").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: true }),
-    supabase.from("workspace_member_invites").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
     supabase.from("service_categories").select("*").eq("workspace_id", workspaceId).order("sort_order", { ascending: true }),
     supabase.from("services").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
     supabase.from("customers").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
@@ -275,7 +277,7 @@ export async function loadAppData(): Promise<AppData> {
     supabase.from("shifts").select("*").eq("workspace_id", workspaceId).order("shift_date", { ascending: false })
   ]);
 
-  const firstError = [workspaceResult, staffResult, staffInvitesResult, categoriesResult, servicesResult, customersResult, appointmentsResult, appointmentServicesResult, ordersResult, orderLinesResult, inventoryResult, shiftsResult]
+  const firstError = [workspaceResult, staffResult, categoriesResult, servicesResult, customersResult, appointmentsResult, appointmentServicesResult, ordersResult, orderLinesResult, inventoryResult, shiftsResult]
     .find((result) => result.error)?.error;
 
   if (firstError) {
@@ -289,13 +291,42 @@ export async function loadAppData(): Promise<AppData> {
 
   const appointmentIds = new Set((appointmentsResult.data ?? []).map((appointment) => appointment.id));
   const orderIds = new Set((ordersResult.data ?? []).map((order) => order.id));
+  let staffInviteFeatureEnabled = true;
+  let staffInvites: StaffInvite[] = [];
+
+  try {
+    const { data: staffInvitesData, error: staffInvitesError } = await supabase
+      .from("workspace_member_invites")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false });
+
+    if (staffInvitesError) {
+      if (isMissingStaffInviteTableError(staffInvitesError)) {
+        staffInviteFeatureEnabled = false;
+      } else {
+        throw staffInvitesError;
+      }
+    } else {
+      staffInvites = (staffInvitesData ?? []).map(toStaffInvite);
+    }
+  } catch (inviteError) {
+    if (isMissingStaffInviteTableError(inviteError as { code?: string; message?: string } | null | undefined)) {
+      staffInviteFeatureEnabled = false;
+      staffInvites = [];
+    } else {
+      console.error("workspace invite query failed", inviteError);
+      return emptyAppData(userSummary);
+    }
+  }
 
   return {
     user: userSummary,
     workspace: toWorkspace(workspaceResult.data),
     currentMember: toStaff(currentMembership),
     staff: (staffResult.data ?? []).map(toStaff),
-    staffInvites: (staffInvitesResult.data ?? []).map(toStaffInvite),
+    staffInvites,
+    staffInviteFeatureEnabled,
     services: (servicesResult.data ?? []).map((service) => toService(service, categoriesResult.data ?? [])),
     customers: (customersResult.data ?? []).map(toCustomer),
     appointments: (appointmentsResult.data ?? []).map((appointment) => toAppointment(

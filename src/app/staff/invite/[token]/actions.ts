@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { isMissingStaffInviteTableError } from "@/lib/staff-invites";
 
 function readRequired(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -42,6 +43,10 @@ export async function acceptStaffInviteAction(formData: FormData) {
     .select("*")
     .eq("token", token)
     .maybeSingle();
+
+  if (isMissingStaffInviteTableError(lookupError)) {
+    redirect(`/staff/invite/${token}?${buildSearchParams({ error: "staff_invite_unavailable" })}`);
+  }
 
   if (lookupError || !invite || invite.status !== "pending" || invite.email.trim().toLowerCase() !== inviteEmail) {
     redirect(`/staff/invite/${token}?${buildSearchParams({ error: "staff_invite_invalid" })}`);

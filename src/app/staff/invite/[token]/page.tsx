@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { acceptStaffInviteAction } from "./actions";
+import type { Database } from "@/lib/database.types";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { buildStaffInvitePath } from "@/lib/staff-invites";
+import { buildStaffInvitePath, isMissingStaffInviteTableError } from "@/lib/staff-invites";
 
 interface StaffInvitePageProps {
   params: Promise<{ token: string }>;
@@ -17,6 +18,8 @@ function buildSearchParams(input: Record<string, string>) {
   return new URLSearchParams(input).toString();
 }
 
+type StaffInviteRow = Database["public"]["Tables"]["workspace_member_invites"]["Row"];
+
 export default async function StaffInvitePage({ params, searchParams }: StaffInvitePageProps) {
   const { token } = await params;
   const query = searchParams ? await searchParams : undefined;
@@ -27,14 +30,38 @@ export default async function StaffInvitePage({ params, searchParams }: StaffInv
     redirect(`/login?${buildSearchParams({ next: buildStaffInvitePath(token) })}`);
   }
 
-  const { data: invite } = await supabase
-    .from("workspace_member_invites")
-    .select("*")
-    .eq("token", token)
-    .maybeSingle();
+  let invite: StaffInviteRow | null = null;
+  let inviteError: { code?: string; message?: string } | null = null;
+
+  try {
+    const result = await supabase
+      .from("workspace_member_invites")
+      .select("*")
+      .eq("token", token)
+      .maybeSingle();
+    invite = result.data;
+    inviteError = result.error;
+  } catch (error) {
+    inviteError = error as { code?: string; message?: string };
+  }
 
   const error = readSearchParam(query?.error);
   const status = readSearchParam(query?.message);
+
+  if (isMissingStaffInviteTableError(inviteError)) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-blush p-4">
+        <section className="card w-full max-w-lg p-6 text-center">
+          <p className="text-sm font-semibold text-rose">Beauty OS</p>
+          <h1 className="mt-3 text-2xl font-bold text-plum">邀請功能尚未啟用</h1>
+          <p className="mt-2 text-sm text-ink/60">目前資料庫尚未建立邀請表，請先由管理員完成 schema 更新。</p>
+          <Link href="/staff" className="mt-5 inline-flex rounded-2xl bg-plum px-4 py-3 font-semibold text-white">
+            返回員工頁
+          </Link>
+        </section>
+      </main>
+    );
+  }
 
   if (!invite) {
     return (
