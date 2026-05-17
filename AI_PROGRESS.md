@@ -226,3 +226,13 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Working tree includes the Supabase config / workspace bootstrap fix.
 - Pending commit hash: not yet created
 - Next step: commit, push, then re-check the preview deployment after Vercel rebuilds.
+
+## Efficient mode update
+
+- Auth callback now reuses the authenticated Supabase client when bootstrapping the workspace after `exchangeCodeForSession`, so the bootstrap chain stays on one session context.
+- Verification kept to one low-cost smoke after the auth change:
+  - login succeeds
+  - `/` loads without `尚未建立 workspace`
+  - `/staff` renders workspace data
+  - logout returns `307` to `/login`
+- Full production build completed once after the auth change and passed.
