@@ -53,6 +53,10 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Ran a production smoke test against `https://beauty-nail-gcx2msmvg-a126783484-2182s-projects.vercel.app`; unauthenticated app routes redirect to `/login`, the login page renders, and no console or hydration errors were detected.
 - Replaced the table export placeholder with a real CSV download path in `src/components/ModuleTable.tsx`.
 - Re-verified `npm run lint`, `npm test`, and `npm run build` after the CSV export change.
+- Merged PR #18 into `main` after GitHub Actions CI, CodeQL, Vercel preview, and real preview login smoke verification passed.
+- Verified PR #18 preview with the provided test account: authenticated login succeeded, `/`, `/appointments`, `/customers`, `/services`, `/checkout`, and `/settings` loaded without 500 or console errors.
+- Verified appointment creation on the PR #18 preview by creating a `Bella` / `單色凝膠` appointment for `05/23`.
+- Verified the post-merge production deployment on mobile viewport `390x844`: authenticated login succeeded, the same core pages loaded, and appointment creation added a `Bella` / `單色凝膠` appointment for `05/24`.
 
 ## Files modified
 
@@ -110,6 +114,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Production smoke test passed on `https://beauty-nail-gcx2msmvg-a126783484-2182s-projects.vercel.app`.
 - Gmail verification check found Supabase email confirmation required for the current test account; the latest readable confirmation link returned `otp_expired`.
 - Table export now downloads a real CSV file from the visible filtered rows and excludes edit/actions columns.
+- PR #18 checks passed: GitHub Actions CI build, typecheck, tests, quality gate, production build, CodeQL, and Vercel preview.
+- Production deployment for merge commit `c6bd3eb` completed successfully at `https://beauty-nail-l88uema36-a126783484-2182s-projects.vercel.app`.
+- Production mobile browser smoke passed with the provided test account: login, dashboard, appointments, customers, services, checkout, settings, and appointment create all passed with no captured 500 or browser console errors.
 
 ## Commit / push status
 
@@ -125,6 +132,10 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - CI fix commit: `dc630dc` - `Improve beauty OS operational readiness`
 - Latest progress update commit: `e1d4f48` - `Improve beauty OS operational readiness`
 - CSV export commit: pending
+- PR #18 merge commit: `c6bd3eb` - `Merge pull request #18 from Johnnie1266789/codex/github-mention-p0-implement-real-crud-for-beauty-os-core-m-i0ioyl`
+- PR #18 merge/deploy verification: completed
+- Latest production deployment: `https://beauty-nail-l88uema36-a126783484-2182s-projects.vercel.app`
+- Current progress update commit: pending
 
 ## Remaining issues
 
@@ -136,10 +147,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Need to keep watching the next preview deployment whenever the progress file is updated and pushed.
 - Need broader smoke coverage for checkout and settings write flows now that the appointment create path is verified.
 - Need to investigate the local Next dev server crash around `public/checkout`/`node_modules` filesystem stat in this Android/Codex environment.
+- Need checkout order-create and settings-save production write smoke in a controlled way after the appointment-create fix is now merged.
+- Need data cleanup for smoke-generated appointments/services once an admin cleanup workflow exists.
 
 ## Next step
 
-- Continue smoke coverage and close the remaining demo-placeholder cleanup on the secondary modules.
+- Continue with checkout order-create validation, settings-save validation, and remaining demo-placeholder cleanup on secondary modules.
 
 ## Operational readiness
 
