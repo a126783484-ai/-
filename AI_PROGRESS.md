@@ -313,3 +313,10 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Added a regression test for `hasPendingStaffInviteForEmail`.
 - The test confirms the helper returns a boolean existence result instead of requiring the full invite list.
 - Verified with `npm run typecheck` and `npm test -- src/lib/staff-invites.test.ts`.
+
+## Workspace app-data trim
+
+- `loadAppData()` now only fetches `workspace_id` for the membership preflight.
+- The current member row is derived from the existing `staff` payload instead of a separate full-row membership read.
+- This trims another common auth-path payload without adding an extra query.
+- Verified with `npm run typecheck`.
