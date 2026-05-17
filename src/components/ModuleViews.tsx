@@ -5,6 +5,7 @@ import { updateWorkspaceSettingsAction } from "@/app/settings/actions";
 import { createCustomerAction } from "@/app/customers/actions";
 import { createAppointmentAction } from "@/app/appointments/actions";
 import { cancelAppointmentAction, updateAppointmentStatusAction } from "@/app/appointments/update-actions";
+import { updateStaffAction } from "@/app/staff/actions";
 import { createServiceAction } from "@/app/services/actions";
 import { ModuleTable } from "@/components/ModuleTable";
 import { FormNotice } from "@/components/FormNotice";
@@ -323,8 +324,76 @@ export function InventoryView({ data }: { data: AppData }) {
   return <AppShell title="庫存管理" subtitle="材料、品牌、成本售價、低庫存提醒、進貨 / 消耗紀錄與訂單扣庫存基礎。" {...shellProps(data)}><ModuleTable rows={data.inventory} searchPlaceholder="搜尋品牌、品名、分類" filterOptions={["美甲膠", "睫毛材料", "保養品"]} emptyTitle="尚無庫存品項" columns={[{ key: "name", label: "品項", render: (row) => <><strong>{row.name}</strong><p className="text-ink/60">{row.brand}</p></> }, { key: "category", label: "分類", render: (row) => row.category }, { key: "cost", label: "成本 / 售價", render: (row) => `${currency.format(row.cost)} / ${currency.format(row.retailPrice)}` }, { key: "qty", label: "庫存", sortValue: (row) => row.quantity, render: (row) => <StatusPill tone={row.quantity <= row.lowStockThreshold ? "amber" : "sage"}>{row.quantity}</StatusPill> }, { key: "alert", label: "提醒", render: (row) => row.quantity <= row.lowStockThreshold ? "低庫存，請補貨" : "安全庫存" }]} /></AppShell>;
 }
 
-export function StaffView({ data }: { data: AppData }) {
-  return <AppShell title="員工 / 班表 / 業績" subtitle="員工資料、技師排班、請假休息日、服務數量、營收與抽成欄位。" {...shellProps(data)}><ModuleTable rows={data.staff} searchPlaceholder="搜尋員工、角色、專長" filterOptions={["technician", "front_desk", "owner"]} emptyTitle="尚無員工資料" columns={[{ key: "name", label: "員工", render: (row) => <><strong>{row.name}</strong><p className="text-ink/60">{row.phone}</p></> }, { key: "role", label: "角色", render: (row) => <StatusPill>{roleLabel(row.role)}</StatusPill> }, { key: "specialty", label: "專長", render: (row) => row.specialties.join("、") || "-" }, { key: "commission", label: "抽成", sortValue: (row) => row.commissionRate, render: (row) => `${Math.round(row.commissionRate * 100)}%` }, { key: "shift", label: "今日班表", render: (row) => { const shift = data.shifts.find((item) => item.staffId === row.id); return shift ? `${shift.startTime}–${shift.endTime}` : "休息"; } }, { key: "status", label: "狀態", render: (row) => row.active ? <StatusPill tone="sage">在職</StatusPill> : <StatusPill>停用</StatusPill> }]} /></AppShell>;
+export function StaffView({ data, notice }: { data: AppData; notice?: { kind: "error" | "success"; message: string } }) {
+  return (
+    <AppShell title="員工 / 班表 / 業績" subtitle="員工資料、技師排班、請假休息日、服務數量、營收與抽成欄位。" {...shellProps(data)}>
+      <div className="grid gap-5">
+        {notice ? <FormNotice kind={notice.kind}>{notice.message}</FormNotice> : null}
+        <div className="card p-5">
+          <h2 className="text-lg font-bold text-plum">員工資料管理</h2>
+          <p className="mt-1 text-sm text-ink/60">目前支援更新既有員工、技師、櫃台與在職狀態。新增員工需對應 auth 使用者，會在後續邀請流程補齊。</p>
+          <ModuleTable
+            rows={data.staff}
+            searchPlaceholder="搜尋員工、角色、專長"
+            filterOptions={["technician", "front_desk", "owner"]}
+            emptyTitle="尚無員工資料"
+            columns={[
+              { key: "name", label: "員工", render: (row) => <><strong>{row.name}</strong><p className="text-ink/60">{row.phone}</p></> },
+              { key: "role", label: "角色", render: (row) => <StatusPill>{roleLabel(row.role)}</StatusPill> },
+              { key: "specialty", label: "專長", render: (row) => row.specialties.join("、") || "-" },
+              { key: "commission", label: "抽成", sortValue: (row) => row.commissionRate, render: (row) => `${Math.round(row.commissionRate * 100)}%` },
+              { key: "shift", label: "今日班表", render: (row) => { const shift = data.shifts.find((item) => item.staffId === row.id); return shift ? `${shift.startTime}–${shift.endTime}` : "休息"; } },
+              {
+                key: "edit",
+                label: "編輯",
+                render: (row) => (
+                  <form action={updateStaffAction} className="grid min-w-[20rem] gap-2 rounded-2xl bg-blush p-3">
+                    <input type="hidden" name="memberId" value={row.id} />
+                    <label className="text-xs font-semibold text-plum">
+                      姓名
+                      <input className="mt-1 w-full rounded-xl border border-champagne p-2" name="displayName" defaultValue={row.name} required />
+                    </label>
+                    <label className="text-xs font-semibold text-plum">
+                      電話
+                      <input className="mt-1 w-full rounded-xl border border-champagne p-2" name="phone" defaultValue={row.phone} />
+                    </label>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="text-xs font-semibold text-plum">
+                        角色
+                        <select className="mt-1 w-full rounded-xl border border-champagne p-2" name="role" defaultValue={row.role}>
+                          <option value="owner">店主</option>
+                          <option value="admin">管理員</option>
+                          <option value="technician">技師</option>
+                          <option value="front_desk">櫃台</option>
+                          <option value="staff">員工</option>
+                        </select>
+                      </label>
+                      <label className="text-xs font-semibold text-plum">
+                        抽成
+                        <input className="mt-1 w-full rounded-xl border border-champagne p-2" name="commissionRate" type="number" min="0" max="1" step="0.01" defaultValue={row.commissionRate} />
+                      </label>
+                    </div>
+                    <label className="text-xs font-semibold text-plum">
+                      專長
+                      <textarea className="mt-1 min-h-20 w-full rounded-xl border border-champagne p-2" name="specialties" defaultValue={row.specialties.join(", ")} />
+                    </label>
+                    <label className="flex items-center gap-2 text-xs font-semibold text-plum">
+                      <input type="checkbox" name="active" defaultChecked={row.active} />
+                      在職
+                    </label>
+                    <button type="submit" className="mobile-tap rounded-xl bg-plum px-3 py-2 font-semibold text-white">
+                      儲存
+                    </button>
+                  </form>
+                )
+              },
+              { key: "status", label: "狀態", render: (row) => row.active ? <StatusPill tone="sage">在職</StatusPill> : <StatusPill>停用</StatusPill> }
+            ]}
+          />
+        </div>
+      </div>
+    </AppShell>
+  );
 }
 
 export function TechnicianView({ data }: { data: AppData }) {

@@ -23,6 +23,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Added appointment status update and cancel actions for operational workflows.
 - Added appointment quick-action buttons in the appointments table.
 - Extended appointment feedback mapping and tests for update/cancel flows.
+- Added staff update action for existing workspace members.
+- Added staff edit forms to the staff table.
+- Added staff feedback mapping and tests.
 
 ## Files modified
 
@@ -37,6 +40,8 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `src/app/appointments/actions.ts`
 - `src/app/appointments/update-actions.ts`
 - `src/app/appointments/page.tsx`
+- `src/app/staff/actions.ts`
+- `src/app/staff/page.tsx`
 - `src/components/ModuleViews.tsx`
 - `src/lib/appointments.ts`
 - `src/lib/app-data.ts`
@@ -49,6 +54,8 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `src/lib/service-feedback.ts`
 - `src/lib/service-feedback.test.ts`
 - `src/lib/workspace.ts`
+- `src/lib/staff-feedback.ts`
+- `src/lib/staff-feedback.test.ts`
 
 ## Verification
 
@@ -66,19 +73,18 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Remaining issues
 
-- Staff CRUD is still read-only.
 - Most module-level actions beyond create flows are still demo placeholders or disabled buttons.
 - Search/filter logic is still client-side and broad.
 - Need real CRUD for appointment edit flows beyond status updates and cancellation.
 - Need per-module validation and better error propagation.
 - Need customer edit/update flows after create is stable.
 - Need service edit/update flows after create is stable.
-- Need staff create/update flows.
+- Need staff invite/create flows tied to auth user onboarding.
 
 ## Next step
 
-- Commit and push the appointment status transition flow, then move to edit flows and staff CRUD.
+- Commit and push the staff update flow, then move to customer/service edit flows and onboarding.
 
 ## Operational readiness
 
-- Estimated readiness: 70%
+- Estimated readiness: 74%
