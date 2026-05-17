@@ -184,3 +184,13 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
   - this is a deployment/config issue, not a local code failure
 - Commit hash: `d272ad1` - `Improve login and staff invite reliability`
 - Push status: completed
+
+## Preview / PR
+
+- Open PR: [#20 Improve login and staff invite reliability](https://github.com/Johnnie1266789/beauty-os/pull/20)
+- Vercel preview: [beauty-nail-os-git-codex-beaut-5fd660-a126783484-2182s-projects.vercel.app](https://beauty-nail-os-git-codex-beaut-5fd660-a126783484-2182s-projects.vercel.app)
+- Preview verification:
+  - login page reflects the new server-action flow
+  - authenticated browser login succeeds
+  - `/staff`, `/inventory`, and `/reports` render correctly
+  - `/staff/invite/test-token` shows the fallback notice because the invite table is still not deployed
