@@ -1,5 +1,11 @@
 export type Role = "owner" | "admin" | "technician" | "front_desk" | "staff";
-export type AppointmentStatus = "pending" | "confirmed" | "in_service" | "completed" | "cancelled" | "no_show";
+export type AppointmentStatus =
+  | "pending"
+  | "confirmed"
+  | "in_service"
+  | "completed"
+  | "cancelled"
+  | "no_show";
 export type OrderStatus = "unpaid" | "partial" | "paid" | "refunded";
 export type PaymentMethod = "cash" | "card" | "transfer" | "line_pay" | "other";
 export type StaffInviteStatus = "pending" | "accepted" | "revoked";
@@ -40,9 +46,17 @@ export interface StaffInvite {
   acceptedAt?: string;
 }
 
+export interface ServiceCategory {
+  id: string;
+  workspaceId: string;
+  name: string;
+  sortOrder: number;
+}
+
 export interface ServiceItem {
   id: string;
   workspaceId: string;
+  categoryId?: string;
   category: string;
   name: string;
   price: number;
@@ -82,6 +96,7 @@ export interface Appointment {
 }
 
 export interface OrderLine {
+  id?: string;
   serviceId: string;
   name: string;
   quantity: number;
@@ -113,6 +128,19 @@ export interface InventoryItem {
   retailPrice: number;
   quantity: number;
   lowStockThreshold: number;
+}
+
+export type InventoryMovementType = "purchase" | "consume" | "adjust";
+
+export interface InventoryMovement {
+  id: string;
+  workspaceId: string;
+  itemId: string;
+  orderId?: string;
+  movementType: InventoryMovementType;
+  quantity: number;
+  note?: string;
+  createdAt: string;
 }
 
 export interface Shift {

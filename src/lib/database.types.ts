@@ -405,7 +405,7 @@ export type Database = {
           workspace_id: string;
           item_id: string;
           order_id: string | null;
-          movement_type: string;
+          movement_type: 'purchase' | 'consume' | 'adjust';
           quantity: number;
           note: string | null;
           created_at: string;
@@ -415,7 +415,7 @@ export type Database = {
           workspace_id: string;
           item_id: string;
           order_id?: string | null;
-          movement_type: string;
+          movement_type: 'purchase' | 'consume' | 'adjust';
           quantity: number;
           note?: string | null;
           created_at?: string;
@@ -425,7 +425,7 @@ export type Database = {
           workspace_id?: string;
           item_id?: string;
           order_id?: string | null;
-          movement_type?: string;
+          movement_type?: 'purchase' | 'consume' | 'adjust';
           quantity?: number;
           note?: string | null;
           created_at?: string;
