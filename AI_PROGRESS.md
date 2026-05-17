@@ -359,3 +359,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `saveOrder()` no longer performs a separate service membership precheck before `buildOrderLines()`.
 - The service ownership validation now happens in one place, which removes a redundant query from the order creation path.
 - Verified with `npm run typecheck`.
+
+## Appointment service lookup removal
+
+- `createAppointmentAction` and `updateAppointmentAction` no longer load `appointment_services` for conflict checks.
+- `hasTechnicianConflict()` only needs technician and time ranges, so the relation read was unnecessary.
+- Verified with `npm run typecheck`.
