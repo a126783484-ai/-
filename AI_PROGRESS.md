@@ -128,9 +128,6 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `npm run lint` passed
 - `npm test` passed
 - `npm run build` passed with production Supabase env variables set locally
-- `npm run lint` passed
-- `npm test` passed
-- `npm run build` passed with production Supabase env variables set locally
 - Playwright local smoke test passed on `http://127.0.0.1:3000`: authenticated login succeeded and appointment creation added a new `Bella` appointment for `05/22 10:00-11:30`.
 - Vercel production deployment for main completed successfully.
 - GitHub Actions build passed after the CI Supabase env fix.
@@ -144,9 +141,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Commit / push status
 
-- Current round code commit: pending
+- Current round code commit: `a6004b1` - `Improve beauty OS operational readiness`
 - Current round progress update commit: pending
-- Current round push status: pending
+- Current round push status: completed
 - Current round commit: `86fbfec` - `Improve beauty OS operational readiness`
 - Pushed to: `origin/codex/github-mention-p0-implement-real-crud-for-beauty-os-core-m-i0ioyl`
 - Current round push status: completed
