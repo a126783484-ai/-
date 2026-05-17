@@ -5,7 +5,7 @@ import { updateWorkspaceSettingsAction } from "@/app/settings/actions";
 import { createCustomerAction } from "@/app/customers/actions";
 import { updateCustomerAction } from "@/app/customers/update-actions";
 import { createAppointmentAction } from "@/app/appointments/actions";
-import { cancelAppointmentAction, updateAppointmentStatusAction } from "@/app/appointments/update-actions";
+import { cancelAppointmentAction, updateAppointmentAction, updateAppointmentStatusAction } from "@/app/appointments/update-actions";
 import { updateStaffAction } from "@/app/staff/actions";
 import { createServiceAction } from "@/app/services/actions";
 import { updateServiceAction } from "@/app/services/update-actions";
@@ -21,6 +21,16 @@ import { currency, formatDate, formatTime } from "@/lib/utils";
 
 const liveNotice = "正式資料模式：資料由 Supabase Auth + RLS 依 workspace 隔離。";
 const sources = ["LINE", "Instagram", "電話", "現場", "官網"];
+
+function toDateTimeLocalInput(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
 
 function shellProps(data: AppData) {
   return {
@@ -152,6 +162,65 @@ export function AppointmentsView({ data, notice }: { data: AppData; notice?: { k
             { key: "service", label: "服務", render: (row) => row.serviceIds.map((id) => data.services.find((service) => service.id === id)?.name).filter(Boolean).join("、") || "-" },
             { key: "tech", label: "技師", render: (row) => data.staff.find((item) => item.id === row.technicianId)?.name ?? "-" },
             { key: "status", label: "狀態", render: (row) => <StatusPill>{statusLabel(row.status)}</StatusPill> },
+            {
+              key: "edit",
+              label: "編輯",
+              render: (row) => {
+                const editableServices = data.services.filter((service) => service.enabled || row.serviceIds.includes(service.id));
+                return (
+                  <form action={updateAppointmentAction} className="grid min-w-[24rem] gap-2 rounded-2xl bg-blush p-3">
+                    <input type="hidden" name="appointmentId" value={row.id} />
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="text-xs font-semibold text-plum">
+                        客戶
+                        <select className="mt-1 w-full rounded-xl border border-champagne p-2" name="customerId" defaultValue={row.customerId} required>
+                          {data.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
+                        </select>
+                      </label>
+                      <label className="text-xs font-semibold text-plum">
+                        技師
+                        <select className="mt-1 w-full rounded-xl border border-champagne p-2" name="technicianId" defaultValue={row.technicianId} required>
+                          {activeTechnicians.map((staff) => <option key={staff.id} value={staff.id}>{staff.name}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="text-xs font-semibold text-plum">
+                        預約時間
+                        <input className="mt-1 w-full rounded-xl border border-champagne p-2" name="startAt" type="datetime-local" defaultValue={toDateTimeLocalInput(row.startAt)} required />
+                      </label>
+                      <label className="text-xs font-semibold text-plum">
+                        來源
+                        <select className="mt-1 w-full rounded-xl border border-champagne p-2" name="source" defaultValue={row.source} required>
+                          {sources.map((source) => <option key={source} value={source}>{source}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                    <label className="text-xs font-semibold text-plum">
+                      服務項目
+                      <div className="mt-1 grid gap-2 rounded-xl border border-champagne p-2">
+                        {editableServices.map((service) => (
+                          <label key={service.id} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-xs">
+                            <span>
+                              <strong>{service.name}</strong>
+                              <span className="ml-2 text-ink/55">{service.category}</span>
+                            </span>
+                            <input type="checkbox" name="serviceIds" value={service.id} defaultChecked={row.serviceIds.includes(service.id)} />
+                          </label>
+                        ))}
+                      </div>
+                    </label>
+                    <label className="text-xs font-semibold text-plum">
+                      備註
+                      <textarea className="mt-1 min-h-20 w-full rounded-xl border border-champagne p-2" name="note" defaultValue={row.note ?? ""} />
+                    </label>
+                    <button type="submit" className="mobile-tap rounded-xl bg-plum px-3 py-2 font-semibold text-white">
+                      儲存
+                    </button>
+                  </form>
+                );
+              }
+            },
             {
               key: "actions",
               label: "快速操作",

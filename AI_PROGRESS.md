@@ -29,6 +29,8 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Added customer update action and customer row-level edit forms.
 - Added service update action and service row-level edit forms.
 - Added customer and service update feedback helpers with tests.
+- Added appointment edit action and appointment row-level edit forms.
+- Extended appointment feedback helpers/tests for edit flows.
 
 ## Files modified
 
@@ -74,24 +76,24 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Commit / push status
 
-- Current round commit: `a8508f8` - `Improve beauty OS operational readiness`
+- Current round commit: pending
 - Pushed to: `origin/codex/beauty-os-auto-work`
-- Current round push status: completed
+- Current round push status: pending
 - Previous commit: `4da959b` - `Add service creation flow`
 - Latest in-progress round hash: pending
 
 ## Remaining issues
 
 - Search/filter logic is still client-side and broad.
-- Need real CRUD for appointment edit flows beyond status updates and cancellation.
+- Need final cleanup on remaining demo-only entry points and broad client-side filtering.
 - Need per-module validation and better error propagation.
 - Need staff invite/create flows tied to auth user onboarding.
 - Need broader demo-placeholder cleanup across remaining read-only modules.
 
 ## Next step
 
-- Commit and push the customer/service update flow, then move to demo-placeholder cleanup and onboarding.
+- Commit and push the appointment edit flow, then move to demo-placeholder cleanup and onboarding.
 
 ## Operational readiness
 
-- Estimated readiness: 80%
+- Estimated readiness: 85%
