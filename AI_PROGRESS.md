@@ -249,3 +249,14 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Verification completed:
   - `npm run typecheck` passed
   - `npm run build` passed
+
+## Membership preflight optimization
+
+- `ensureOwnerWorkspaceForUser` now checks for an existing active membership before trying the bootstrap RPC.
+- If the membership already exists and the workspace row is present, it returns immediately instead of doing extra bootstrap work.
+- This reduces repeated database work on the common authenticated path without changing login behavior.
+- Verified with the same one-time smoke flow:
+  - login succeeded
+  - `/` loaded
+  - `/staff` rendered workspace data
+  - logout returned to `/login`
