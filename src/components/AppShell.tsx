@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { CalendarDays, ChartNoAxesCombined, CreditCard, Gauge, Package, Scissors, Settings, Sparkles, UsersRound, UserRoundCog } from "lucide-react";
 import type { Role, Workspace } from "@/lib/types";
-import { demoNotice, workspace as demoWorkspace } from "@/lib/seed";
 import { roleLabel } from "@/lib/permissions";
 
 const nav = [
@@ -21,9 +20,9 @@ export function AppShell({
   title,
   subtitle,
   children,
-  workspace = demoWorkspace,
+  workspace = { name: "Beauty OS" },
   role = "owner",
-  notice = demoNotice
+  notice = "正式資料模式已啟用，請透過 Supabase Auth 與 workspace 進行操作。"
 }: {
   title: string;
   subtitle: string;
