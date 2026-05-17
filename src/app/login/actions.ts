@@ -40,7 +40,7 @@ export async function bootstrapLoggedInWorkspaceAction(
       }
     }
 
-    await ensureOwnerWorkspaceForUser(dataUser, client);
+    await ensureOwnerWorkspaceForUser(dataUser, client, true);
   } catch {
     return { ok: false, error: "auth_bootstrap_failed" };
   }

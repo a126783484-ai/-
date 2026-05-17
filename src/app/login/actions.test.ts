@@ -68,7 +68,8 @@ describe("bootstrapLoggedInWorkspaceAction", () => {
     });
     expect(mocks.ensureOwnerWorkspaceForUserMock).toHaveBeenCalledWith(
       { id: "user-2", email: "owner@example.com" },
-      supabase
+      supabase,
+      true
     );
   });
 
