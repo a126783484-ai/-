@@ -4,6 +4,7 @@ import { AppShell } from "@/components/AppShell";
 import { updateWorkspaceSettingsAction } from "@/app/settings/actions";
 import { createCustomerAction } from "@/app/customers/actions";
 import { createAppointmentAction } from "@/app/appointments/actions";
+import { cancelAppointmentAction, updateAppointmentStatusAction } from "@/app/appointments/update-actions";
 import { createServiceAction } from "@/app/services/actions";
 import { ModuleTable } from "@/components/ModuleTable";
 import { FormNotice } from "@/components/FormNotice";
@@ -148,7 +149,46 @@ export function AppointmentsView({ data, notice }: { data: AppData; notice?: { k
             { key: "service", label: "服務", render: (row) => row.serviceIds.map((id) => data.services.find((service) => service.id === id)?.name).filter(Boolean).join("、") || "-" },
             { key: "tech", label: "技師", render: (row) => data.staff.find((item) => item.id === row.technicianId)?.name ?? "-" },
             { key: "status", label: "狀態", render: (row) => <StatusPill>{statusLabel(row.status)}</StatusPill> },
-            { key: "actions", label: "快速操作", render: () => <button type="button" className="rounded-xl bg-champagne px-3 py-2 font-semibold text-plum opacity-60" disabled title="狀態更新流程尚未接上後端">更新</button> }
+            {
+              key: "actions",
+              label: "快速操作",
+              render: (row) => (
+                <div className="flex flex-wrap gap-2">
+                  {row.status === "pending" ? (
+                    <form action={updateAppointmentStatusAction}>
+                      <input type="hidden" name="appointmentId" value={row.id} />
+                      <button type="submit" name="status" value="confirmed" className="rounded-xl bg-champagne px-3 py-2 font-semibold text-plum">
+                        確認
+                      </button>
+                    </form>
+                  ) : null}
+                  {row.status === "confirmed" ? (
+                    <form action={updateAppointmentStatusAction}>
+                      <input type="hidden" name="appointmentId" value={row.id} />
+                      <button type="submit" name="status" value="in_service" className="rounded-xl bg-sage/15 px-3 py-2 font-semibold text-sage">
+                        開始服務
+                      </button>
+                    </form>
+                  ) : null}
+                  {row.status === "in_service" ? (
+                    <form action={updateAppointmentStatusAction}>
+                      <input type="hidden" name="appointmentId" value={row.id} />
+                      <button type="submit" name="status" value="completed" className="rounded-xl bg-sage/15 px-3 py-2 font-semibold text-sage">
+                        完成
+                      </button>
+                    </form>
+                  ) : null}
+                  {row.status !== "cancelled" && row.status !== "completed" ? (
+                    <form action={cancelAppointmentAction}>
+                      <input type="hidden" name="appointmentId" value={row.id} />
+                      <button type="submit" className="rounded-xl bg-rose/10 px-3 py-2 font-semibold text-rose">
+                        取消
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+              )
+            }
           ]}
         />
       </div>

@@ -20,6 +20,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Added appointment creation flow with workspace-scoped server action, conflict detection, and success/error feedback.
 - Added appointment create form and notice handling to the appointments page.
 - Refined appointment duration and conflict helpers to support leaner service row shapes.
+- Added appointment status update and cancel actions for operational workflows.
+- Added appointment quick-action buttons in the appointments table.
+- Extended appointment feedback mapping and tests for update/cancel flows.
 
 ## Files modified
 
@@ -32,6 +35,7 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `src/app/services/actions.ts`
 - `src/app/services/page.tsx`
 - `src/app/appointments/actions.ts`
+- `src/app/appointments/update-actions.ts`
 - `src/app/appointments/page.tsx`
 - `src/components/ModuleViews.tsx`
 - `src/lib/appointments.ts`
@@ -58,14 +62,14 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Pushed to: `origin/codex/beauty-os-auto-work`
 - Current round push status: completed
 - Previous commit: `4da959b` - `Add service creation flow`
+- Latest in-progress round hash: pending
 
 ## Remaining issues
 
 - Staff CRUD is still read-only.
-- Some appointment edit/cancel flows are still placeholders.
 - Most module-level actions beyond create flows are still demo placeholders or disabled buttons.
 - Search/filter logic is still client-side and broad.
-- Need real CRUD for appointment updates, cancellation, and status changes.
+- Need real CRUD for appointment edit flows beyond status updates and cancellation.
 - Need per-module validation and better error propagation.
 - Need customer edit/update flows after create is stable.
 - Need service edit/update flows after create is stable.
@@ -73,8 +77,8 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Next step
 
-- Commit and push the appointment create flow, then move to appointment edit/cancel and status transitions.
+- Commit and push the appointment status transition flow, then move to edit flows and staff CRUD.
 
 ## Operational readiness
 
-- Estimated readiness: 66%
+- Estimated readiness: 70%
