@@ -1,5 +1,6 @@
 export const appointmentMessageText: Record<string, string> = {
   appointment_created: "預約已建立。",
+  appointment_updated: "預約已更新。",
   appointment_status_updated: "預約狀態已更新。",
   appointment_cancelled: "預約已取消。"
 };
@@ -10,8 +11,10 @@ export const appointmentErrorText: Record<string, string> = {
   appointment_invalid_input: "預約資料格式不正確，請檢查時間與服務項目。",
   appointment_conflict: "同一位技師在這段時間已有衝突的預約。",
   appointment_create_failed: "預約建立失敗，請稍後再試。",
+  appointment_update_invalid_input: "預約更新資料格式不正確，請檢查欄位內容。",
   appointment_invalid_status: "預約狀態不正確，請重新操作。",
-  appointment_update_failed: "預約更新失敗，請稍後再試。"
+  appointment_update_failed: "預約更新失敗，請稍後再試。",
+  appointment_update_conflict: "同一位技師在這段時間已有衝突的預約。"
 };
 
 export function readAppointmentParam(value: string | string[] | undefined) {
