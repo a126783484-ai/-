@@ -44,6 +44,8 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Local dev browser verification is currently blocked by the environment-specific Next dev server crash: `ENOSYS: function not implemented, stat '/root/beauty-os/public/checkout'`.
 - Merged `codex/beauty-os-auto-work` into `main` and pushed production deployment.
 - Fixed GitHub Actions CI build by injecting the canonical production Supabase env before `npm run build`.
+- Verified the follow-up main deployment and GitHub Actions build/CodeQL checks are green.
+- Ran a production smoke test against `https://beauty-nail-gcx2msmvg-a126783484-2182s-projects.vercel.app`; unauthenticated app routes redirect to `/login`, the login page renders, and no console or hydration errors were detected.
 
 ## Files modified
 
@@ -92,7 +94,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `npm test` passed
 - `npm run build` passed with production Supabase env variables set locally
 - Vercel production deployment for main completed successfully.
-- GitHub Actions build initially failed because CI did not provide Supabase env variables; workflow has been patched and is pending re-run.
+- GitHub Actions build passed after the CI Supabase env fix.
+- GitHub CodeQL `Analyze (javascript-typescript)` passed.
+- Production smoke test passed on `https://beauty-nail-gcx2msmvg-a126783484-2182s-projects.vercel.app`.
 - Gmail verification check found Supabase email confirmation required for the current test account; the latest readable confirmation link returned `otp_expired`.
 
 ## Commit / push status
@@ -106,7 +110,8 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Previous commit: `4da959b` - `Add service creation flow`
 - Latest in-progress round hash: pending
 - Main merge commit: `11cc63e` - `Merge beauty OS operational readiness updates`
-- CI fix commit: pending
+- CI fix commit: `dc630dc` - `Improve beauty OS operational readiness`
+- Latest progress update commit: pending
 
 ## Remaining issues
 
@@ -121,7 +126,7 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Next step
 
-- Push the CI env fix, verify GitHub Actions turns green, then continue demo-placeholder cleanup.
+- Continue demo-placeholder cleanup and add a confirmed test account path for authenticated browser checks.
 
 ## Operational readiness
 
