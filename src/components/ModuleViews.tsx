@@ -3,10 +3,12 @@
 import { AppShell } from "@/components/AppShell";
 import { updateWorkspaceSettingsAction } from "@/app/settings/actions";
 import { createCustomerAction } from "@/app/customers/actions";
+import { updateCustomerAction } from "@/app/customers/update-actions";
 import { createAppointmentAction } from "@/app/appointments/actions";
 import { cancelAppointmentAction, updateAppointmentStatusAction } from "@/app/appointments/update-actions";
 import { updateStaffAction } from "@/app/staff/actions";
 import { createServiceAction } from "@/app/services/actions";
+import { updateServiceAction } from "@/app/services/update-actions";
 import { ModuleTable } from "@/components/ModuleTable";
 import { FormNotice } from "@/components/FormNotice";
 import { MetricCard, StatusPill, EmptyState } from "@/components/ui";
@@ -259,7 +261,81 @@ export function CustomersView({ data, notice }: { data: AppData; notice?: { kind
             </button>
           </form>
         ) : null}
-        <ModuleTable rows={data.customers} searchPlaceholder="搜尋姓名、電話、LINE、標籤" filterOptions={["VIP", "VVIP", "新客", "高價值客戶"]} emptyTitle="尚無客戶資料" columns={[{ key: "name", label: "客戶", sortValue: (row) => row.name, render: (row) => <><strong>{row.name}</strong><p className="text-ink/60">{row.phone}｜LINE {row.lineId ?? "-"}</p></> }, { key: "tier", label: "會員", render: (row) => <StatusPill tone="plum">{row.tier}</StatusPill> }, { key: "prefs", label: "偏好紀錄", render: (row) => row.preferences.join("、") || "-" }, { key: "cautions", label: "注意事項", render: (row) => row.cautions.length ? <span className="text-rose">{row.cautions.join("、")}</span> : "無" }, { key: "reminder", label: "回訪提醒", render: (row) => row.nextReminder ?? "-" }, { key: "tags", label: "標記", render: (row) => row.tags.map((tag) => <StatusPill key={tag} tone="sage">{tag}</StatusPill>) }]} />
+        <ModuleTable
+          rows={data.customers}
+          searchPlaceholder="搜尋姓名、電話、LINE、標籤"
+          filterOptions={["VIP", "VVIP", "新客", "高價值客戶"]}
+          emptyTitle="尚無客戶資料"
+          columns={[
+            { key: "name", label: "客戶", sortValue: (row) => row.name, render: (row) => <><strong>{row.name}</strong><p className="text-ink/60">{row.phone}｜LINE {row.lineId ?? "-"}</p></> },
+            { key: "tier", label: "會員", render: (row) => <StatusPill tone="plum">{row.tier}</StatusPill> },
+            { key: "prefs", label: "偏好紀錄", render: (row) => row.preferences.join("、") || "-" },
+            { key: "cautions", label: "注意事項", render: (row) => row.cautions.length ? <span className="text-rose">{row.cautions.join("、")}</span> : "無" },
+            { key: "reminder", label: "回訪提醒", render: (row) => row.nextReminder ?? "-" },
+            { key: "tags", label: "標記", render: (row) => row.tags.map((tag) => <StatusPill key={tag} tone="sage">{tag}</StatusPill>) },
+            {
+              key: "edit",
+              label: "編輯",
+              render: (row) => (
+                <form action={updateCustomerAction} className="grid min-w-[22rem] gap-2 rounded-2xl bg-blush p-3">
+                  <input type="hidden" name="customerId" value={row.id} />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="text-xs font-semibold text-plum">
+                      姓名
+                      <input className="mt-1 w-full rounded-xl border border-champagne p-2" name="name" defaultValue={row.name} required />
+                    </label>
+                    <label className="text-xs font-semibold text-plum">
+                      電話
+                      <input className="mt-1 w-full rounded-xl border border-champagne p-2" name="phone" defaultValue={row.phone} required />
+                    </label>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="text-xs font-semibold text-plum">
+                      會員等級
+                      <select className="mt-1 w-full rounded-xl border border-champagne p-2" name="tier" defaultValue={row.tier}>
+                        <option>一般</option>
+                        <option>新客</option>
+                        <option>VIP</option>
+                        <option>VVIP</option>
+                      </select>
+                    </label>
+                    <label className="text-xs font-semibold text-plum">
+                      生日
+                      <input className="mt-1 w-full rounded-xl border border-champagne p-2" name="birthday" type="date" defaultValue={row.birthday} />
+                    </label>
+                  </div>
+                  <label className="text-xs font-semibold text-plum">
+                    LINE ID
+                    <input className="mt-1 w-full rounded-xl border border-champagne p-2" name="lineId" defaultValue={row.lineId ?? ""} />
+                  </label>
+                  <label className="text-xs font-semibold text-plum">
+                    下次提醒
+                    <input className="mt-1 w-full rounded-xl border border-champagne p-2" name="nextReminder" type="date" defaultValue={row.nextReminder ?? ""} />
+                  </label>
+                  <label className="text-xs font-semibold text-plum">
+                    偏好
+                    <textarea className="mt-1 min-h-20 w-full rounded-xl border border-champagne p-2" name="preferences" defaultValue={row.preferences.join(", ")} />
+                  </label>
+                  <label className="text-xs font-semibold text-plum">
+                    注意事項
+                    <textarea className="mt-1 min-h-20 w-full rounded-xl border border-champagne p-2" name="cautions" defaultValue={row.cautions.join(", ")} />
+                  </label>
+                  <label className="text-xs font-semibold text-plum">
+                    標記
+                    <textarea className="mt-1 min-h-20 w-full rounded-xl border border-champagne p-2" name="tags" defaultValue={row.tags.join(", ")} />
+                  </label>
+                  <label className="text-xs font-semibold text-plum">
+                    備註
+                    <textarea className="mt-1 min-h-20 w-full rounded-xl border border-champagne p-2" name="note" defaultValue={row.note ?? ""} />
+                  </label>
+                  <button type="submit" className="mobile-tap rounded-xl bg-plum px-3 py-2 font-semibold text-white">
+                    儲存
+                  </button>
+                </form>
+              )
+            }
+          ]}
+        />
       </div>
     </AppShell>
   );
@@ -310,7 +386,66 @@ export function ServicesView({ data, notice }: { data: AppData; notice?: { kind:
             </button>
           </form>
         ) : null}
-        <ModuleTable rows={data.services} searchPlaceholder="搜尋服務名稱、分類、說明" filterOptions={["美甲", "美睫", "美容", "SPA", "霧眉", "加購"]} emptyTitle="尚未建立服務項目" columns={[{ key: "name", label: "服務", render: (row) => <><strong>{row.name}</strong><p className="text-ink/60">{row.description}</p></> }, { key: "category", label: "分類", render: (row) => <StatusPill>{row.category}</StatusPill> }, { key: "price", label: "價格", sortValue: (row) => row.price, render: (row) => currency.format(row.price) }, { key: "duration", label: "時間", sortValue: (row) => row.durationMin, render: (row) => `${row.durationMin} 分鐘` }, { key: "addon", label: "加購", render: (row) => row.addOn ? <StatusPill tone="amber">加購</StatusPill> : "主服務" }, { key: "enabled", label: "狀態", render: (row) => row.enabled ? <StatusPill tone="sage">啟用</StatusPill> : <StatusPill>停用</StatusPill> }]} />
+        <ModuleTable
+          rows={data.services}
+          searchPlaceholder="搜尋服務名稱、分類、說明"
+          filterOptions={["美甲", "美睫", "美容", "SPA", "霧眉", "加購"]}
+          emptyTitle="尚未建立服務項目"
+          columns={[
+            { key: "name", label: "服務", render: (row) => <><strong>{row.name}</strong><p className="text-ink/60">{row.description}</p></> },
+            { key: "category", label: "分類", render: (row) => <StatusPill>{row.category}</StatusPill> },
+            { key: "price", label: "價格", sortValue: (row) => row.price, render: (row) => currency.format(row.price) },
+            { key: "duration", label: "時間", sortValue: (row) => row.durationMin, render: (row) => `${row.durationMin} 分鐘` },
+            { key: "addon", label: "加購", render: (row) => row.addOn ? <StatusPill tone="amber">加購</StatusPill> : "主服務" },
+            { key: "enabled", label: "狀態", render: (row) => row.enabled ? <StatusPill tone="sage">啟用</StatusPill> : <StatusPill>停用</StatusPill> },
+            {
+              key: "edit",
+              label: "編輯",
+              render: (row) => (
+                <form action={updateServiceAction} className="grid min-w-[22rem] gap-2 rounded-2xl bg-blush p-3">
+                  <input type="hidden" name="serviceId" value={row.id} />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="text-xs font-semibold text-plum">
+                      服務名稱
+                      <input className="mt-1 w-full rounded-xl border border-champagne p-2" name="name" defaultValue={row.name} required />
+                    </label>
+                    <label className="text-xs font-semibold text-plum">
+                      分類
+                      <input className="mt-1 w-full rounded-xl border border-champagne p-2" name="category" defaultValue={row.category} />
+                    </label>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="text-xs font-semibold text-plum">
+                      價格
+                      <input className="mt-1 w-full rounded-xl border border-champagne p-2" name="price" type="number" min="0" step="1" defaultValue={row.price} required />
+                    </label>
+                    <label className="text-xs font-semibold text-plum">
+                      所需時間
+                      <input className="mt-1 w-full rounded-xl border border-champagne p-2" name="durationMin" type="number" min="1" step="1" defaultValue={row.durationMin} required />
+                    </label>
+                  </div>
+                  <label className="text-xs font-semibold text-plum">
+                    說明
+                    <textarea className="mt-1 min-h-20 w-full rounded-xl border border-champagne p-2" name="description" defaultValue={row.description} />
+                  </label>
+                  <div className="flex flex-wrap gap-3 text-xs font-semibold text-plum">
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" name="addOn" defaultChecked={row.addOn} />
+                      加購項目
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" name="enabled" defaultChecked={row.enabled} />
+                      啟用
+                    </label>
+                  </div>
+                  <button type="submit" className="mobile-tap rounded-xl bg-plum px-3 py-2 font-semibold text-white">
+                    儲存
+                  </button>
+                </form>
+              )
+            }
+          ]}
+        />
       </div>
     </AppShell>
   );

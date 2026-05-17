@@ -26,6 +26,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Added staff update action for existing workspace members.
 - Added staff edit forms to the staff table.
 - Added staff feedback mapping and tests.
+- Added customer update action and customer row-level edit forms.
+- Added service update action and service row-level edit forms.
+- Added customer and service update feedback helpers with tests.
 
 ## Files modified
 
@@ -34,8 +37,10 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `src/app/settings/actions.ts`
 - `src/app/settings/page.tsx`
 - `src/app/customers/actions.ts`
+- `src/app/customers/update-actions.ts`
 - `src/app/customers/page.tsx`
 - `src/app/services/actions.ts`
+- `src/app/services/update-actions.ts`
 - `src/app/services/page.tsx`
 - `src/app/appointments/actions.ts`
 - `src/app/appointments/update-actions.ts`
@@ -49,10 +54,14 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `src/lib/appointment-feedback.test.ts`
 - `src/lib/customer-feedback.ts`
 - `src/lib/customer-feedback.test.ts`
+- `src/lib/customer-update-feedback.ts`
+- `src/lib/customer-update-feedback.test.ts`
 - `src/lib/settings-feedback.ts`
 - `src/lib/settings-feedback.test.ts`
 - `src/lib/service-feedback.ts`
 - `src/lib/service-feedback.test.ts`
+- `src/lib/service-update-feedback.ts`
+- `src/lib/service-update-feedback.test.ts`
 - `src/lib/workspace.ts`
 - `src/lib/staff-feedback.ts`
 - `src/lib/staff-feedback.test.ts`
@@ -65,26 +74,24 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Commit / push status
 
-- Current round commit: `1d3803b` - `Improve beauty OS operational readiness`
+- Current round commit: pending
 - Pushed to: `origin/codex/beauty-os-auto-work`
-- Current round push status: completed
+- Current round push status: pending
 - Previous commit: `4da959b` - `Add service creation flow`
 - Latest in-progress round hash: pending
 
 ## Remaining issues
 
-- Most module-level actions beyond create flows are still demo placeholders or disabled buttons.
 - Search/filter logic is still client-side and broad.
 - Need real CRUD for appointment edit flows beyond status updates and cancellation.
 - Need per-module validation and better error propagation.
-- Need customer edit/update flows after create is stable.
-- Need service edit/update flows after create is stable.
 - Need staff invite/create flows tied to auth user onboarding.
+- Need broader demo-placeholder cleanup across remaining read-only modules.
 
 ## Next step
 
-- Commit and push the staff update flow, then move to customer/service edit flows and onboarding.
+- Commit and push the customer/service update flow, then move to demo-placeholder cleanup and onboarding.
 
 ## Operational readiness
 
-- Estimated readiness: 74%
+- Estimated readiness: 80%
