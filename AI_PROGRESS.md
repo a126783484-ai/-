@@ -10,6 +10,8 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Added a client-side `LoginForm` component for persistent browser-based auth.
 - Verified the login flow locally with Playwright: authenticated session cookies persisted, `/appointments` and `/customers` stayed on protected pages, and no redirect back to `/login` occurred.
 - Verified the same login flow on the live Vercel preview deployment: authenticated session cookies persisted, `/appointments` and `/customers` stayed protected, and the deployment URL resolved correctly.
+- Re-verified the live login flow after the latest deployment: unauthenticated `/appointments` redirects to `/login`, authenticated login reaches the dashboard, and `/appointments`, `/customers`, `/services`, and `/staff` all render their working module pages.
+- Re-checked the live module pages for their primary controls: `建立預約`, `建立客戶`, `建立服務`, and staff edit forms are present, with no console errors or page errors during the browser run.
 - Ran `npm run lint` successfully.
 - Ran `npm test` successfully.
 - Ran `npm run build` successfully with production Supabase env variables set locally.
@@ -126,7 +128,6 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Need staff invite/create flows tied to auth user onboarding.
 - Need broader demo-placeholder cleanup across remaining read-only modules.
 - Need to keep watching the next preview deployment whenever the progress file is updated and pushed.
-- Need a fresh, non-expired Supabase confirmation link or a confirmed test account to complete authenticated live browser checks.
 - Need to investigate the local Next dev server crash around `public/checkout`/`node_modules` filesystem stat in this Android/Codex environment.
 
 ## Next step
@@ -135,4 +136,4 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Operational readiness
 
-- Estimated readiness: 90%
+- Estimated readiness: 92%
