@@ -384,3 +384,15 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `toWorkspace()` now accepts a reduced workspace summary shape instead of the full row.
 - This reduces the primary dashboard workspace fetch without changing the rendered data.
 - Verified with `npm run typecheck`.
+
+## App data column trim
+
+- `loadAppData()` now selects only the fields used by its mappers across members, categories, services, customers, appointments, orders, inventory, movements, and shifts.
+- This removes the remaining `select("*")` calls from the main dashboard data path.
+- Verified with `npm run typecheck`.
+
+## App data mapper trim
+
+- The `loadAppData()` mapper parameter types now match the reduced select lists.
+- This keeps the dashboard payload trim type-safe after removing the remaining `*` queries.
+- Verified with `npm run typecheck`.

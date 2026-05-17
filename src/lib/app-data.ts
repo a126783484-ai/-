@@ -28,21 +28,50 @@ type WorkspaceSummaryRow = Pick<
   WorkspaceRow,
   "id" | "name" | "phone" | "address" | "brand_color" | "business_hours"
 >;
-type WorkspaceMemberRow =
-  Database["public"]["Tables"]["workspace_members"]["Row"];
-type ServiceCategoryRow =
-  Database["public"]["Tables"]["service_categories"]["Row"];
-type ServiceRow = Database["public"]["Tables"]["services"]["Row"];
-type CustomerRow = Database["public"]["Tables"]["customers"]["Row"];
-type AppointmentRow = Database["public"]["Tables"]["appointments"]["Row"];
-type AppointmentServiceRow =
-  Database["public"]["Tables"]["appointment_services"]["Row"];
-type OrderRow = Database["public"]["Tables"]["orders"]["Row"];
-type OrderLineRow = Database["public"]["Tables"]["order_lines"]["Row"];
-type InventoryRow = Database["public"]["Tables"]["inventory_items"]["Row"];
-type InventoryMovementRow =
-  Database["public"]["Tables"]["inventory_movements"]["Row"];
-type ShiftRow = Database["public"]["Tables"]["shifts"]["Row"];
+type WorkspaceMemberSummaryRow = Pick<
+  Database["public"]["Tables"]["workspace_members"]["Row"],
+  "id" | "workspace_id" | "user_id" | "display_name" | "role" | "phone" | "active" | "commission_rate" | "specialties"
+>;
+type ServiceCategorySummaryRow = Pick<
+  Database["public"]["Tables"]["service_categories"]["Row"],
+  "id" | "workspace_id" | "name" | "sort_order"
+>;
+type ServiceSummaryRow = Pick<
+  Database["public"]["Tables"]["services"]["Row"],
+  "id" | "workspace_id" | "category_id" | "name" | "price" | "duration_min" | "description" | "enabled" | "is_add_on"
+>;
+type CustomerSummaryRow = Pick<
+  Database["public"]["Tables"]["customers"]["Row"],
+  "id" | "workspace_id" | "name" | "phone" | "birthday" | "line_id" | "note" | "preferences" | "cautions" | "tier" | "tags" | "last_visit" | "next_reminder"
+>;
+type AppointmentSummaryRow = Pick<
+  Database["public"]["Tables"]["appointments"]["Row"],
+  "id" | "workspace_id" | "customer_id" | "technician_id" | "start_at" | "end_at" | "status" | "source" | "note"
+>;
+type AppointmentServiceSummaryRow = Pick<
+  Database["public"]["Tables"]["appointment_services"]["Row"],
+  "appointment_id" | "service_id"
+>;
+type OrderSummaryRow = Pick<
+  Database["public"]["Tables"]["orders"]["Row"],
+  "id" | "workspace_id" | "appointment_id" | "customer_id" | "technician_id" | "discount" | "tip" | "paid_amount" | "payment_method" | "status" | "created_at"
+>;
+type OrderLineSummaryRow = Pick<
+  Database["public"]["Tables"]["order_lines"]["Row"],
+  "id" | "order_id" | "service_id" | "name" | "quantity" | "unit_price"
+>;
+type InventorySummaryRow = Pick<
+  Database["public"]["Tables"]["inventory_items"]["Row"],
+  "id" | "workspace_id" | "brand" | "category" | "name" | "cost" | "retail_price" | "quantity" | "low_stock_threshold"
+>;
+type InventoryMovementSummaryRow = Pick<
+  Database["public"]["Tables"]["inventory_movements"]["Row"],
+  "id" | "workspace_id" | "item_id" | "order_id" | "movement_type" | "quantity" | "note" | "created_at"
+>;
+type ShiftSummaryRow = Pick<
+  Database["public"]["Tables"]["shifts"]["Row"],
+  "id" | "workspace_id" | "staff_id" | "shift_date" | "start_time" | "end_time" | "leave"
+>;
 
 export interface AppData {
   user: { id: string; email: string | null };
@@ -104,7 +133,7 @@ function toWorkspace(row: WorkspaceSummaryRow): Workspace {
   };
 }
 
-function toStaff(row: WorkspaceMemberRow): StaffMember {
+function toStaff(row: WorkspaceMemberSummaryRow): StaffMember {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -117,7 +146,7 @@ function toStaff(row: WorkspaceMemberRow): StaffMember {
   };
 }
 
-function toCustomer(row: CustomerRow): Customer {
+function toCustomer(row: CustomerSummaryRow): Customer {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -135,7 +164,7 @@ function toCustomer(row: CustomerRow): Customer {
   };
 }
 
-function toCategory(row: ServiceCategoryRow): ServiceCategory {
+function toCategory(row: ServiceCategorySummaryRow): ServiceCategory {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -145,8 +174,8 @@ function toCategory(row: ServiceCategoryRow): ServiceCategory {
 }
 
 function toService(
-  row: ServiceRow,
-  categories: ServiceCategoryRow[],
+  row: ServiceSummaryRow,
+  categories: ServiceCategorySummaryRow[],
 ): ServiceItem {
   return {
     id: row.id,
@@ -165,8 +194,8 @@ function toService(
 }
 
 function toAppointment(
-  row: AppointmentRow,
-  appointmentServices: AppointmentServiceRow[],
+  row: AppointmentSummaryRow,
+  appointmentServices: AppointmentServiceSummaryRow[],
 ): Appointment {
   return {
     id: row.id,
@@ -184,7 +213,7 @@ function toAppointment(
   };
 }
 
-function toOrder(row: OrderRow, lines: OrderLineRow[]): Order {
+function toOrder(row: OrderSummaryRow, lines: OrderLineSummaryRow[]): Order {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -209,7 +238,7 @@ function toOrder(row: OrderRow, lines: OrderLineRow[]): Order {
   };
 }
 
-function toInventory(row: InventoryRow): InventoryItem {
+function toInventory(row: InventorySummaryRow): InventoryItem {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -223,7 +252,7 @@ function toInventory(row: InventoryRow): InventoryItem {
   };
 }
 
-function toInventoryMovement(row: InventoryMovementRow): InventoryMovement {
+function toInventoryMovement(row: InventoryMovementSummaryRow): InventoryMovement {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -236,7 +265,7 @@ function toInventoryMovement(row: InventoryMovementRow): InventoryMovement {
   };
 }
 
-function toShift(row: ShiftRow): Shift {
+function toShift(row: ShiftSummaryRow): Shift {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -349,48 +378,48 @@ export async function loadAppData(): Promise<AppData> {
       .maybeSingle(),
     supabase
       .from("workspace_members")
-      .select("*")
+      .select("id, workspace_id, user_id, display_name, role, phone, active, commission_rate, specialties")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: true }),
     supabase
       .from("service_categories")
-      .select("*")
+      .select("id, workspace_id, name, sort_order")
       .eq("workspace_id", workspaceId)
       .order("sort_order", { ascending: true }),
     supabase
       .from("services")
-      .select("*")
+      .select("id, workspace_id, category_id, name, price, duration_min, description, enabled, is_add_on")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false }),
     supabase
       .from("customers")
-      .select("*")
+      .select("id, workspace_id, name, phone, birthday, line_id, note, preferences, cautions, tier, tags, last_visit, next_reminder")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false }),
     supabase
       .from("appointments")
-      .select("*")
+      .select("id, workspace_id, customer_id, technician_id, start_at, end_at, status, source, note")
       .eq("workspace_id", workspaceId)
       .order("start_at", { ascending: true }),
     supabase
       .from("orders")
-      .select("*")
+      .select("id, workspace_id, appointment_id, customer_id, technician_id, discount, tip, paid_amount, payment_method, status, created_at")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false }),
     supabase
       .from("inventory_items")
-      .select("*")
+      .select("id, workspace_id, brand, category, name, cost, retail_price, quantity, low_stock_threshold")
       .eq("workspace_id", workspaceId)
       .order("name", { ascending: true }),
     supabase
       .from("inventory_movements")
-      .select("*")
+      .select("id, workspace_id, item_id, order_id, movement_type, quantity, note, created_at")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false })
       .limit(100),
     supabase
       .from("shifts")
-      .select("*")
+      .select("id, workspace_id, staff_id, shift_date, start_time, end_time, leave")
       .eq("workspace_id", workspaceId)
       .order("shift_date", { ascending: false }),
     supabase
