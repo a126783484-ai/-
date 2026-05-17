@@ -44,6 +44,28 @@ export async function loadPendingStaffInvitesForEmail(supabase: AppSupabaseClien
   return (data ?? []).map(toStaffInvite);
 }
 
+export async function hasPendingStaffInviteForEmail(supabase: AppSupabaseClient, email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    return false;
+  }
+
+  const { data, error } = await supabase
+    .from("workspace_member_invites")
+    .select("id")
+    .eq("email", normalizedEmail)
+    .eq("status", "pending")
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return Boolean(data);
+}
+
 export function isMissingStaffInviteTableError(error: { code?: string; message?: string } | null | undefined) {
   return error?.code === "PGRST205" || error?.message?.includes("workspace_member_invites") === true;
 }

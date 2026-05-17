@@ -3,7 +3,7 @@ import { bootstrapLoggedInWorkspaceAction } from "./actions";
 
 const mocks = vi.hoisted(() => ({
   ensureOwnerWorkspaceForUserMock: vi.fn(),
-  loadPendingStaffInvitesForEmailMock: vi.fn(),
+  hasPendingStaffInviteForEmailMock: vi.fn(),
   hasActiveWorkspaceMembershipMock: vi.fn(),
   createSupabaseServerClientMock: vi.fn()
 }));
@@ -15,7 +15,7 @@ vi.mock("@/lib/workspace", () => ({
 
 vi.mock("@/lib/staff-invites", () => ({
   isMissingStaffInviteTableError: () => false,
-  loadPendingStaffInvitesForEmail: mocks.loadPendingStaffInvitesForEmailMock
+  hasPendingStaffInviteForEmail: mocks.hasPendingStaffInviteForEmailMock
 }));
 
 vi.mock("@/lib/supabase-server", () => ({
@@ -48,7 +48,7 @@ describe("bootstrapLoggedInWorkspaceAction", () => {
     const supabase = createSupabaseStub({ id: "user-1", email: "owner@example.com" });
     mocks.createSupabaseServerClientMock.mockResolvedValue(supabase);
     mocks.hasActiveWorkspaceMembershipMock.mockResolvedValue(false);
-    mocks.loadPendingStaffInvitesForEmailMock.mockResolvedValue([{ id: "invite-1" }]);
+    mocks.hasPendingStaffInviteForEmailMock.mockResolvedValue(true);
 
     await expect(bootstrapLoggedInWorkspaceAction(supabase, { id: "user-1", email: "owner@example.com" } as never)).resolves.toEqual({
       ok: true
@@ -60,7 +60,7 @@ describe("bootstrapLoggedInWorkspaceAction", () => {
     const supabase = createSupabaseStub({ id: "user-2", email: "owner@example.com" });
     mocks.createSupabaseServerClientMock.mockResolvedValue(supabase);
     mocks.hasActiveWorkspaceMembershipMock.mockResolvedValue(false);
-    mocks.loadPendingStaffInvitesForEmailMock.mockResolvedValue([]);
+    mocks.hasPendingStaffInviteForEmailMock.mockResolvedValue(false);
     mocks.ensureOwnerWorkspaceForUserMock.mockResolvedValue({ id: "workspace-1" });
 
     await expect(bootstrapLoggedInWorkspaceAction(supabase, { id: "user-2", email: "owner@example.com" } as never)).resolves.toEqual({
@@ -80,7 +80,7 @@ describe("bootstrapLoggedInWorkspaceAction", () => {
     await expect(bootstrapLoggedInWorkspaceAction(supabase, { id: "user-3", email: "owner@example.com" } as never)).resolves.toEqual({
       ok: true
     });
-    expect(mocks.loadPendingStaffInvitesForEmailMock).not.toHaveBeenCalled();
+    expect(mocks.hasPendingStaffInviteForEmailMock).not.toHaveBeenCalled();
     expect(mocks.ensureOwnerWorkspaceForUserMock).not.toHaveBeenCalled();
   });
 });

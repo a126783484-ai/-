@@ -3,7 +3,7 @@
 import type { User } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { ensureOwnerWorkspaceForUser, hasActiveWorkspaceMembership } from "@/lib/workspace";
-import { isMissingStaffInviteTableError, loadPendingStaffInvitesForEmail } from "@/lib/staff-invites";
+import { hasPendingStaffInviteForEmail, isMissingStaffInviteTableError } from "@/lib/staff-invites";
 
 export type LoginBootstrapResult =
   | { ok: true }
@@ -30,17 +30,14 @@ export async function bootstrapLoggedInWorkspaceAction(
       return { ok: true };
     }
 
-    let pendingInvites: Awaited<ReturnType<typeof loadPendingStaffInvitesForEmail>> = [];
     try {
-      pendingInvites = await loadPendingStaffInvitesForEmail(client, dataUser.email ?? "");
+      if (await hasPendingStaffInviteForEmail(client, dataUser.email ?? "")) {
+        return { ok: true };
+      }
     } catch (inviteError) {
       if (!isMissingStaffInviteTableError(inviteError as { code?: string; message?: string } | null | undefined)) {
         console.error("pending invite lookup failed", inviteError);
       }
-    }
-
-    if (pendingInvites.length > 0) {
-      return { ok: true };
     }
 
     await ensureOwnerWorkspaceForUser(dataUser, client);
