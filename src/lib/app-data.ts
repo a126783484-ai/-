@@ -267,7 +267,7 @@ export async function loadAppData(): Promise<AppData> {
 
   const { data: memberships, error: membershipError } = await supabase
     .from("workspace_members")
-    .select("*")
+    .select("workspace_id")
     .eq("user_id", user.id)
     .eq("active", true)
     .order("created_at", { ascending: true });
@@ -277,9 +277,9 @@ export async function loadAppData(): Promise<AppData> {
     return emptyAppData(userSummary);
   }
 
-  let currentMembership = memberships?.[0] ?? null;
+  let currentWorkspaceId = memberships?.[0]?.workspace_id ?? null;
 
-  if (!currentMembership) {
+  if (!currentWorkspaceId) {
     let pendingInvites: StaffInvite[] = [];
 
     try {
@@ -307,7 +307,7 @@ export async function loadAppData(): Promise<AppData> {
 
     const { data: refreshedMemberships, error: refreshedMembershipError } = await supabase
       .from("workspace_members")
-      .select("*")
+      .select("workspace_id")
       .eq("user_id", user.id)
       .eq("active", true)
       .order("created_at", { ascending: true });
@@ -317,14 +317,14 @@ export async function loadAppData(): Promise<AppData> {
       return emptyAppData(userSummary);
     }
 
-    currentMembership = refreshedMemberships?.[0] ?? null;
+    currentWorkspaceId = refreshedMemberships?.[0]?.workspace_id ?? null;
 
-    if (!currentMembership) {
+    if (!currentWorkspaceId) {
       return emptyAppData(userSummary);
     }
   }
 
-  const workspaceId = currentMembership.workspace_id;
+  const workspaceId = currentWorkspaceId;
   const [
     workspaceResult,
     staffResult,
@@ -420,6 +420,8 @@ export async function loadAppData(): Promise<AppData> {
     return emptyAppData(userSummary);
   }
 
+  const currentMemberRow = (staffResult.data ?? []).find((member) => member.user_id === user.id) ?? null;
+
   let staffInviteFeatureEnabled = true;
   let staffInvites: StaffInvite[] = [];
 
@@ -442,7 +444,7 @@ export async function loadAppData(): Promise<AppData> {
   return {
     user: userSummary,
     workspace: toWorkspace(workspaceResult.data),
-    currentMember: toStaff(currentMembership),
+    currentMember: currentMemberRow ? toStaff(currentMemberRow) : null,
     staff: (staffResult.data ?? []).map(toStaff),
     categories: (categoriesResult.data ?? []).map(toCategory),
     staffInvites,
