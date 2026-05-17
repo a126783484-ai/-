@@ -236,3 +236,16 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
   - `/staff` renders workspace data
   - logout returns `307` to `/login`
 - Full production build completed once after the auth change and passed.
+
+## Latest efficiency tweak
+
+- Reduced one redundant auth roundtrip during login:
+  - `signInAction` now passes the `user` returned by `signInWithPassword` into `bootstrapLoggedInWorkspaceAction`
+  - `bootstrapLoggedInWorkspaceAction` can reuse an existing Supabase client and user instead of always calling `auth.getUser()` again
+- Verified again with the same single smoke pattern:
+  - `/` loads successfully after login
+  - `/staff` renders workspace data
+  - logout redirects back to `/login`
+- Verification completed:
+  - `npm run typecheck` passed
+  - `npm run build` passed
