@@ -285,3 +285,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
   - login success
   - home loads without `尚未建立 workspace`
   - logout redirects to `/login`
+
+## Membership payload trim
+
+- `workspace_members` membership lookups now only select `workspace_id` instead of the full row payload.
+- This reduces the data returned on the common auth / bootstrap path without changing behavior.
+- Kept the change minimal and verified with `npm run typecheck`.
