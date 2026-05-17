@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { updateWorkspaceSettingsAction } from "@/app/settings/actions";
@@ -7,7 +8,7 @@ import { createCustomerAction } from "@/app/customers/actions";
 import { updateCustomerAction } from "@/app/customers/update-actions";
 import { createAppointmentAction } from "@/app/appointments/actions";
 import { cancelAppointmentAction, updateAppointmentAction, updateAppointmentStatusAction } from "@/app/appointments/update-actions";
-import { updateStaffAction } from "@/app/staff/actions";
+import { createStaffInviteAction, updateStaffAction } from "@/app/staff/actions";
 import { createServiceAction } from "@/app/services/actions";
 import { updateServiceAction } from "@/app/services/update-actions";
 import { ModuleTable } from "@/components/ModuleTable";
@@ -18,6 +19,7 @@ import { dashboardMetrics } from "@/lib/analytics";
 import { orderTotal, outstandingAmount } from "@/lib/orders";
 import { roleLabel } from "@/lib/permissions";
 import type { AppData } from "@/lib/app-data";
+import { buildStaffInvitePath } from "@/lib/staff-invites";
 import { currency, formatDate, formatDateTime, formatDateTimeLocalInput, formatTime } from "@/lib/utils";
 
 const liveNotice = "正式資料模式：資料由 Supabase Auth + RLS 依 workspace 隔離。";
@@ -55,7 +57,35 @@ export function DashboardView({ data }: { data: AppData }) {
 
   return (
     <AppShell title="營運總覽" subtitle="今日預約、營收、技師業績、熱門服務與風險提醒集中管理。" {...shellProps(data)}>
-      {data.needsWorkspace ? <EmptyState title="尚未完成 workspace 初始化" action="請重新登入，系統會依註冊資料補齊 workspace、owner profile 與 membership。" /> : null}
+      {data.needsWorkspace ? (
+        <EmptyState
+          title="尚未完成 workspace 初始化"
+          action={
+            data.staffInvites.length > 0
+              ? "你有待加入的店鋪邀請，請先開啟邀請卡完成加入。"
+              : "請重新登入，系統會依註冊資料補齊 workspace、owner profile 與 membership。"
+          }
+        />
+      ) : null}
+      {data.needsWorkspace && data.staffInvites.length > 0 ? (
+        <div className="mt-4 card p-5">
+          <h2 className="text-lg font-bold text-plum">你有待加入的店鋪邀請</h2>
+          <p className="mt-1 text-sm text-ink/60">先接受邀請，再進入對應店鋪後台。</p>
+          <div className="mt-4 space-y-3">
+            {data.staffInvites.map((invite) => (
+              <div key={invite.id} className="flex flex-col gap-3 rounded-2xl bg-blush p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <strong className="block text-plum">{invite.displayName}</strong>
+                  <p className="text-sm text-ink/60">{invite.email} ｜ {roleLabel(invite.role)}</p>
+                </div>
+                <Link href={buildStaffInvitePath(invite.token)} className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-center font-semibold text-white">
+                  開啟邀請
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="今日預約數" value={metrics.todayAppointments} hint="含待確認與已確認" />
         <MetricCard label="今日營收" value={currency.format(metrics.todayRevenue)} hint="依訂單建立日統計" />
@@ -614,17 +644,85 @@ export function InventoryView({ data }: { data: AppData }) {
 }
 
 export function StaffView({ data, notice }: { data: AppData; notice?: { kind: "error" | "success"; message: string } }) {
+  const canManageStaff = !data.needsWorkspace && (data.currentMember ? ["owner", "admin"].includes(data.currentMember.role) : true);
+  const pendingInvites = data.staffInvites.filter((invite) => invite.status === "pending");
+
   return (
     <AppShell title="員工 / 班表 / 業績" subtitle="員工資料、技師排班、請假休息日、服務數量、營收與抽成欄位。" {...shellProps(data)}>
       <div className="grid gap-5">
         {notice ? <FormNotice kind={notice.kind}>{notice.message}</FormNotice> : null}
+        {canManageStaff ? (
+          <form action={createStaffInviteAction} className="card p-5">
+            <h2 className="text-lg font-bold text-plum">新增員工邀請</h2>
+            <p className="mt-1 text-sm text-ink/60">輸入對方 email 後會產生可分享的加入連結。對方登入並接受後，會成為目前店鋪成員。</p>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <label className="block text-sm font-semibold text-plum">
+                顯示名稱
+                <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="displayName" required />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                Email
+                <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="email" type="email" autoComplete="email" required />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                電話
+                <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="phone" autoComplete="tel" />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                角色
+                <select className="mt-2 w-full rounded-2xl border border-champagne p-3" name="role" defaultValue="staff">
+                  <option value="staff">一般員工</option>
+                  <option value="front_desk">櫃台</option>
+                  <option value="technician">技師</option>
+                  <option value="admin">管理員</option>
+                  <option value="owner">店主</option>
+                </select>
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                抽成
+                <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="commissionRate" type="number" min="0" max="1" step="0.01" defaultValue="0" />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                專長
+                <textarea className="mt-2 min-h-24 w-full rounded-2xl border border-champagne p-3" name="specialties" placeholder="例如：凝膠美甲, 眉型設計" />
+              </label>
+            </div>
+            <button type="submit" className="mobile-tap mt-5 rounded-2xl bg-plum font-semibold text-white">
+              建立邀請連結
+            </button>
+          </form>
+        ) : null}
+        {pendingInvites.length > 0 ? (
+          <div className="card p-5">
+            <h2 className="text-lg font-bold text-plum">待處理邀請</h2>
+            <div className="mt-4 space-y-3">
+              {pendingInvites.map((invite) => (
+                <div key={invite.id} className="rounded-2xl bg-blush p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <strong className="block text-plum">{invite.displayName}</strong>
+                      <p className="text-sm text-ink/60">{invite.email} ｜ {roleLabel(invite.role)}</p>
+                    </div>
+                    <StatusPill tone="amber">待接受</StatusPill>
+                  </div>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <code className="break-all rounded-2xl bg-white px-3 py-2 text-xs text-ink/70">{buildStaffInvitePath(invite.token)}</code>
+                    <Link href={buildStaffInvitePath(invite.token)} className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-center font-semibold text-white">
+                      開啟邀請
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <div className="card p-5">
           <h2 className="text-lg font-bold text-plum">員工資料管理</h2>
-          <p className="mt-1 text-sm text-ink/60">目前支援更新既有員工、技師、櫃台與在職狀態。新增員工需對應 auth 使用者，會在後續邀請流程補齊。</p>
+          <p className="mt-1 text-sm text-ink/60">目前支援更新既有員工、技師、櫃台與在職狀態，也可先建立邀請連結給新成員加入。</p>
           <ModuleTable
             rows={data.staff}
             searchPlaceholder="搜尋員工、角色、專長"
-            filterOptions={["technician", "front_desk", "owner"]}
+            filterOptions={["technician", "front_desk", "owner", "admin", "staff"]}
             emptyTitle="尚無員工資料"
             columns={[
               { key: "name", label: "員工", render: (row) => <><strong>{row.name}</strong><p className="text-ink/60">{row.phone}</p></> },

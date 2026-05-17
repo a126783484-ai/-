@@ -2,6 +2,7 @@
 
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { ensureOwnerWorkspaceForUser } from "@/lib/workspace";
+import { loadPendingStaffInvitesForEmail } from "@/lib/staff-invites";
 
 export type LoginBootstrapResult =
   | { ok: true }
@@ -21,6 +22,17 @@ export async function bootstrapLoggedInWorkspaceAction(): Promise<LoginBootstrap
   }
 
   try {
+    let pendingInvites: Awaited<ReturnType<typeof loadPendingStaffInvitesForEmail>> = [];
+    try {
+      pendingInvites = await loadPendingStaffInvitesForEmail(supabase, data.user.email ?? "");
+    } catch (inviteError) {
+      console.error("pending invite lookup failed", inviteError);
+    }
+
+    if (pendingInvites.length > 0) {
+      return { ok: true };
+    }
+
     await ensureOwnerWorkspaceForUser(data.user, supabase);
   } catch {
     return { ok: false, error: "auth_bootstrap_failed" };

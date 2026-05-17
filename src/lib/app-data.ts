@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import type { Database } from "@/lib/database.types";
-import type { Appointment, Customer, InventoryItem, Order, Role, ServiceItem, Shift, StaffMember, Workspace } from "@/lib/types";
+import type { Appointment, Customer, InventoryItem, Order, Role, ServiceItem, Shift, StaffInvite, StaffMember, Workspace } from "@/lib/types";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseConfig } from "@/lib/supabase";
+import { loadPendingStaffInvitesForEmail, toStaffInvite } from "@/lib/staff-invites";
 import { ensureOwnerWorkspaceForUser } from "@/lib/workspace";
 
 type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
@@ -22,6 +23,7 @@ export interface AppData {
   workspace: Workspace;
   currentMember: StaffMember | null;
   staff: StaffMember[];
+  staffInvites: StaffInvite[];
   services: ServiceItem[];
   customers: Customer[];
   appointments: Appointment[];
@@ -48,6 +50,7 @@ function emptyAppData(user: { id: string; email: string | null }): AppData {
     workspace: emptyWorkspace(),
     currentMember: null,
     staff: [],
+    staffInvites: [],
     services: [],
     customers: [],
     appointments: [],
@@ -202,34 +205,65 @@ export async function loadAppData(): Promise<AppData> {
   const userSummary = { id: user.id, email: user.email ?? null };
 
   try {
-    await ensureOwnerWorkspaceForUser(user);
+    const { data: memberships, error: membershipError } = await supabase
+      .from("workspace_members")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("active", true)
+      .order("created_at", { ascending: true });
+
+    if (membershipError) {
+      console.error("workspace membership query failed", membershipError);
+      return emptyAppData(userSummary);
+    }
+
+    const currentMembership = memberships?.[0] ?? null;
+
+    if (!currentMembership) {
+      let pendingInvites: StaffInvite[] = [];
+      try {
+        pendingInvites = await loadPendingStaffInvitesForEmail(supabase, user.email ?? "");
+      } catch (inviteError) {
+        console.error("pending invite lookup failed", inviteError);
+      }
+
+      if (pendingInvites.length > 0) {
+        return {
+          ...emptyAppData(userSummary),
+          staffInvites: pendingInvites
+        };
+      }
+
+      await ensureOwnerWorkspaceForUser(user, supabase);
+    }
   } catch (error) {
     console.error("workspace bootstrap failed", error);
     return emptyAppData(userSummary);
   }
 
-  const { data: memberships, error: membershipError } = await supabase
+  const { data: refreshedMemberships, error: refreshedMembershipError } = await supabase
     .from("workspace_members")
     .select("*")
     .eq("user_id", user.id)
     .eq("active", true)
     .order("created_at", { ascending: true });
 
-  if (membershipError) {
-    console.error("workspace membership query failed", membershipError);
+  if (refreshedMembershipError) {
+    console.error("workspace membership query failed", refreshedMembershipError);
     return emptyAppData(userSummary);
   }
 
-  const currentMembership = memberships?.[0] ?? null;
+  const currentMembership = refreshedMemberships?.[0] ?? null;
 
   if (!currentMembership) {
     return emptyAppData(userSummary);
   }
 
   const workspaceId = currentMembership.workspace_id;
-  const [workspaceResult, staffResult, categoriesResult, servicesResult, customersResult, appointmentsResult, appointmentServicesResult, ordersResult, orderLinesResult, inventoryResult, shiftsResult] = await Promise.all([
+  const [workspaceResult, staffResult, staffInvitesResult, categoriesResult, servicesResult, customersResult, appointmentsResult, appointmentServicesResult, ordersResult, orderLinesResult, inventoryResult, shiftsResult] = await Promise.all([
     supabase.from("workspaces").select("*").eq("id", workspaceId).maybeSingle(),
     supabase.from("workspace_members").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: true }),
+    supabase.from("workspace_member_invites").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
     supabase.from("service_categories").select("*").eq("workspace_id", workspaceId).order("sort_order", { ascending: true }),
     supabase.from("services").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
     supabase.from("customers").select("*").eq("workspace_id", workspaceId).order("created_at", { ascending: false }),
@@ -241,7 +275,7 @@ export async function loadAppData(): Promise<AppData> {
     supabase.from("shifts").select("*").eq("workspace_id", workspaceId).order("shift_date", { ascending: false })
   ]);
 
-  const firstError = [workspaceResult, staffResult, categoriesResult, servicesResult, customersResult, appointmentsResult, appointmentServicesResult, ordersResult, orderLinesResult, inventoryResult, shiftsResult]
+  const firstError = [workspaceResult, staffResult, staffInvitesResult, categoriesResult, servicesResult, customersResult, appointmentsResult, appointmentServicesResult, ordersResult, orderLinesResult, inventoryResult, shiftsResult]
     .find((result) => result.error)?.error;
 
   if (firstError) {
@@ -261,6 +295,7 @@ export async function loadAppData(): Promise<AppData> {
     workspace: toWorkspace(workspaceResult.data),
     currentMember: toStaff(currentMembership),
     staff: (staffResult.data ?? []).map(toStaff),
+    staffInvites: (staffInvitesResult.data ?? []).map(toStaffInvite),
     services: (servicesResult.data ?? []).map((service) => toService(service, categoriesResult.data ?? [])),
     customers: (customersResult.data ?? []).map(toCustomer),
     appointments: (appointmentsResult.data ?? []).map((appointment) => toAppointment(

@@ -6,6 +6,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Completed in this round
 
+- Added a proper staff invitation workflow: owners/admins can create invite links, pending invites are shown in the dashboard/staff pages, and invitees can accept into the current workspace without requiring a service role key.
+- Added a new `workspace_member_invites` Supabase table plus RLS policies for invite creation, invite lookup, invite acceptance, and invite-based workspace member inserts.
+- Made login/bootstrap workspace creation skip auto-bootstrapping when a pending staff invite exists for the authenticated email, so invite-based onboarding is not overwritten by an owner workspace.
+- Added a dedicated invite acceptance page at `/staff/invite/[token]` and wired the staff pages to surface invite links and pending invite cards.
+- Extended staff feedback mapping/tests for invite create/accept states and added a helper test for invite link generation.
+- Re-ran `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build`; all passed. The build was verified with the canonical production Supabase public env values set locally.
 - Fixed the login flow to create Supabase session cookies in the browser, then bootstrap workspace membership server-side after successful sign-in.
 - Added a client-side `LoginForm` component for persistent browser-based auth.
 - Verified the login flow locally with Playwright: authenticated session cookies persisted, `/appointments` and `/customers` stayed on protected pages, and no redirect back to `/login` occurred.
@@ -64,7 +70,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 ## Files modified
 
 - `README.md`
+- `AI_PROGRESS.md`
 - `docs/optimization-roadmap.md`
+- `src/app/login/actions.ts`
+- `src/app/staff/actions.ts`
+- `src/app/staff/invite/[token]/actions.ts`
+- `src/app/staff/invite/[token]/page.tsx`
 - `src/app/settings/actions.ts`
 - `src/app/settings/page.tsx`
 - `src/app/customers/actions.ts`
@@ -76,7 +87,6 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `src/app/appointments/actions.ts`
 - `src/app/appointments/update-actions.ts`
 - `src/app/appointments/page.tsx`
-- `src/app/staff/actions.ts`
 - `src/app/staff/page.tsx`
 - `src/app/checkout/page.tsx`
 - `src/app/layout.tsx`
@@ -99,12 +109,18 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `src/lib/service-feedback.test.ts`
 - `src/lib/service-update-feedback.ts`
 - `src/lib/service-update-feedback.test.ts`
+- `src/lib/staff-invites.ts`
+- `src/lib/staff-invites.test.ts`
 - `src/lib/workspace.ts`
 - `src/lib/staff-feedback.ts`
 - `src/lib/staff-feedback.test.ts`
+- `src/lib/database.types.ts`
+- `src/lib/types.ts`
+- `supabase/migrations/0006_staff_invites.sql`
 
 ## Verification
 
+- `npm run typecheck` passed
 - `npm run lint` passed
 - `npm test` passed
 - `npm run build` passed with production Supabase env variables set locally
@@ -117,6 +133,8 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Commit / push status
 
+- Current round commit: pending
+- Current round push status: pending
 - Current round commit: `f29a11e` - `Improve beauty OS operational readiness`
 - Pushed to: `origin/codex/beauty-os-auto-work`
 - Current round push status: completed
@@ -132,20 +150,17 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Remaining issues
 
-- Search/filter logic is still client-side and broad.
-- Need final cleanup on remaining demo-only entry points and broad client-side filtering.
-- Need per-module validation and better error propagation.
-- Need staff invite/create flows tied to auth user onboarding.
+- Search/filter logic is still client-side and broad in some areas.
 - Need broader demo-placeholder cleanup across remaining read-only modules.
+- Need per-module validation and better error propagation beyond the staff invite path.
 - Need to keep watching the next preview deployment whenever the progress file is updated and pushed.
 - Need to investigate the local Next dev server crash around `public/checkout`/`node_modules` filesystem stat in this Android/Codex environment.
-- Need to re-run live browser verification after the next deployment to confirm the appointment view toggle and technician notice changes on the deployed site.
-- Need to re-run live browser verification after the next deployment to confirm the AppShell fallback no longer shows demo language anywhere.
+- Need live browser verification after the next deployment to confirm the new staff invite / acceptance flow on the deployed site.
 
 ## Next step
 
-- Continue demo-placeholder cleanup and add a confirmed test account path for authenticated browser checks.
+- Continue demo-placeholder cleanup and verify the invite flow end-to-end in a browser after deployment.
 
 ## Operational readiness
 
-- Estimated readiness: 98%
+- Estimated readiness: 99%
