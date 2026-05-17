@@ -353,3 +353,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `buildOrderLines()` now routes the missing-service validation text through a shared helper.
 - This keeps the traditional Chinese validation message stable when a service does not belong to the current workspace.
 - Verified with `npm run typecheck` and `npm test -- src/lib/order-line-errors.test.ts`.
+
+## Order service lookup dedupe
+
+- `saveOrder()` no longer performs a separate service membership precheck before `buildOrderLines()`.
+- The service ownership validation now happens in one place, which removes a redundant query from the order creation path.
+- Verified with `npm run typecheck`.
