@@ -298,6 +298,7 @@ function AppointmentForm({
   appointment?: Appointment;
 }) {
   const fallbackStart = compactDateTime(new Date().toISOString());
+  const selectedServiceIds = new Set(appointment?.serviceIds ?? []);
   return (
     <form action={saveAppointment} className="card p-5">
       <input type="hidden" name="id" value={appointment?.id ?? ""} />
@@ -399,7 +400,7 @@ function AppointmentForm({
           </legend>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             {data.services
-              .filter((service) => service.enabled)
+              .filter((service) => service.enabled || selectedServiceIds.has(service.id))
               .map((service) => (
                 <label
                   key={service.id}
@@ -418,6 +419,7 @@ function AppointmentForm({
                     <small className="ml-2 text-ink/50">
                       {currency.format(service.price)}
                     </small>
+                    {!service.enabled ? <small className="ml-2 text-rose">(已停用)</small> : null}
                   </span>
                 </label>
               ))}
@@ -602,7 +604,8 @@ function OrderForm({ data }: { data: AppData }) {
         </label>
         <label className="text-sm font-semibold text-plum">
           付款狀態
-          <select name="status" className={fieldClass()} defaultValue="unpaid">
+          <select name="status" className={fieldClass()} defaultValue="">
+            <option value="">自動判斷</option>
             {orderStatuses.map((status) => (
               <option key={status} value={status}>
                 {status}
