@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { updateWorkspaceSettingsAction } from "@/app/settings/actions";
 import { createCustomerAction } from "@/app/customers/actions";
@@ -85,6 +85,8 @@ export function DashboardView({ data }: { data: AppData }) {
 
 export function AppointmentsView({ data, notice }: { data: AppData; notice?: { kind: "error" | "success"; message: string } }) {
   const ready = useClientReady();
+  const createFormRef = useRef<HTMLFormElement | null>(null);
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   if (!ready) {
     return (
       <AppShell title="預約系統" subtitle="新增、修改、取消預約；日曆 / 列表檢視與技師衝突檢查。" {...shellProps(data)}>
@@ -97,24 +99,76 @@ export function AppointmentsView({ data, notice }: { data: AppData; notice?: { k
   const activeTechnicians = data.staff.filter((staff) => staff.role === "technician" && staff.active);
   const bookableServices = data.services.filter((service) => service.enabled);
   const canCreateAppointmentForm = canCreateAppointments && data.customers.length > 0 && activeTechnicians.length > 0 && bookableServices.length > 0;
+  const groupedByDate = data.appointments.reduce<Record<string, typeof data.appointments>>((accumulator, appointment) => {
+    const key = formatDate(appointment.startAt);
+    accumulator[key] ??= [];
+    accumulator[key].push(appointment);
+    return accumulator;
+  }, {});
+  const sortedCalendarDays = Object.entries(groupedByDate).sort((left, right) => left[0].localeCompare(right[0]));
 
   return (
     <AppShell title="預約系統" subtitle="新增、修改、取消預約；日曆 / 列表檢視與技師衝突檢查。" {...shellProps(data)}>
       <div className="mb-4 grid gap-3 md:grid-cols-3">
-        <button type="button" className="mobile-tap rounded-2xl bg-plum font-semibold text-white">
+        <button
+          type="button"
+          className="mobile-tap rounded-2xl bg-plum font-semibold text-white"
+          onClick={() => createFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+        >
           ＋ 新增預約
         </button>
-        <button type="button" className="mobile-tap rounded-2xl bg-white font-semibold text-plum">
+        <button
+          type="button"
+          className={`mobile-tap rounded-2xl font-semibold ${viewMode === "calendar" ? "bg-plum text-white" : "bg-white text-plum"}`}
+          onClick={() => setViewMode("calendar")}
+        >
           日曆檢視
         </button>
-        <button type="button" className="mobile-tap rounded-2xl bg-white font-semibold text-plum">
+        <button
+          type="button"
+          className={`mobile-tap rounded-2xl font-semibold ${viewMode === "list" ? "bg-plum text-white" : "bg-white text-plum"}`}
+          onClick={() => setViewMode("list")}
+        >
           列表檢視
         </button>
       </div>
       <div className="grid gap-5">
         {notice ? <FormNotice kind={notice.kind}>{notice.message}</FormNotice> : null}
-        {canCreateAppointments ? (
-          <form action={createAppointmentAction} className="card p-5">
+        {viewMode === "calendar" ? (
+          <div className="card p-5">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-lg font-bold text-plum">預約日曆</h2>
+              <StatusPill tone="plum">{data.appointments.length} 筆預約</StatusPill>
+            </div>
+            <div className="mt-4 grid gap-3">
+              {sortedCalendarDays.length ? sortedCalendarDays.map(([date, appointments]) => (
+                <article key={date} className="rounded-3xl bg-blush p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <strong className="text-plum">{date}</strong>
+                    <StatusPill>{appointments.length} 筆</StatusPill>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {appointments.map((appointment) => {
+                      const customer = data.customers.find((item) => item.id === appointment.customerId);
+                      const technician = data.staff.find((item) => item.id === appointment.technicianId);
+                      return (
+                        <div key={appointment.id} className="rounded-2xl bg-white p-3 text-sm">
+                          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                            <strong>{formatTime(appointment.startAt)}–{formatTime(appointment.endAt)}｜{customer?.name ?? "未命名客戶"}</strong>
+                            <StatusPill>{statusLabel(appointment.status)}</StatusPill>
+                          </div>
+                          <p className="mt-1 text-ink/60">技師 {technician?.name ?? "未指派"}｜{appointment.note ?? "無備註"}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </article>
+              )) : <EmptyState title="目前沒有預約" action="建立第一筆預約後，這裡會顯示以日期分組的工作排程。" />}
+            </div>
+          </div>
+        ) : null}
+        {viewMode === "list" && canCreateAppointments ? (
+          <form ref={createFormRef} action={createAppointmentAction} className="card p-5">
             <h2 className="text-lg font-bold text-plum">建立預約</h2>
             <p className="mt-1 text-sm text-ink/60">選擇客戶、技師、時間與服務項目後，系統會自動檢查技師衝突。</p>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -170,118 +224,120 @@ export function AppointmentsView({ data, notice }: { data: AppData; notice?: { k
             </button>
           </form>
         ) : null}
-        <ModuleTable
-          rows={data.appointments}
-          searchPlaceholder="搜尋客戶、技師、來源、備註"
-          filterOptions={["pending", "confirmed", "completed", "no_show"]}
-          emptyTitle="目前沒有預約"
-          columns={[
-            { key: "time", label: "日期 / 時間", sortValue: (row) => row.startAt, render: (row) => <><strong>{formatDate(row.startAt)}</strong><p className="text-ink/60">{formatTime(row.startAt)}–{formatTime(row.endAt)}</p></> },
-            { key: "customer", label: "客戶", render: (row) => data.customers.find((item) => item.id === row.customerId)?.name ?? "-" },
-            { key: "service", label: "服務", render: (row) => row.serviceIds.map((id) => data.services.find((service) => service.id === id)?.name).filter(Boolean).join("、") || "-" },
-            { key: "tech", label: "技師", render: (row) => data.staff.find((item) => item.id === row.technicianId)?.name ?? "-" },
-            { key: "status", label: "狀態", render: (row) => <StatusPill>{statusLabel(row.status)}</StatusPill> },
-            {
-              key: "edit",
-              label: "編輯",
-              render: (row) => {
-                const editableServices = data.services.filter((service) => service.enabled || row.serviceIds.includes(service.id));
-                return (
-                  <form action={updateAppointmentAction} className="grid min-w-[24rem] gap-2 rounded-2xl bg-blush p-3">
-                    <input type="hidden" name="appointmentId" value={row.id} />
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <label className="text-xs font-semibold text-plum">
-                        客戶
-                        <select className="mt-1 w-full rounded-xl border border-champagne p-2" name="customerId" defaultValue={row.customerId} required>
-                          {data.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
-                        </select>
-                      </label>
-                      <label className="text-xs font-semibold text-plum">
-                        技師
-                        <select className="mt-1 w-full rounded-xl border border-champagne p-2" name="technicianId" defaultValue={row.technicianId} required>
-                          {activeTechnicians.map((staff) => <option key={staff.id} value={staff.id}>{staff.name}</option>)}
-                        </select>
-                      </label>
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <label className="text-xs font-semibold text-plum">
-                        預約時間
-                        <input className="mt-1 w-full rounded-xl border border-champagne p-2" name="startAt" type="datetime-local" defaultValue={formatDateTimeLocalInput(row.startAt)} required />
-                      </label>
-                      <label className="text-xs font-semibold text-plum">
-                        來源
-                        <select className="mt-1 w-full rounded-xl border border-champagne p-2" name="source" defaultValue={row.source} required>
-                          {sources.map((source) => <option key={source} value={source}>{source}</option>)}
-                        </select>
-                      </label>
-                    </div>
-                    <label className="text-xs font-semibold text-plum">
-                      服務項目
-                      <div className="mt-1 grid gap-2 rounded-xl border border-champagne p-2">
-                        {editableServices.map((service) => (
-                          <label key={service.id} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-xs">
-                            <span>
-                              <strong>{service.name}</strong>
-                              <span className="ml-2 text-ink/55">{service.category}</span>
-                            </span>
-                            <input type="checkbox" name="serviceIds" value={service.id} defaultChecked={row.serviceIds.includes(service.id)} />
-                          </label>
-                        ))}
+        {viewMode === "list" ? (
+          <ModuleTable
+            rows={data.appointments}
+            searchPlaceholder="搜尋客戶、技師、來源、備註"
+            filterOptions={["pending", "confirmed", "completed", "no_show"]}
+            emptyTitle="目前沒有預約"
+            columns={[
+              { key: "time", label: "日期 / 時間", sortValue: (row) => row.startAt, render: (row) => <><strong>{formatDate(row.startAt)}</strong><p className="text-ink/60">{formatTime(row.startAt)}–{formatTime(row.endAt)}</p></> },
+              { key: "customer", label: "客戶", render: (row) => data.customers.find((item) => item.id === row.customerId)?.name ?? "-" },
+              { key: "service", label: "服務", render: (row) => row.serviceIds.map((id) => data.services.find((service) => service.id === id)?.name).filter(Boolean).join("、") || "-" },
+              { key: "tech", label: "技師", render: (row) => data.staff.find((item) => item.id === row.technicianId)?.name ?? "-" },
+              { key: "status", label: "狀態", render: (row) => <StatusPill>{statusLabel(row.status)}</StatusPill> },
+              {
+                key: "edit",
+                label: "編輯",
+                render: (row) => {
+                  const editableServices = data.services.filter((service) => service.enabled || row.serviceIds.includes(service.id));
+                  return (
+                    <form action={updateAppointmentAction} className="grid min-w-[24rem] gap-2 rounded-2xl bg-blush p-3">
+                      <input type="hidden" name="appointmentId" value={row.id} />
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <label className="text-xs font-semibold text-plum">
+                          客戶
+                          <select className="mt-1 w-full rounded-xl border border-champagne p-2" name="customerId" defaultValue={row.customerId} required>
+                            {data.customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
+                          </select>
+                        </label>
+                        <label className="text-xs font-semibold text-plum">
+                          技師
+                          <select className="mt-1 w-full rounded-xl border border-champagne p-2" name="technicianId" defaultValue={row.technicianId} required>
+                            {activeTechnicians.map((staff) => <option key={staff.id} value={staff.id}>{staff.name}</option>)}
+                          </select>
+                        </label>
                       </div>
-                    </label>
-                    <label className="text-xs font-semibold text-plum">
-                      備註
-                      <textarea className="mt-1 min-h-20 w-full rounded-xl border border-champagne p-2" name="note" defaultValue={row.note ?? ""} />
-                    </label>
-                    <button type="submit" className="mobile-tap rounded-xl bg-plum px-3 py-2 font-semibold text-white">
-                      儲存
-                    </button>
-                  </form>
-                );
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <label className="text-xs font-semibold text-plum">
+                          預約時間
+                          <input className="mt-1 w-full rounded-xl border border-champagne p-2" name="startAt" type="datetime-local" defaultValue={formatDateTimeLocalInput(row.startAt)} required />
+                        </label>
+                        <label className="text-xs font-semibold text-plum">
+                          來源
+                          <select className="mt-1 w-full rounded-xl border border-champagne p-2" name="source" defaultValue={row.source} required>
+                            {sources.map((source) => <option key={source} value={source}>{source}</option>)}
+                          </select>
+                        </label>
+                      </div>
+                      <label className="text-xs font-semibold text-plum">
+                        服務項目
+                        <div className="mt-1 grid gap-2 rounded-xl border border-champagne p-2">
+                          {editableServices.map((service) => (
+                            <label key={service.id} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-xs">
+                              <span>
+                                <strong>{service.name}</strong>
+                                <span className="ml-2 text-ink/55">{service.category}</span>
+                              </span>
+                              <input type="checkbox" name="serviceIds" value={service.id} defaultChecked={row.serviceIds.includes(service.id)} />
+                            </label>
+                          ))}
+                        </div>
+                      </label>
+                      <label className="text-xs font-semibold text-plum">
+                        備註
+                        <textarea className="mt-1 min-h-20 w-full rounded-xl border border-champagne p-2" name="note" defaultValue={row.note ?? ""} />
+                      </label>
+                      <button type="submit" className="mobile-tap rounded-xl bg-plum px-3 py-2 font-semibold text-white">
+                        儲存
+                      </button>
+                    </form>
+                  );
+                }
+              },
+              {
+                key: "actions",
+                label: "快速操作",
+                render: (row) => (
+                  <div className="flex flex-wrap gap-2">
+                    {row.status === "pending" ? (
+                      <form action={updateAppointmentStatusAction}>
+                        <input type="hidden" name="appointmentId" value={row.id} />
+                        <button type="submit" name="status" value="confirmed" className="rounded-xl bg-champagne px-3 py-2 font-semibold text-plum">
+                          確認
+                        </button>
+                      </form>
+                    ) : null}
+                    {row.status === "confirmed" ? (
+                      <form action={updateAppointmentStatusAction}>
+                        <input type="hidden" name="appointmentId" value={row.id} />
+                        <button type="submit" name="status" value="in_service" className="rounded-xl bg-sage/15 px-3 py-2 font-semibold text-sage">
+                          開始服務
+                        </button>
+                      </form>
+                    ) : null}
+                    {row.status === "in_service" ? (
+                      <form action={updateAppointmentStatusAction}>
+                        <input type="hidden" name="appointmentId" value={row.id} />
+                        <button type="submit" name="status" value="completed" className="rounded-xl bg-sage/15 px-3 py-2 font-semibold text-sage">
+                          完成
+                        </button>
+                      </form>
+                    ) : null}
+                    {row.status !== "cancelled" && row.status !== "completed" ? (
+                      <form action={cancelAppointmentAction}>
+                        <input type="hidden" name="appointmentId" value={row.id} />
+                        <button type="submit" className="rounded-xl bg-rose/10 px-3 py-2 font-semibold text-rose">
+                          取消
+                        </button>
+                      </form>
+                    ) : null}
+                  </div>
+                )
               }
-            },
-            {
-              key: "actions",
-              label: "快速操作",
-              render: (row) => (
-                <div className="flex flex-wrap gap-2">
-                  {row.status === "pending" ? (
-                    <form action={updateAppointmentStatusAction}>
-                      <input type="hidden" name="appointmentId" value={row.id} />
-                      <button type="submit" name="status" value="confirmed" className="rounded-xl bg-champagne px-3 py-2 font-semibold text-plum">
-                        確認
-                      </button>
-                    </form>
-                  ) : null}
-                  {row.status === "confirmed" ? (
-                    <form action={updateAppointmentStatusAction}>
-                      <input type="hidden" name="appointmentId" value={row.id} />
-                      <button type="submit" name="status" value="in_service" className="rounded-xl bg-sage/15 px-3 py-2 font-semibold text-sage">
-                        開始服務
-                      </button>
-                    </form>
-                  ) : null}
-                  {row.status === "in_service" ? (
-                    <form action={updateAppointmentStatusAction}>
-                      <input type="hidden" name="appointmentId" value={row.id} />
-                      <button type="submit" name="status" value="completed" className="rounded-xl bg-sage/15 px-3 py-2 font-semibold text-sage">
-                        完成
-                      </button>
-                    </form>
-                  ) : null}
-                  {row.status !== "cancelled" && row.status !== "completed" ? (
-                    <form action={cancelAppointmentAction}>
-                      <input type="hidden" name="appointmentId" value={row.id} />
-                      <button type="submit" className="rounded-xl bg-rose/10 px-3 py-2 font-semibold text-rose">
-                        取消
-                      </button>
-                    </form>
-                  ) : null}
-                </div>
-              )
-            }
-          ]}
-        />
+            ]}
+          />
+        ) : null}
       </div>
     </AppShell>
   );
@@ -632,7 +688,7 @@ export function StaffView({ data, notice }: { data: AppData; notice?: { kind: "e
 export function TechnicianView({ data }: { data: AppData }) {
   const technicianId = data.currentMember?.role === "technician" ? data.currentMember.id : data.staff.find((item) => item.role === "technician")?.id;
   const mine = technicianId ? data.appointments.filter((item) => item.technicianId === technicianId) : [];
-  return <AppShell title="技師工作台" subtitle="技師只看自己的今日預約、客戶注意事項、服務紀錄與服務前後照片欄位。" {...shellProps(data)}><div className="grid gap-4">{mine.length ? mine.map((appointment) => { const customer = data.customers.find((item) => item.id === appointment.customerId); return <article key={appointment.id} className="card p-5"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="font-bold text-plum">{formatTime(appointment.startAt)}–{formatTime(appointment.endAt)}｜{customer?.name ?? "未命名客戶"}</p><p className="mt-1 text-sm text-ink/60">{appointment.serviceIds.map((id) => data.services.find((service) => service.id === id)?.name).filter(Boolean).join("、") || "未指定服務"}</p></div><StatusPill>{statusLabel(appointment.status)}</StatusPill></div><div className="mt-4 rounded-3xl bg-blush p-4 text-sm"><strong>注意事項：</strong>{customer?.cautions.join("、") || "無"}<br/><strong>偏好：</strong>{customer?.preferences.join("、") || "無"}</div><textarea className="mt-4 min-h-28 w-full rounded-3xl border border-champagne p-4" placeholder="填寫服務紀錄、使用色號、補充說明…" /><div className="mt-3 grid gap-3 sm:grid-cols-2"><button type="button" className="mobile-tap rounded-2xl bg-white font-semibold text-plum opacity-60" disabled title="照片上傳尚未接上後端">上傳服務前照片</button><button type="button" className="mobile-tap rounded-2xl bg-white font-semibold text-plum opacity-60" disabled title="照片上傳尚未接上後端">上傳服務後照片</button></div></article>; }) : <EmptyState title="目前沒有指派給你的預約" action="當預約指定到技師後，會顯示服務紀錄與客戶注意事項。" />}</div></AppShell>;
+  return <AppShell title="技師工作台" subtitle="技師只看自己的今日預約、客戶注意事項、服務紀錄與服務前後照片欄位。" {...shellProps(data)}><div className="grid gap-4">{mine.length ? mine.map((appointment) => { const customer = data.customers.find((item) => item.id === appointment.customerId); return <article key={appointment.id} className="card p-5"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="font-bold text-plum">{formatTime(appointment.startAt)}–{formatTime(appointment.endAt)}｜{customer?.name ?? "未命名客戶"}</p><p className="mt-1 text-sm text-ink/60">{appointment.serviceIds.map((id) => data.services.find((service) => service.id === id)?.name).filter(Boolean).join("、") || "未指定服務"}</p></div><StatusPill>{statusLabel(appointment.status)}</StatusPill></div><div className="mt-4 rounded-3xl bg-blush p-4 text-sm"><strong>注意事項：</strong>{customer?.cautions.join("、") || "無"}<br/><strong>偏好：</strong>{customer?.preferences.join("、") || "無"}</div><textarea className="mt-4 min-h-28 w-full rounded-3xl border border-champagne p-4" placeholder="填寫服務紀錄、使用色號、補充說明…" /><div className="mt-4 rounded-2xl border border-dashed border-champagne bg-white p-4 text-sm text-ink/70"><strong className="text-plum">照片上傳</strong><p className="mt-1">目前已保留服務前 / 服務後照片欄位的工作流程，待 Supabase Storage 接上後再啟用實際上傳。</p></div></article>; }) : <EmptyState title="目前沒有指派給你的預約" action="當預約指定到技師後，會顯示服務紀錄與客戶注意事項。" />}</div></AppShell>;
 }
 
 export function ReportsView({ data }: { data: AppData }) {
