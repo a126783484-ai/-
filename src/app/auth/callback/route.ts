@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(new URL("/login?error=auth_callback_failed", request.url));
       }
 
-      await ensureOwnerWorkspaceForUser(data.user);
+      await ensureOwnerWorkspaceForUser(data.user, supabase);
     } catch {
       return NextResponse.redirect(new URL("/login?error=auth_bootstrap_failed", request.url));
     }
