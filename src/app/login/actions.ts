@@ -2,7 +2,7 @@
 
 import type { User } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { ensureOwnerWorkspaceForUser } from "@/lib/workspace";
+import { ensureOwnerWorkspaceForUser, hasActiveWorkspaceMembership } from "@/lib/workspace";
 import { isMissingStaffInviteTableError, loadPendingStaffInvitesForEmail } from "@/lib/staff-invites";
 
 export type LoginBootstrapResult =
@@ -26,6 +26,10 @@ export async function bootstrapLoggedInWorkspaceAction(
   }
 
   try {
+    if (await hasActiveWorkspaceMembership(dataUser.id, client)) {
+      return { ok: true };
+    }
+
     let pendingInvites: Awaited<ReturnType<typeof loadPendingStaffInvitesForEmail>> = [];
     try {
       pendingInvites = await loadPendingStaffInvitesForEmail(client, dataUser.email ?? "");
