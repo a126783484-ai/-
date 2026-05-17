@@ -203,3 +203,4 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Merge commit: `3383308` - `Merge main into codex/beauty-os-auto-work`
 - Push status: completed
 - Fixed `loadAppData` so it re-checks `workspace_members` after workspace bootstrap; this prevents freshly authenticated users from being dropped into an empty workspace state during preview verification.
+- Updated `loadAppData` to pass the authenticated Supabase client into `ensureOwnerWorkspaceForUser`, so workspace bootstrap uses the live session rather than an unauthenticated fallback client.
