@@ -202,3 +202,4 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Re-verified `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` after the merge resolution; all passed.
 - Merge commit: `3383308` - `Merge main into codex/beauty-os-auto-work`
 - Push status: completed
+- Fixed `loadAppData` so it re-checks `workspace_members` after workspace bootstrap; this prevents freshly authenticated users from being dropped into an empty workspace state during preview verification.

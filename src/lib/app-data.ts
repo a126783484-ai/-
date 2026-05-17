@@ -284,7 +284,7 @@ export async function loadAppData(): Promise<AppData> {
     return emptyAppData(userSummary);
   }
 
-  const currentMembership = memberships?.[0] ?? null;
+  let currentMembership = memberships?.[0] ?? null;
 
   if (!currentMembership) {
     let pendingInvites: StaffInvite[] = [];
@@ -305,7 +305,25 @@ export async function loadAppData(): Promise<AppData> {
       };
     }
 
-    return emptyAppData(userSummary);
+    await ensureOwnerWorkspaceForUser(user);
+
+    const { data: refreshedMemberships, error: refreshedMembershipError } = await supabase
+      .from("workspace_members")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("active", true)
+      .order("created_at", { ascending: true });
+
+    if (refreshedMembershipError) {
+      console.error("workspace membership query failed", refreshedMembershipError);
+      return emptyAppData(userSummary);
+    }
+
+    currentMembership = refreshedMemberships?.[0] ?? null;
+
+    if (!currentMembership) {
+      return emptyAppData(userSummary);
+    }
   }
 
   const workspaceId = currentMembership.workspace_id;
