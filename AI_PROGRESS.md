@@ -275,3 +275,13 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Added a small unit test for `ensureOwnerWorkspaceForUser`.
 - The test confirms that when an active membership already exists, the helper returns the current workspace without calling the bootstrap RPC.
 - This locks in the latest DB roundtrip reduction without requiring full browser verification.
+
+## Login membership preflight
+
+- `bootstrapLoggedInWorkspaceAction` now checks for an active workspace membership first.
+- If the user already belongs to a workspace, it short-circuits before loading pending invites or calling workspace bootstrap.
+- Added a regression test that verifies the short-circuit path.
+- Verified once with the minimal smoke flow:
+  - login success
+  - home loads without `尚未建立 workspace`
+  - logout redirects to `/login`

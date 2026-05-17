@@ -85,6 +85,10 @@ async function getFirstActiveMembership(userId: string, client?: AppSupabaseClie
   return (data?.[0] as WorkspaceMemberRow | undefined) ?? null;
 }
 
+export async function hasActiveWorkspaceMembership(userId: string, client?: AppSupabaseClient) {
+  return Boolean(await getFirstActiveMembership(userId, client));
+}
+
 async function bootstrapOwnerWorkspaceWithAuthenticatedInserts(params: {
   user: User;
   workspaceName: string;
@@ -159,18 +163,7 @@ export async function bootstrapOwnerWorkspace(params: {
 export async function ensureOwnerWorkspaceForUser(user: User, client?: AppSupabaseClient) {
   const workspaceName = metadataString(user.user_metadata?.workspace_name) ?? defaultWorkspaceName(user);
   const supabase = await getClient(client);
-  const { data: existingMembership, error: membershipError } = await supabase
-    .from("workspace_members")
-    .select("*")
-    .eq("user_id", user.id)
-    .eq("active", true)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (membershipError) {
-    throw membershipError;
-  }
+  const existingMembership = await getFirstActiveMembership(user.id, supabase);
 
   if (existingMembership) {
     const { data: workspace, error: workspaceError } = await supabase
