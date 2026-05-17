@@ -182,5 +182,5 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
   - `NEXT_PUBLIC_SUPABASE_*` on that deployment points at `ijokerkjysomrtigigtb`
   - the app’s expected project ref is `odzxyhaoehvhfximnwjh`
   - this is a deployment/config issue, not a local code failure
-- Commit hash: pending
-- Push status: pending
+- Commit hash: `d272ad1` - `Improve login and staff invite reliability`
+- Push status: completed
