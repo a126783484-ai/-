@@ -307,3 +307,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `hasActiveWorkspaceMembership` now returns an explicit boolean check instead of relying on truthiness.
 - This is a tiny clarity cleanup on the auth path and does not change behavior.
 - Verified with `npm run typecheck`.
+
+## Pending invite existence test
+
+- Added a regression test for `hasPendingStaffInviteForEmail`.
+- The test confirms the helper returns a boolean existence result instead of requiring the full invite list.
+- Verified with `npm run typecheck` and `npm test -- src/lib/staff-invites.test.ts`.
