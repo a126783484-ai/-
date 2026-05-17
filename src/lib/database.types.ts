@@ -78,6 +78,54 @@ export type Database = {
         };
         Relationships: [];
       };
+      workspace_member_invites: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          email: string;
+          display_name: string;
+          phone: string | null;
+          role: Database['public']['Enums']['workspace_role'];
+          commission_rate: number;
+          specialties: string[];
+          token: string;
+          status: 'pending' | 'accepted' | 'revoked';
+          invited_by: string | null;
+          created_at: string;
+          accepted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          email: string;
+          display_name: string;
+          phone?: string | null;
+          role?: Database['public']['Enums']['workspace_role'];
+          commission_rate?: number;
+          specialties?: string[];
+          token: string;
+          status?: 'pending' | 'accepted' | 'revoked';
+          invited_by?: string | null;
+          created_at?: string;
+          accepted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          email?: string;
+          display_name?: string;
+          phone?: string | null;
+          role?: Database['public']['Enums']['workspace_role'];
+          commission_rate?: number;
+          specialties?: string[];
+          token?: string;
+          status?: 'pending' | 'accepted' | 'revoked';
+          invited_by?: string | null;
+          created_at?: string;
+          accepted_at?: string | null;
+        };
+        Relationships: [];
+      };
       customers: {
         Row: {
           id: string;
