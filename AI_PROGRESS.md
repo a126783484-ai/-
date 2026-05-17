@@ -194,3 +194,11 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
   - authenticated browser login succeeds
   - `/staff`, `/inventory`, and `/reports` render correctly
   - `/staff/invite/test-token` shows the fallback notice because the invite table is still not deployed
+
+## Merge resolution
+
+- Merged `origin/main` into `codex/beauty-os-auto-work` to resolve the PR 20 conflict state.
+- Kept the main branch's inventory / CRUD updates while preserving the staff invite table workflow and login server-action flow.
+- Re-verified `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` after the merge resolution; all passed.
+- Merge commit: `3383308` - `Merge main into codex/beauty-os-auto-work`
+- Push status: completed
