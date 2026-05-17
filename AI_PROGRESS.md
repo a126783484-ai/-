@@ -6,6 +6,10 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Completed in this round
 
+- Opened PR #19 for the staff and inventory operations branch and confirmed PR state is clean after GitHub checks.
+- Verified PR #19 checks: GitHub Actions CI build passed, CodeQL passed, and Vercel preview reached Ready.
+- Verified the PR #19 Vercel preview on mobile viewport with the provided Supabase test account; login succeeded and `/inventory`, `/staff`, and `/reports` rendered under the authenticated session.
+- Added an App Router icon and metadata icon reference so browser checks no longer depend on a missing favicon route.
 - Verified real Supabase password login in the browser with the provided account: session cookies were written, `/` loaded, and the authenticated workspace shell rendered successfully.
 - Verified the authenticated browser flow on `/inventory`, `/staff`, and `/reports`; inventory and staff pages rendered normally, and reports rendered with the new inventory metrics.
 - Fixed duplicate React key warnings in dashboard/report ranking lists by switching repeated `name` keys to index-based keys where names can repeat.
@@ -128,6 +132,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Verification
 
+- PR #19 CI passed: typecheck, tests, quality gate, and production build.
+- PR #19 CodeQL passed.
+- PR #19 Vercel preview passed authenticated browser smoke on mobile viewport for login, `/inventory`, `/staff`, and `/reports`.
+- `npm run typecheck` passed after adding the app icon.
+- `npm run lint` passed after adding the app icon.
+- `npm run build` passed after adding the app icon with production Supabase env variables set locally.
 - Real browser login passed with the provided Supabase account: `POST /login` returned 200, session cookies were created, and the authenticated home dashboard loaded.
 - Real browser smoke passed on `/inventory`, `/staff`, and `/reports` with the authenticated session.
 - Fresh browser session after state reload showed no duplicate-key React console error on `/reports`.
