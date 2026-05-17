@@ -38,6 +38,10 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Added customer and service update feedback helpers with tests.
 - Added appointment edit action and appointment row-level edit forms.
 - Extended appointment feedback helpers/tests for edit flows.
+- Added client-only deferred wrappers for dashboard, appointments, customers, and checkout pages to remove production hydration mismatch risk on data-heavy module views.
+- Limited Vercel Analytics rendering to Vercel deployments so local browser verification is not polluted by missing `/_vercel/insights/script.js` requests.
+- Re-ran Supabase signup verification with the provided Gmail inbox. Signup reaches Supabase email confirmation, but the available confirmation token had expired before use.
+- Local dev browser verification is currently blocked by the environment-specific Next dev server crash: `ENOSYS: function not implemented, stat '/root/beauty-os/public/checkout'`.
 
 ## Files modified
 
@@ -56,6 +60,10 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `src/app/appointments/page.tsx`
 - `src/app/staff/actions.ts`
 - `src/app/staff/page.tsx`
+- `src/app/checkout/page.tsx`
+- `src/app/layout.tsx`
+- `src/app/page.tsx`
+- `src/components/DeferredViews.tsx`
 - `src/components/ModuleViews.tsx`
 - `src/lib/appointments.ts`
 - `src/lib/app-data.ts`
@@ -79,7 +87,8 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 - `npm run lint` passed
 - `npm test` passed
-- `npm run build` passed
+- `npm run build` passed with production Supabase env variables set locally
+- Gmail verification check found Supabase email confirmation required for the current test account; the latest readable confirmation link returned `otp_expired`.
 
 ## Commit / push status
 
@@ -100,11 +109,13 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Need staff invite/create flows tied to auth user onboarding.
 - Need broader demo-placeholder cleanup across remaining read-only modules.
 - Need to keep watching the next preview deployment whenever the progress file is updated and pushed.
+- Need a fresh, non-expired Supabase confirmation link or a confirmed test account to complete authenticated live browser checks.
+- Need to investigate the local Next dev server crash around `public/checkout`/`node_modules` filesystem stat in this Android/Codex environment.
 
 ## Next step
 
-- Commit and push the appointment edit flow, then move to demo-placeholder cleanup and onboarding.
+- Commit and push the deferred hydration fix, then verify the new Vercel preview with a confirmed account and continue demo-placeholder cleanup.
 
 ## Operational readiness
 
-- Estimated readiness: 89%
+- Estimated readiness: 90%
