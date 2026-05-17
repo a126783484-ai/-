@@ -46,6 +46,8 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Fixed GitHub Actions CI build by injecting the canonical production Supabase env before `npm run build`.
 - Verified the follow-up main deployment and GitHub Actions build/CodeQL checks are green.
 - Ran a production smoke test against `https://beauty-nail-gcx2msmvg-a126783484-2182s-projects.vercel.app`; unauthenticated app routes redirect to `/login`, the login page renders, and no console or hydration errors were detected.
+- Replaced the table export placeholder with a real CSV download path in `src/components/ModuleTable.tsx`.
+- Re-verified `npm run lint`, `npm test`, and `npm run build` after the CSV export change.
 
 ## Files modified
 
@@ -69,6 +71,7 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `src/app/page.tsx`
 - `src/components/DeferredViews.tsx`
 - `.github/workflows/ci.yml`
+- `src/components/ModuleTable.tsx`
 - `src/components/ModuleViews.tsx`
 - `src/lib/appointments.ts`
 - `src/lib/app-data.ts`
@@ -98,6 +101,7 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - GitHub CodeQL `Analyze (javascript-typescript)` passed.
 - Production smoke test passed on `https://beauty-nail-gcx2msmvg-a126783484-2182s-projects.vercel.app`.
 - Gmail verification check found Supabase email confirmation required for the current test account; the latest readable confirmation link returned `otp_expired`.
+- Table export now downloads a real CSV file from the visible filtered rows and excludes edit/actions columns.
 
 ## Commit / push status
 
@@ -111,7 +115,8 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Latest in-progress round hash: pending
 - Main merge commit: `11cc63e` - `Merge beauty OS operational readiness updates`
 - CI fix commit: `dc630dc` - `Improve beauty OS operational readiness`
-- Latest progress update commit: pending
+- Latest progress update commit: `e1d4f48` - `Improve beauty OS operational readiness`
+- CSV export commit: pending
 
 ## Remaining issues
 
