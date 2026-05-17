@@ -15,6 +15,7 @@ import {
   updateWorkspaceSettings,
 } from "@/app/crud-actions";
 import { AppShell } from "@/components/AppShell";
+import { FormNotice } from "@/components/FormNotice";
 import { ModuleTable } from "@/components/ModuleTable";
 import { MetricCard, StatusPill, EmptyState } from "@/components/ui";
 import { statusLabel } from "@/lib/appointments";
@@ -46,6 +47,12 @@ const paymentMethods = [
 ] as const;
 const orderStatuses = ["unpaid", "partial", "paid", "refunded"] as const;
 const tiers = ["新客", "一般", "VIP", "VVIP"];
+type Notice = { kind: "error" | "success"; message: string };
+
+function NoticeBanner({ notice }: { notice?: Notice }) {
+  if (!notice) return null;
+  return <FormNotice kind={notice.kind}>{notice.message}</FormNotice>;
+}
 
 function SubmitButton({
   children,
@@ -819,7 +826,13 @@ export function DashboardView({ data }: { data: AppData }) {
   );
 }
 
-export function AppointmentsView({ data }: { data: AppData }) {
+export function AppointmentsView({
+  data,
+  notice,
+}: {
+  data: AppData;
+  notice?: Notice;
+}) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = data.appointments.find(
     (appointment) => appointment.id === editingId,
@@ -831,6 +844,7 @@ export function AppointmentsView({ data }: { data: AppData }) {
       subtitle="新增、修改、取消預約；日曆 / 列表檢視與技師衝突檢查。"
       {...shellProps(data)}
     >
+      <NoticeBanner notice={notice} />
       <div className="mb-5 grid gap-3 md:grid-cols-2">
         <AppointmentForm data={data} appointment={editing} />
         <div className="card p-5">
@@ -927,7 +941,13 @@ export function AppointmentsView({ data }: { data: AppData }) {
   );
 }
 
-export function ServicesView({ data }: { data: AppData }) {
+export function ServicesView({
+  data,
+  notice,
+}: {
+  data: AppData;
+  notice?: Notice;
+}) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = data.services.find((service) => service.id === editingId);
 
@@ -937,6 +957,7 @@ export function ServicesView({ data }: { data: AppData }) {
       subtitle="分類、價格、所需時間、說明、啟用狀態與加購項目管理。"
       {...shellProps(data)}
     >
+      <NoticeBanner notice={notice} />
       <div className="mb-5">
         <ServiceForm service={editing} categories={data.categories} />
       </div>
@@ -1020,7 +1041,13 @@ export function ServicesView({ data }: { data: AppData }) {
   );
 }
 
-export function CustomersView({ data }: { data: AppData }) {
+export function CustomersView({
+  data,
+  notice,
+}: {
+  data: AppData;
+  notice?: Notice;
+}) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = data.customers.find((customer) => customer.id === editingId);
 
@@ -1030,6 +1057,7 @@ export function CustomersView({ data }: { data: AppData }) {
       subtitle="電話、生日、LINE、偏好、過敏禁忌、會員等級與回訪提醒。"
       {...shellProps(data)}
     >
+      <NoticeBanner notice={notice} />
       <div className="mb-5">
         <CustomerForm customer={editing} />
       </div>
@@ -1252,13 +1280,20 @@ export function CheckoutView({ data }: { data: AppData }) {
   );
 }
 
-export function StaffView({ data }: { data: AppData }) {
+export function StaffView({
+  data,
+  notice,
+}: {
+  data: AppData;
+  notice?: Notice;
+}) {
   return (
     <AppShell
       title="員工 / 技師管理"
       subtitle="角色權限、班表、抽成、專長與在職狀態。"
       {...shellProps(data)}
     >
+      <NoticeBanner notice={notice} />
       <ModuleTable
         rows={data.staff}
         searchPlaceholder="搜尋員工、角色、專長"
@@ -1445,7 +1480,13 @@ export function ReportsView({ data }: { data: AppData }) {
   );
 }
 
-export function SettingsView({ data }: { data: AppData }) {
+export function SettingsView({
+  data,
+  notice,
+}: {
+  data: AppData;
+  notice?: Notice;
+}) {
   const parsedHours = useMemo(() => {
     try {
       return JSON.stringify(
@@ -1464,6 +1505,7 @@ export function SettingsView({ data }: { data: AppData }) {
       subtitle="店鋪基本資料、預約規則、收款、稅務、品牌外觀與多店設定。"
       {...shellProps(data)}
     >
+      <NoticeBanner notice={notice} />
       <form action={updateWorkspaceSettings} className="card p-5">
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block text-sm font-semibold text-plum">
