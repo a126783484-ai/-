@@ -336,6 +336,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - This keeps relation-table hydration aligned with workspace ownership and trims a broader read on the dashboard path.
 - Verified with `npm run typecheck`.
 
+## Relation payload trim
+
+- `loadAppData()` now selects only the columns needed from `appointment_services` and `order_lines`.
+- This reduces dashboard payload without changing the workspace-scoped hydration behavior.
+- Verified with `npm run typecheck`.
+
 ## Appointment relation scoping
 
 - `createAppointmentAction` and `updateAppointmentAction` now fetch `appointment_services` only for the current workspace's appointment ids.
