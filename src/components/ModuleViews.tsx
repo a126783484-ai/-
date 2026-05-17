@@ -1194,13 +1194,20 @@ export function InventoryView({ data }: { data: AppData }) {
   );
 }
 
-export function CheckoutView({ data }: { data: AppData }) {
+export function CheckoutView({
+  data,
+  notice,
+}: {
+  data: AppData;
+  notice?: Notice;
+}) {
   return (
     <AppShell
       title="訂單 / 結帳 / 收款"
       subtitle="從預約轉訂單，支援折扣、小費、多付款方式、收據明細與每日結帳。"
       {...shellProps(data)}
     >
+      <NoticeBanner notice={notice} />
       <div className="mb-5">
         <OrderForm data={data} />
       </div>
