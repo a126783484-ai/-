@@ -17,20 +17,10 @@ import { dashboardMetrics } from "@/lib/analytics";
 import { orderTotal, outstandingAmount } from "@/lib/orders";
 import { roleLabel } from "@/lib/permissions";
 import type { AppData } from "@/lib/app-data";
-import { currency, formatDate, formatDateTime, formatTime } from "@/lib/utils";
+import { currency, formatDate, formatDateTime, formatDateTimeLocalInput, formatTime } from "@/lib/utils";
 
 const liveNotice = "正式資料模式：資料由 Supabase Auth + RLS 依 workspace 隔離。";
 const sources = ["LINE", "Instagram", "電話", "現場", "官網"];
-
-function toDateTimeLocalInput(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 16);
-}
 
 function shellProps(data: AppData) {
   return {
@@ -187,7 +177,7 @@ export function AppointmentsView({ data, notice }: { data: AppData; notice?: { k
                     <div className="grid gap-2 sm:grid-cols-2">
                       <label className="text-xs font-semibold text-plum">
                         預約時間
-                        <input className="mt-1 w-full rounded-xl border border-champagne p-2" name="startAt" type="datetime-local" defaultValue={toDateTimeLocalInput(row.startAt)} required />
+                        <input className="mt-1 w-full rounded-xl border border-champagne p-2" name="startAt" type="datetime-local" defaultValue={formatDateTimeLocalInput(row.startAt)} required />
                       </label>
                       <label className="text-xs font-semibold text-plum">
                         來源
