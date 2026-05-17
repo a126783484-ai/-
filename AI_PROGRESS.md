@@ -269,3 +269,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
   - pending invite short-circuit
   - normal bootstrap path
 - This keeps the auth / workspace chain protected without needing extra browser verification.
+
+## Workspace membership regression test
+
+- Added a small unit test for `ensureOwnerWorkspaceForUser`.
+- The test confirms that when an active membership already exists, the helper returns the current workspace without calling the bootstrap RPC.
+- This locks in the latest DB roundtrip reduction without requiring full browser verification.
