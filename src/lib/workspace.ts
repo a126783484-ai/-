@@ -224,7 +224,7 @@ export async function getCurrentWorkspaceContext(client?: AppSupabaseClient): Pr
 
   const { data: memberships, error: membershipError } = await supabase
     .from("workspace_members")
-    .select("*")
+    .select("id, workspace_id, role, active")
     .eq("user_id", authData.user.id)
     .eq("active", true)
     .order("created_at", { ascending: true })
