@@ -6,6 +6,10 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Completed in this round
 
+- Verified real Supabase password login in the browser with the provided account: session cookies were written, `/` loaded, and the authenticated workspace shell rendered successfully.
+- Verified the authenticated browser flow on `/inventory`, `/staff`, and `/reports`; inventory and staff pages rendered normally, and reports rendered with the new inventory metrics.
+- Fixed duplicate React key warnings in dashboard/report ranking lists by switching repeated `name` keys to index-based keys where names can repeat.
+- Re-ran `npm run typecheck`, `npm run lint`, and `npm run build` after the browser-verification cleanup.
 - Added a workspace-scoped inventory movement ledger with purchase/consume/adjust support, rollback-safe stock validation, and a direct server action to record inventory movements.
 - Added inventory movement feedback helpers and tests so success and validation errors surface as readable Chinese notices.
 - Extended the inventory page and reports view to show low-stock, value, and movement metrics plus a recent movement ledger.
@@ -124,6 +128,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Verification
 
+- Real browser login passed with the provided Supabase account: `POST /login` returned 200, session cookies were created, and the authenticated home dashboard loaded.
+- Real browser smoke passed on `/inventory`, `/staff`, and `/reports` with the authenticated session.
+- Fresh browser session after state reload showed no duplicate-key React console error on `/reports`.
 - `npm run typecheck` passed
 - `npm run lint` passed
 - `npm test` passed
@@ -141,6 +148,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Commit / push status
 
+- Current round code commit: pending
+- Current round progress update commit: pending
+- Current round push status: pending
 - Current round code commit: `a6004b1` - `Improve beauty OS operational readiness`
 - Current round progress update commit: pending
 - Current round push status: completed
