@@ -371,3 +371,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `loadPendingStaffInvitesForEmail()` and the workspace invite load in `loadAppData()` now select only the columns used by `toStaffInvite()`.
 - This trims another low-risk payload on the auth and staff dashboard paths.
 - Verified with `npm run typecheck`.
+
+## Workspace context trim
+
+- `getCurrentWorkspaceContext()` now selects only the membership fields used by downstream actions.
+- This reduces a common auth/context payload without changing workspace resolution behavior.
+- Verified with `npm run typecheck`.
