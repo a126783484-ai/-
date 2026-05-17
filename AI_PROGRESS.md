@@ -377,3 +377,10 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `getCurrentWorkspaceContext()` now selects only the membership fields used by downstream actions.
 - This reduces a common auth/context payload without changing workspace resolution behavior.
 - Verified with `npm run typecheck`.
+
+## Workspace payload trim
+
+- `loadAppData()` now selects only the workspace columns used by `toWorkspace()`.
+- `toWorkspace()` now accepts a reduced workspace summary shape instead of the full row.
+- This reduces the primary dashboard workspace fetch without changing the rendered data.
+- Verified with `npm run typecheck`.

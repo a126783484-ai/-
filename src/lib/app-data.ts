@@ -24,6 +24,10 @@ import {
 import { ensureOwnerWorkspaceForUser } from "@/lib/workspace";
 
 type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
+type WorkspaceSummaryRow = Pick<
+  WorkspaceRow,
+  "id" | "name" | "phone" | "address" | "brand_color" | "business_hours"
+>;
 type WorkspaceMemberRow =
   Database["public"]["Tables"]["workspace_members"]["Row"];
 type ServiceCategoryRow =
@@ -89,7 +93,7 @@ function emptyAppData(user: { id: string; email: string | null }): AppData {
   };
 }
 
-function toWorkspace(row: WorkspaceRow): Workspace {
+function toWorkspace(row: WorkspaceSummaryRow): Workspace {
   return {
     id: row.id,
     name: row.name,
@@ -338,7 +342,11 @@ export async function loadAppData(): Promise<AppData> {
     shiftsResult,
     staffInvitesResult,
   ] = await Promise.all([
-    supabase.from("workspaces").select("*").eq("id", workspaceId).maybeSingle(),
+    supabase
+      .from("workspaces")
+      .select("id, name, phone, address, brand_color, business_hours")
+      .eq("id", workspaceId)
+      .maybeSingle(),
     supabase
       .from("workspace_members")
       .select("*")
