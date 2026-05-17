@@ -1,11 +1,13 @@
 import { addMinutes, areIntervalsOverlapping, parseISO } from "date-fns";
 import type { Appointment, ServiceItem } from "./types";
 
-export function appointmentDuration(serviceIds: string[], services: ServiceItem[]) {
+type AppointmentService = Pick<ServiceItem, "id" | "durationMin">;
+
+export function appointmentDuration(serviceIds: string[], services: AppointmentService[]) {
   return serviceIds.reduce((total, id) => total + (services.find((service) => service.id === id)?.durationMin ?? 0), 0);
 }
 
-export function buildAppointmentEnd(startAt: string, serviceIds: string[], services: ServiceItem[]) {
+export function buildAppointmentEnd(startAt: string, serviceIds: string[], services: AppointmentService[]) {
   return addMinutes(parseISO(startAt), appointmentDuration(serviceIds, services)).toISOString();
 }
 

@@ -8,6 +8,12 @@ type WorkspaceInsert = Database["public"]["Tables"]["workspaces"]["Insert"];
 type WorkspaceMemberRow = Database["public"]["Tables"]["workspace_members"]["Row"];
 type WorkspaceMemberInsert = Database["public"]["Tables"]["workspace_members"]["Insert"];
 
+export interface WorkspaceContext {
+  user: User;
+  workspace: WorkspaceRow;
+  membership: WorkspaceMemberRow;
+}
+
 async function getClient(client?: AppSupabaseClient) {
   return client ?? createSupabaseServerClient();
 }
@@ -171,4 +177,51 @@ export async function listWorkspaces() {
   }
 
   return data;
+}
+
+export async function getCurrentWorkspaceContext(client?: AppSupabaseClient): Promise<WorkspaceContext> {
+  const supabase = await getClient(client);
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !authData.user) {
+    throw new Error("AUTH_REQUIRED");
+  }
+
+  const { data: memberships, error: membershipError } = await supabase
+    .from("workspace_members")
+    .select("*")
+    .eq("user_id", authData.user.id)
+    .eq("active", true)
+    .order("created_at", { ascending: true })
+    .limit(1);
+
+  if (membershipError) {
+    throw membershipError;
+  }
+
+  const membership = memberships?.[0];
+
+  if (!membership) {
+    throw new Error("WORKSPACE_MEMBER_MISSING");
+  }
+
+  const { data: workspace, error: workspaceError } = await supabase
+    .from("workspaces")
+    .select("*")
+    .eq("id", membership.workspace_id)
+    .maybeSingle();
+
+  if (workspaceError) {
+    throw workspaceError;
+  }
+
+  if (!workspace) {
+    throw new Error("WORKSPACE_MISSING");
+  }
+
+  return {
+    user: authData.user,
+    workspace: workspace as WorkspaceRow,
+    membership: membership as WorkspaceMemberRow
+  };
 }
