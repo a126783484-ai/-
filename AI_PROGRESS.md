@@ -133,8 +133,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Commit / push status
 
-- Current round commit: pending
-- Current round push status: pending
+- Current round code commit: `e0d9654` - `Add staff invitation workflow`
+- Current round progress update commit: `cde60a4` - `Update progress for staff invites`
+- Current round push status: completed
 - Current round commit: `f29a11e` - `Improve beauty OS operational readiness`
 - Pushed to: `origin/codex/beauty-os-auto-work`
 - Current round push status: completed
