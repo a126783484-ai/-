@@ -291,3 +291,13 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `workspace_members` membership lookups now only select `workspace_id` instead of the full row payload.
 - This reduces the data returned on the common auth / bootstrap path without changing behavior.
 - Kept the change minimal and verified with `npm run typecheck`.
+
+## Pending invite existence check
+
+- Login bootstrap no longer fetches the full pending invite list just to short-circuit.
+- Added `hasPendingStaffInviteForEmail` so the login path only checks for invite existence.
+- `loadAppData()` still keeps the full invite list when it needs to render invite cards.
+- Verified with:
+  - `npm run typecheck`
+  - `npm test -- src/app/login/actions.test.ts`
+  - one minimal smoke for login/home/logout
