@@ -365,3 +365,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `createAppointmentAction` and `updateAppointmentAction` no longer load `appointment_services` for conflict checks.
 - `hasTechnicianConflict()` only needs technician and time ranges, so the relation read was unnecessary.
 - Verified with `npm run typecheck`.
+
+## Invite payload trim
+
+- `loadPendingStaffInvitesForEmail()` and the workspace invite load in `loadAppData()` now select only the columns used by `toStaffInvite()`.
+- This trims another low-risk payload on the auth and staff dashboard paths.
+- Verified with `npm run typecheck`.
