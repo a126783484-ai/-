@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { can } from "@/lib/permissions";
+import { buildMissingOrderLineServiceMessage } from "@/lib/order-line-errors";
 import type { Database, Json } from "@/lib/database.types";
 import type {
   AppointmentStatus,
@@ -633,7 +634,7 @@ async function buildOrderLines(
     if (found.length !== serviceIds.length) {
       const foundIds = new Set(found.map((service) => service.id));
       const missingServiceIds = serviceIds.filter((serviceId) => !foundIds.has(serviceId));
-      throw new Error(`訂單明細中的服務不存在於目前工作區，請重新選擇：${missingServiceIds.join("、")}`);
+      throw new Error(buildMissingOrderLineServiceMessage(missingServiceIds));
     }
     lines.push(
       ...found.map((service) => ({
