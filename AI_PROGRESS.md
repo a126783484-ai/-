@@ -42,6 +42,8 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Limited Vercel Analytics rendering to Vercel deployments so local browser verification is not polluted by missing `/_vercel/insights/script.js` requests.
 - Re-ran Supabase signup verification with the provided Gmail inbox. Signup reaches Supabase email confirmation, but the available confirmation token had expired before use.
 - Local dev browser verification is currently blocked by the environment-specific Next dev server crash: `ENOSYS: function not implemented, stat '/root/beauty-os/public/checkout'`.
+- Merged `codex/beauty-os-auto-work` into `main` and pushed production deployment.
+- Fixed GitHub Actions CI build by injecting the canonical production Supabase env before `npm run build`.
 
 ## Files modified
 
@@ -64,6 +66,7 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `src/app/layout.tsx`
 - `src/app/page.tsx`
 - `src/components/DeferredViews.tsx`
+- `.github/workflows/ci.yml`
 - `src/components/ModuleViews.tsx`
 - `src/lib/appointments.ts`
 - `src/lib/app-data.ts`
@@ -88,6 +91,8 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `npm run lint` passed
 - `npm test` passed
 - `npm run build` passed with production Supabase env variables set locally
+- Vercel production deployment for main completed successfully.
+- GitHub Actions build initially failed because CI did not provide Supabase env variables; workflow has been patched and is pending re-run.
 - Gmail verification check found Supabase email confirmation required for the current test account; the latest readable confirmation link returned `otp_expired`.
 
 ## Commit / push status
@@ -100,6 +105,8 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - This round push status: completed
 - Previous commit: `4da959b` - `Add service creation flow`
 - Latest in-progress round hash: pending
+- Main merge commit: `11cc63e` - `Merge beauty OS operational readiness updates`
+- CI fix commit: pending
 
 ## Remaining issues
 
@@ -114,7 +121,7 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Next step
 
-- Commit and push the deferred hydration fix, then verify the new Vercel preview with a confirmed account and continue demo-placeholder cleanup.
+- Push the CI env fix, verify GitHub Actions turns green, then continue demo-placeholder cleanup.
 
 ## Operational readiness
 
