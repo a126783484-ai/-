@@ -2,7 +2,7 @@
 
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { ensureOwnerWorkspaceForUser } from "@/lib/workspace";
-import { loadPendingStaffInvitesForEmail } from "@/lib/staff-invites";
+import { isMissingStaffInviteTableError, loadPendingStaffInvitesForEmail } from "@/lib/staff-invites";
 
 export type LoginBootstrapResult =
   | { ok: true }
@@ -26,7 +26,9 @@ export async function bootstrapLoggedInWorkspaceAction(): Promise<LoginBootstrap
     try {
       pendingInvites = await loadPendingStaffInvitesForEmail(supabase, data.user.email ?? "");
     } catch (inviteError) {
-      console.error("pending invite lookup failed", inviteError);
+      if (!isMissingStaffInviteTableError(inviteError as { code?: string; message?: string } | null | undefined)) {
+        console.error("pending invite lookup failed", inviteError);
+      }
     }
 
     if (pendingInvites.length > 0) {
