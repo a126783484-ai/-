@@ -1,5 +1,6 @@
 "use server";
 
+import type { User } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { ensureOwnerWorkspaceForUser } from "@/lib/workspace";
 import { isMissingStaffInviteTableError, loadPendingStaffInvitesForEmail } from "@/lib/staff-invites";
@@ -8,23 +9,26 @@ export type LoginBootstrapResult =
   | { ok: true }
   | { ok: false; error: "auth_config_missing" | "auth_bootstrap_failed" };
 
-export async function bootstrapLoggedInWorkspaceAction(): Promise<LoginBootstrapResult> {
-  const supabase = await createSupabaseServerClient().catch(() => null);
+export async function bootstrapLoggedInWorkspaceAction(
+  supabase?: Awaited<ReturnType<typeof createSupabaseServerClient>> | null,
+  user?: User
+): Promise<LoginBootstrapResult> {
+  const client = supabase ?? (await createSupabaseServerClient().catch(() => null));
 
-  if (!supabase) {
+  if (!client) {
     return { ok: false, error: "auth_config_missing" };
   }
 
-  const { data, error } = await supabase.auth.getUser();
+  const dataUser = user ?? (await client.auth.getUser()).data.user;
 
-  if (error || !data.user) {
+  if (!dataUser) {
     return { ok: false, error: "auth_bootstrap_failed" };
   }
 
   try {
     let pendingInvites: Awaited<ReturnType<typeof loadPendingStaffInvitesForEmail>> = [];
     try {
-      pendingInvites = await loadPendingStaffInvitesForEmail(supabase, data.user.email ?? "");
+      pendingInvites = await loadPendingStaffInvitesForEmail(client, dataUser.email ?? "");
     } catch (inviteError) {
       if (!isMissingStaffInviteTableError(inviteError as { code?: string; message?: string } | null | undefined)) {
         console.error("pending invite lookup failed", inviteError);
@@ -35,7 +39,7 @@ export async function bootstrapLoggedInWorkspaceAction(): Promise<LoginBootstrap
       return { ok: true };
     }
 
-    await ensureOwnerWorkspaceForUser(data.user, supabase);
+    await ensureOwnerWorkspaceForUser(dataUser, client);
   } catch {
     return { ok: false, error: "auth_bootstrap_failed" };
   }
