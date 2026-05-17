@@ -40,3 +40,19 @@ export function formatDateTime(date: string) {
     minute: "2-digit"
   }).format(new Date(date));
 }
+
+export function formatDateTimeLocalInput(date: string) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: taipeiTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  });
+
+  const parts = formatter.formatToParts(new Date(date));
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${value("year")}-${value("month")}-${value("day")}T${value("hour")}:${value("minute")}`;
+}
