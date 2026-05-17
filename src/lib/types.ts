@@ -113,6 +113,19 @@ export interface InventoryItem {
   lowStockThreshold: number;
 }
 
+export type InventoryMovementType = "purchase" | "consume" | "adjust";
+
+export interface InventoryMovement {
+  id: string;
+  workspaceId: string;
+  itemId: string;
+  orderId?: string;
+  movementType: InventoryMovementType;
+  quantity: number;
+  note?: string;
+  createdAt: string;
+}
+
 export interface Shift {
   id: string;
   workspaceId: string;

@@ -15,6 +15,7 @@ import {
   updateWorkspaceSettings,
 } from "@/app/crud-actions";
 import { createStaffAction, updateStaffAction } from "@/app/staff/actions";
+import { recordInventoryMovementAction } from "@/app/inventory/actions";
 import { AppShell } from "@/components/AppShell";
 import { FormNotice } from "@/components/FormNotice";
 import { ModuleTable } from "@/components/ModuleTable";
@@ -49,6 +50,7 @@ const paymentMethods = [
 const orderStatuses = ["unpaid", "partial", "paid", "refunded"] as const;
 const tiers = ["新客", "一般", "VIP", "VVIP"];
 const staffRoles = ["owner", "admin", "technician", "front_desk", "staff"] as const;
+const inventoryMovementTypes = ["purchase", "consume", "adjust"] as const;
 type Notice = { kind: "error" | "success"; message: string };
 
 function NoticeBanner({ notice }: { notice?: Notice }) {
@@ -674,6 +676,67 @@ function AddLineForm({
   );
 }
 
+function InventoryMovementForm({ data }: { data: AppData }) {
+  return (
+    <form action={recordInventoryMovementAction} className="card p-5">
+      <h2 className="text-lg font-bold text-plum">新增庫存異動</h2>
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <label className="text-sm font-semibold text-plum md:col-span-2">
+          品項
+          <select
+            required
+            name="item_id"
+            className={fieldClass()}
+            defaultValue={data.inventory[0]?.id ?? ""}
+          >
+            <option value="" disabled>
+              請選擇品項
+            </option>
+            {data.inventory.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name} ｜ {item.brand}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          類型
+          <select name="movement_type" className={fieldClass()} defaultValue="purchase">
+            {inventoryMovementTypes.map((type) => (
+              <option key={type} value={type}>
+                {type === "purchase" ? "入庫" : type === "consume" ? "出庫" : "調整"}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          數量 / 異動量
+          <input
+            required
+            type="number"
+            name="quantity"
+            inputMode="decimal"
+            step="0.01"
+            className={fieldClass()}
+            placeholder="3 或 -2"
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum md:col-span-2">
+          備註
+          <input
+            name="note"
+            className={fieldClass()}
+            placeholder="盤點補貨、耗材報廢、手動修正"
+          />
+        </label>
+      </div>
+      <div className="mt-4">
+        <SubmitButton>記錄異動</SubmitButton>
+      </div>
+    </form>
+  );
+}
+
 function StaffForm({ staff }: { staff?: StaffMember }) {
   const action = staff ? updateStaffAction : createStaffAction;
 
@@ -1230,57 +1293,139 @@ export function CustomersView({
   );
 }
 
-export function InventoryView({ data }: { data: AppData }) {
+export function InventoryView({
+  data,
+  notice,
+}: {
+  data: AppData;
+  notice?: Notice;
+}) {
+  const canManageInventory = can(data.currentMember?.role ?? "staff", "inventory");
+  const lowStockCount = data.inventory.filter(
+    (item) => item.quantity <= item.lowStockThreshold,
+  ).length;
+  const totalValue = data.inventory.reduce(
+    (sum, item) => sum + item.quantity * item.cost,
+    0,
+  );
+  const netMovement = data.inventoryMovements.reduce(
+    (sum, movement) => sum + movement.quantity,
+    0,
+  );
+  const movementOutflow = data.inventoryMovements
+    .filter((movement) => movement.quantity < 0)
+    .reduce((sum, movement) => sum + Math.abs(movement.quantity), 0);
+  const recentMovements = data.inventoryMovements.slice(0, 25);
+
   return (
     <AppShell
       title="庫存管理"
       subtitle="用品、耗材、色膠、低庫存提醒與進銷存紀錄。"
       {...shellProps(data)}
     >
-      <ModuleTable
-        rows={data.inventory}
-        searchPlaceholder="搜尋品牌、品項、分類"
-        filterOptions={["凝膠", "保養", "耗材", "工具"]}
-        emptyTitle="尚無庫存資料"
-        columns={[
-          {
-            key: "name",
-            label: "品項",
-            render: (row) => (
-              <>
-                <strong>{row.name}</strong>
-                <p className="text-ink/60">
-                  {row.brand}｜{row.category}
-                </p>
-              </>
-            ),
-          },
-          {
-            key: "qty",
-            label: "庫存",
-            sortValue: (row) => row.quantity,
-            render: (row) => (
-              <StatusPill
-                tone={row.quantity <= row.lowStockThreshold ? "amber" : "sage"}
-              >
-                {row.quantity}
-              </StatusPill>
-            ),
-          },
-          {
-            key: "cost",
-            label: "成本",
-            sortValue: (row) => row.cost,
-            render: (row) => currency.format(row.cost),
-          },
-          {
-            key: "retail",
-            label: "售價",
-            sortValue: (row) => row.retailPrice,
-            render: (row) => currency.format(row.retailPrice),
-          },
-        ]}
-      />
+      {notice ? <NoticeBanner notice={notice} /> : null}
+      <section className="grid gap-4 md:grid-cols-4">
+        <MetricCard label="品項數" value={`${data.inventory.length}`} hint="所有在庫品項" />
+        <MetricCard label="低庫存" value={`${lowStockCount}`} hint="已低於警戒值" />
+        <MetricCard label="庫存成本" value={currency.format(totalValue)} hint="依成本估值" />
+        <MetricCard label="淨異動" value={netMovement.toFixed(2)} hint={`出庫累計 ${movementOutflow.toFixed(2)}`} />
+      </section>
+      <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)]">
+        {canManageInventory ? <InventoryMovementForm data={data} /> : null}
+        <div className="card p-5">
+          <h2 className="text-lg font-bold text-plum">庫存運作</h2>
+          <div className="mt-4 space-y-3 text-sm text-ink/70">
+            <p>入庫、出庫、調整都會寫入 `inventory_movements`，並同步更新品項數量。</p>
+            <p>出庫前會檢查餘量，不允許扣成負數。</p>
+            <p>這裡是後續結算、報表與耗材成本的共同來源。</p>
+          </div>
+        </div>
+      </div>
+      <div className="mt-5">
+        <ModuleTable
+          rows={data.inventory}
+          searchPlaceholder="搜尋品牌、品項、分類"
+          filterOptions={["凝膠", "保養", "耗材", "工具"]}
+          emptyTitle="尚無庫存資料"
+          columns={[
+            {
+              key: "name",
+              label: "品項",
+              render: (row) => (
+                <>
+                  <strong>{row.name}</strong>
+                  <p className="text-ink/60">
+                    {row.brand}｜{row.category}
+                  </p>
+                </>
+              ),
+            },
+            {
+              key: "qty",
+              label: "庫存",
+              sortValue: (row) => row.quantity,
+              render: (row) => (
+                <StatusPill tone={row.quantity <= row.lowStockThreshold ? "amber" : "sage"}>
+                  {row.quantity}
+                </StatusPill>
+              ),
+            },
+            {
+              key: "cost",
+              label: "成本",
+              sortValue: (row) => row.cost,
+              render: (row) => currency.format(row.cost),
+            },
+            {
+              key: "retail",
+              label: "售價",
+              sortValue: (row) => row.retailPrice,
+              render: (row) => currency.format(row.retailPrice),
+            },
+          ]}
+        />
+      </div>
+      <div className="mt-5">
+        <ModuleTable
+          rows={recentMovements}
+          searchPlaceholder="搜尋異動、備註、品項"
+          filterOptions={["purchase", "consume", "adjust"]}
+          emptyTitle="尚無庫存異動"
+          columns={[
+            {
+              key: "time",
+              label: "時間",
+              sortValue: (row) => row.createdAt,
+              render: (row) => new Date(row.createdAt).toLocaleString("zh-TW"),
+            },
+            {
+              key: "item",
+              label: "品項",
+              render: (row) => data.inventory.find((item) => item.id === row.itemId)?.name ?? row.itemId,
+            },
+            {
+              key: "type",
+              label: "類型",
+              render: (row) => (
+                <StatusPill tone={row.movementType === "consume" ? "amber" : row.movementType === "adjust" ? "plum" : "sage"}>
+                  {row.movementType === "purchase" ? "入庫" : row.movementType === "consume" ? "出庫" : "調整"}
+                </StatusPill>
+              ),
+            },
+            {
+              key: "qty",
+              label: "異動量",
+              sortValue: (row) => row.quantity,
+              render: (row) => row.quantity.toFixed(2),
+            },
+            {
+              key: "note",
+              label: "備註",
+              render: (row) => row.note ?? "-",
+            },
+          ]}
+        />
+      </div>
     </AppShell>
   );
 }
@@ -1570,13 +1715,23 @@ export function ReportsView({ data }: { data: AppData }) {
   const returningRate = data.customers.length
     ? Math.round((metrics.returningCustomers / data.customers.length) * 100)
     : 0;
+  const lowStockCount = data.inventory.filter(
+    (item) => item.quantity <= item.lowStockThreshold,
+  ).length;
+  const inventoryNet = data.inventoryMovements.reduce(
+    (sum, movement) => sum + movement.quantity,
+    0,
+  );
+  const inventoryOutflow = data.inventoryMovements
+    .filter((movement) => movement.quantity < 0)
+    .reduce((sum, movement) => sum + Math.abs(movement.quantity), 0);
   return (
     <AppShell
       title="報表分析"
       subtitle="日 / 月營收、服務排行、技師排行、回訪率、客單價、來源與庫存消耗分析。"
       {...shellProps(data)}
     >
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid gap-4 md:grid-cols-4">
         <MetricCard
           label="月營收"
           value={currency.format(metrics.monthRevenue)}
@@ -1591,6 +1746,11 @@ export function ReportsView({ data }: { data: AppData }) {
           label="回訪率"
           value={`${returningRate}%`}
           hint="有 lastVisit 的客戶比例"
+        />
+        <MetricCard
+          label="低庫存"
+          value={`${lowStockCount}`}
+          hint="目前低於警戒值的品項"
         />
       </section>
       <section className="mt-5 grid gap-5 lg:grid-cols-2">
@@ -1624,6 +1784,23 @@ export function ReportsView({ data }: { data: AppData }) {
             </div>
           ))}
         </div>
+      </section>
+      <section className="mt-5 grid gap-4 md:grid-cols-3">
+        <MetricCard
+          label="庫存淨異動"
+          value={inventoryNet.toFixed(2)}
+          hint="入庫與出庫、調整的淨變化"
+        />
+        <MetricCard
+          label="庫存出庫"
+          value={inventoryOutflow.toFixed(2)}
+          hint="扣料與報廢合計"
+        />
+        <MetricCard
+          label="庫存品項"
+          value={`${data.inventory.length}`}
+          hint="現有在庫品項數"
+        />
       </section>
     </AppShell>
   );
