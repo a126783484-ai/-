@@ -4,7 +4,10 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Lumière Beauty OS",
-  description: "美甲美容行業營運 OS：預約、CRM、結帳、技師工作台、庫存與報表。"
+  description: "美甲美容行業營運 OS：預約、CRM、結帳、技師工作台、庫存與報表。",
+  icons: {
+    icon: "/icon.svg"
+  }
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
