@@ -320,3 +320,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - The current member row is derived from the existing `staff` payload instead of a separate full-row membership read.
 - This trims another common auth-path payload without adding an extra query.
 - Verified with `npm run typecheck`.
+
+## Login bootstrap skip flag
+
+- `ensureOwnerWorkspaceForUser` now accepts `skipMembershipCheck`.
+- `bootstrapLoggedInWorkspaceAction` passes `true` because it already checked membership before it calls into workspace bootstrap.
+- This removes one redundant membership lookup from the common login path.
+- Verified with:
+  - `npm run typecheck`
+  - `npm test -- src/app/login/actions.test.ts`

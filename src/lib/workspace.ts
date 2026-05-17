@@ -162,24 +162,30 @@ export async function bootstrapOwnerWorkspace(params: {
   return data as WorkspaceRow;
 }
 
-export async function ensureOwnerWorkspaceForUser(user: User, client?: AppSupabaseClient) {
+export async function ensureOwnerWorkspaceForUser(
+  user: User,
+  client?: AppSupabaseClient,
+  skipMembershipCheck = false
+) {
   const workspaceName = metadataString(user.user_metadata?.workspace_name) ?? defaultWorkspaceName(user);
   const supabase = await getClient(client);
-  const existingMembership = await getFirstActiveMembership(user.id, supabase);
+  if (!skipMembershipCheck) {
+    const existingMembership = await getFirstActiveMembership(user.id, supabase);
 
-  if (existingMembership) {
-    const { data: workspace, error: workspaceError } = await supabase
-      .from("workspaces")
-      .select("*")
-      .eq("id", existingMembership.workspace_id)
-      .maybeSingle();
+    if (existingMembership) {
+      const { data: workspace, error: workspaceError } = await supabase
+        .from("workspaces")
+        .select("*")
+        .eq("id", existingMembership.workspace_id)
+        .maybeSingle();
 
-    if (workspaceError) {
-      throw workspaceError;
-    }
+      if (workspaceError) {
+        throw workspaceError;
+      }
 
-    if (workspace) {
-      return workspace as WorkspaceRow;
+      if (workspace) {
+        return workspace as WorkspaceRow;
+      }
     }
   }
 
