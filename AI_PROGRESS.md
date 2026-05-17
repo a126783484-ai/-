@@ -22,6 +22,7 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Replaced the `AppShell` demo fallback with a formal production notice so any missing shell context no longer surfaces demo copy.
 - Made the technician workflow notice always visible, even when the current technician has no assigned appointments, so the photo-upload workflow is not hidden in the empty state.
 - Re-ran `npm run lint`, `npm test`, and `npm run build` after the technician empty-state notice change; lint and test passed, and build passed with the canonical production Supabase env values set in the shell.
+- Verified the latest Vercel deployment after the push: `/technician` returns the logged-in server-rendered page with the new always-visible `照片上傳流程` notice, and `/appointments` still responds with HTTP 200 under the authenticated Supabase session.
 - Added a beauty-os-specific optimization roadmap at `docs/optimization-roadmap.md`.
 - Fixed README roadmap links to use repo-relative paths.
 - Implemented real workspace settings persistence through Supabase server action.
@@ -145,4 +146,4 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Operational readiness
 
-- Estimated readiness: 96%
+- Estimated readiness: 97%
