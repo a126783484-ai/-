@@ -4,7 +4,10 @@ import { getAppointmentError, getAppointmentMessage, readAppointmentParam } from
 describe("appointment feedback helpers", () => {
   it("maps success and error codes", () => {
     expect(getAppointmentMessage("appointment_created")).toContain("已建立");
+    expect(getAppointmentMessage("appointment_status_updated")).toContain("已更新");
+    expect(getAppointmentMessage("appointment_cancelled")).toContain("已取消");
     expect(getAppointmentError("appointment_conflict")).toContain("衝突");
+    expect(getAppointmentError("appointment_invalid_status")).toContain("不正確");
   });
 
   it("ignores array search params", () => {
