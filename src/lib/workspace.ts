@@ -91,23 +91,26 @@ async function bootstrapOwnerWorkspaceWithAuthenticatedInserts(params: {
   phone?: string | null;
   displayName?: string | null;
   client?: AppSupabaseClient;
+  skipMembershipCheck?: boolean;
 }) {
-  const existingMembership = await getFirstActiveMembership(params.user.id, params.client);
+  if (!params.skipMembershipCheck) {
+    const existingMembership = await getFirstActiveMembership(params.user.id, params.client);
 
-  if (existingMembership) {
-    const supabase = await getClient(params.client);
-    const { data, error } = await supabase
-      .from("workspaces")
-      .select("*")
-      .eq("id", existingMembership.workspace_id)
-      .maybeSingle();
+    if (existingMembership) {
+      const supabase = await getClient(params.client);
+      const { data, error } = await supabase
+        .from("workspaces")
+        .select("*")
+        .eq("id", existingMembership.workspace_id)
+        .maybeSingle();
 
-    if (error) {
-      throw error;
-    }
+      if (error) {
+        throw error;
+      }
 
-    if (data) {
-      return data as WorkspaceRow;
+      if (data) {
+        return data as WorkspaceRow;
+      }
     }
   }
 
@@ -133,6 +136,7 @@ export async function bootstrapOwnerWorkspace(params: {
   phone?: string | null;
   displayName?: string | null;
   client?: AppSupabaseClient;
+  skipMembershipCheck?: boolean;
 }) {
   const supabase = await getClient(params.client);
   const { data, error } = await supabase.rpc("bootstrap_owner_workspace", {
@@ -189,7 +193,8 @@ export async function ensureOwnerWorkspaceForUser(user: User, client?: AppSupaba
     workspaceName,
     phone: metadataString(user.user_metadata?.phone),
     displayName: metadataString(user.user_metadata?.display_name) ?? user.email ?? "Owner",
-    client
+    client,
+    skipMembershipCheck: true
   });
 }
 
