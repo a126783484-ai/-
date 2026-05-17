@@ -7,6 +7,7 @@ type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
 type WorkspaceInsert = Database["public"]["Tables"]["workspaces"]["Insert"];
 type WorkspaceMemberRow = Database["public"]["Tables"]["workspace_members"]["Row"];
 type WorkspaceMemberInsert = Database["public"]["Tables"]["workspace_members"]["Insert"];
+type WorkspaceMembershipPointer = Pick<WorkspaceMemberRow, "workspace_id">;
 
 export interface WorkspaceContext {
   user: User;
@@ -68,21 +69,22 @@ export async function createWorkspaceOwner(input: WorkspaceMemberInsert, client?
   return data;
 }
 
-async function getFirstActiveMembership(userId: string, client?: AppSupabaseClient): Promise<WorkspaceMemberRow | null> {
+async function getFirstActiveMembership(userId: string, client?: AppSupabaseClient): Promise<WorkspaceMembershipPointer | null> {
   const supabase = await getClient(client);
   const { data, error } = await supabase
     .from("workspace_members")
-    .select("*")
+    .select("workspace_id")
     .eq("user_id", userId)
     .eq("active", true)
     .order("created_at", { ascending: true })
-    .limit(1);
+    .limit(1)
+    .maybeSingle();
 
   if (error) {
     throw error;
   }
 
-  return (data?.[0] as WorkspaceMemberRow | undefined) ?? null;
+  return data as WorkspaceMembershipPointer | null;
 }
 
 export async function hasActiveWorkspaceMembership(userId: string, client?: AppSupabaseClient) {
