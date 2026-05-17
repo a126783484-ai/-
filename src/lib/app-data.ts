@@ -411,7 +411,6 @@ export async function loadAppData(): Promise<AppData> {
     inventoryResult,
     inventoryMovementsResult,
     shiftsResult,
-    staffInvitesResult,
   ].find((result) => result.error)?.error;
 
   if (firstError) {

@@ -205,3 +205,24 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Fixed `loadAppData` so it re-checks `workspace_members` after workspace bootstrap; this prevents freshly authenticated users from being dropped into an empty workspace state during preview verification.
 - Updated `loadAppData` to pass the authenticated Supabase client into `ensureOwnerWorkspaceForUser`, so workspace bootstrap uses the live session rather than an unauthenticated fallback client.
 - Updated `signInAction` to run `bootstrapLoggedInWorkspaceAction()` immediately after password login, restoring the workspace bootstrap step that the earlier client-side flow used.
+
+## Latest bootstrap / preview fix
+
+- Fixed the Supabase config resolver so any env URL pointing at the wrong project now falls back to the canonical production project `odzxyhaoehvhfximnwjh`, even in preview builds.
+- Simplified the production config assertion so the resolved config only has to match the canonical Supabase project.
+- Fixed `loadAppData` so the missing optional `workspace_member_invites` table no longer counts as a fatal workspace error.
+- Verified with a local production server and real Supabase session cookies that login now renders the authenticated app shell with a real workspace:
+  - `/` no longer shows `尚未建立 workspace`
+  - `/staff`, `/inventory`, and `/reports` render with workspace data
+  - `/api/diagnostics/runtime` reports the canonical project ref
+- Verification completed:
+  - `npm run typecheck` passed
+  - `npm run lint` passed
+  - `npm test` passed
+  - `npm run build` passed with production Supabase env
+
+## Current round commit status
+
+- Working tree includes the Supabase config / workspace bootstrap fix.
+- Pending commit hash: not yet created
+- Next step: commit, push, then re-check the preview deployment after Vercel rebuilds.
