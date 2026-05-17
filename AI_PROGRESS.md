@@ -20,6 +20,8 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Re-validated the updated code in a local `next start` instance on port `3001`; the build served correctly, but the current test account returned a Supabase auth 401 during local login, so the live-flow browser check remains the source of truth for authenticated verification.
 - Re-validated the latest Vercel deployment in a browser: login writes Supabase auth cookies, the dashboard loads after auth, `/appointments` is protected when logged out, and the updated appointment controls and technician workflow notice render without console or page errors.
 - Replaced the `AppShell` demo fallback with a formal production notice so any missing shell context no longer surfaces demo copy.
+- Made the technician workflow notice always visible, even when the current technician has no assigned appointments, so the photo-upload workflow is not hidden in the empty state.
+- Re-ran `npm run lint`, `npm test`, and `npm run build` after the technician empty-state notice change; lint and test passed, and build passed with the canonical production Supabase env values set in the shell.
 - Added a beauty-os-specific optimization roadmap at `docs/optimization-roadmap.md`.
 - Fixed README roadmap links to use repo-relative paths.
 - Implemented real workspace settings persistence through Supabase server action.
@@ -143,4 +145,4 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Operational readiness
 
-- Estimated readiness: 95%
+- Estimated readiness: 96%
