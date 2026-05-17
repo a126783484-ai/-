@@ -260,3 +260,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
   - `/` loaded
   - `/staff` rendered workspace data
   - logout returned to `/login`
+
+## Login bootstrap tests
+
+- Added a small unit test file for `bootstrapLoggedInWorkspaceAction`.
+- The tests cover:
+  - missing Supabase client config
+  - pending invite short-circuit
+  - normal bootstrap path
+- This keeps the auth / workspace chain protected without needing extra browser verification.
