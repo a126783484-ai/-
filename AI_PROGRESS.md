@@ -6,6 +6,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Completed in this round
 
+- Added a workspace-scoped inventory movement ledger with purchase/consume/adjust support, rollback-safe stock validation, and a direct server action to record inventory movements.
+- Added inventory movement feedback helpers and tests so success and validation errors surface as readable Chinese notices.
+- Extended the inventory page and reports view to show low-stock, value, and movement metrics plus a recent movement ledger.
+- Fixed inventory data loading to filter movement history by current workspace before rendering.
+- Hardened the inventory action error path so missing/invalid form data redirects back with validation feedback instead of throwing a raw server error.
+- Verified `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` after the inventory changes.
 - Added a complete staff management flow with Supabase Auth email invite creation, workspace membership creation, and guarded edit/update support.
 - Added staff-management feedback codes and tests for create/update/invite failure states.
 - Added an in-page staff summary panel with active headcount, technician count, and management-role count.
@@ -65,6 +71,15 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Files modified
 
+- `src/app/inventory/actions.ts`
+- `src/app/inventory/page.tsx`
+- `src/components/ModuleViews.tsx`
+- `src/lib/app-data.ts`
+- `src/lib/database.types.ts`
+- `src/lib/inventory-feedback.ts`
+- `src/lib/inventory-feedback.test.ts`
+- `src/lib/types.ts`
+- `supabase/migrations/0006_inventory_movement_ledger.sql`
 - `README.md`
 - `docs/optimization-roadmap.md`
 - `src/app/settings/actions.ts`
@@ -109,6 +124,10 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Verification
 
+- `npm run typecheck` passed
+- `npm run lint` passed
+- `npm test` passed
+- `npm run build` passed with production Supabase env variables set locally
 - `npm run lint` passed
 - `npm test` passed
 - `npm run build` passed with production Supabase env variables set locally
@@ -125,6 +144,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Commit / push status
 
+- Current round code commit: pending
+- Current round progress update commit: pending
+- Current round push status: pending
 - Current round commit: `86fbfec` - `Improve beauty OS operational readiness`
 - Pushed to: `origin/codex/github-mention-p0-implement-real-crud-for-beauty-os-core-m-i0ioyl`
 - Current round push status: completed

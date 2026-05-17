@@ -4,6 +4,7 @@ import type {
   Appointment,
   Customer,
   InventoryItem,
+  InventoryMovement,
   Order,
   Role,
   ServiceCategory,
@@ -29,6 +30,8 @@ type AppointmentServiceRow =
 type OrderRow = Database["public"]["Tables"]["orders"]["Row"];
 type OrderLineRow = Database["public"]["Tables"]["order_lines"]["Row"];
 type InventoryRow = Database["public"]["Tables"]["inventory_items"]["Row"];
+type InventoryMovementRow =
+  Database["public"]["Tables"]["inventory_movements"]["Row"];
 type ShiftRow = Database["public"]["Tables"]["shifts"]["Row"];
 
 export interface AppData {
@@ -42,6 +45,7 @@ export interface AppData {
   appointments: Appointment[];
   orders: Order[];
   inventory: InventoryItem[];
+  inventoryMovements: InventoryMovement[];
   shifts: Shift[];
   needsWorkspace: boolean;
 }
@@ -69,6 +73,7 @@ function emptyAppData(user: { id: string; email: string | null }): AppData {
     appointments: [],
     orders: [],
     inventory: [],
+    inventoryMovements: [],
     shifts: [],
     needsWorkspace: true,
   };
@@ -204,6 +209,19 @@ function toInventory(row: InventoryRow): InventoryItem {
   };
 }
 
+function toInventoryMovement(row: InventoryMovementRow): InventoryMovement {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    itemId: row.item_id,
+    orderId: row.order_id ?? undefined,
+    movementType: row.movement_type,
+    quantity: Number(row.quantity),
+    note: row.note ?? undefined,
+    createdAt: row.created_at,
+  };
+}
+
 function toShift(row: ShiftRow): Shift {
   return {
     id: row.id,
@@ -274,6 +292,7 @@ export async function loadAppData(): Promise<AppData> {
     ordersResult,
     orderLinesResult,
     inventoryResult,
+    inventoryMovementsResult,
     shiftsResult,
   ] = await Promise.all([
     supabase.from("workspaces").select("*").eq("id", workspaceId).maybeSingle(),
@@ -315,6 +334,12 @@ export async function loadAppData(): Promise<AppData> {
       .eq("workspace_id", workspaceId)
       .order("name", { ascending: true }),
     supabase
+      .from("inventory_movements")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false })
+      .limit(100),
+    supabase
       .from("shifts")
       .select("*")
       .eq("workspace_id", workspaceId)
@@ -332,6 +357,7 @@ export async function loadAppData(): Promise<AppData> {
     ordersResult,
     orderLinesResult,
     inventoryResult,
+    inventoryMovementsResult,
     shiftsResult,
   ].find((result) => result.error)?.error;
 
@@ -376,6 +402,9 @@ export async function loadAppData(): Promise<AppData> {
       ),
     ),
     inventory: (inventoryResult.data ?? []).map(toInventory),
+    inventoryMovements: (inventoryMovementsResult.data ?? []).map(
+      toInventoryMovement,
+    ),
     shifts: (shiftsResult.data ?? []).map(toShift),
     needsWorkspace: false,
   };
