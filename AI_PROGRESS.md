@@ -329,3 +329,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Verified with:
   - `npm run typecheck`
   - `npm test -- src/app/login/actions.test.ts`
+
+## Scoped relation loads
+
+- `loadAppData()` now fetches `appointment_services` and `order_lines` by current workspace parent ids instead of loading both tables wholesale.
+- This keeps relation-table hydration aligned with workspace ownership and trims a broader read on the dashboard path.
+- Verified with `npm run typecheck`.

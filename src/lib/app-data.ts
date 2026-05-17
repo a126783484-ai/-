@@ -332,9 +332,7 @@ export async function loadAppData(): Promise<AppData> {
     servicesResult,
     customersResult,
     appointmentsResult,
-    appointmentServicesResult,
     ordersResult,
-    orderLinesResult,
     inventoryResult,
     inventoryMovementsResult,
     shiftsResult,
@@ -366,13 +364,11 @@ export async function loadAppData(): Promise<AppData> {
       .select("*")
       .eq("workspace_id", workspaceId)
       .order("start_at", { ascending: true }),
-    supabase.from("appointment_services").select("*"),
     supabase
       .from("orders")
       .select("*")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false }),
-    supabase.from("order_lines").select("*"),
     supabase
       .from("inventory_items")
       .select("*")
@@ -403,9 +399,7 @@ export async function loadAppData(): Promise<AppData> {
     servicesResult,
     customersResult,
     appointmentsResult,
-    appointmentServicesResult,
     ordersResult,
-    orderLinesResult,
     inventoryResult,
     inventoryMovementsResult,
     shiftsResult,
@@ -421,6 +415,33 @@ export async function loadAppData(): Promise<AppData> {
   }
 
   const currentMemberRow = (staffResult.data ?? []).find((member) => member.user_id === user.id) ?? null;
+  const appointmentIdList = (appointmentsResult.data ?? []).map((appointment) => appointment.id);
+  const orderIdList = (ordersResult.data ?? []).map((order) => order.id);
+
+  const [appointmentServicesResult, orderLinesResult] = await Promise.all([
+    appointmentIdList.length
+      ? supabase
+          .from("appointment_services")
+          .select("*")
+          .in("appointment_id", appointmentIdList)
+      : Promise.resolve({ data: [], error: null } as const),
+    orderIdList.length
+      ? supabase
+          .from("order_lines")
+          .select("*")
+          .in("order_id", orderIdList)
+      : Promise.resolve({ data: [], error: null } as const),
+  ]);
+
+  if (appointmentServicesResult.error) {
+    console.error("workspace appointment services query failed", appointmentServicesResult.error);
+    return emptyAppData(userSummary);
+  }
+
+  if (orderLinesResult.error) {
+    console.error("workspace order lines query failed", orderLinesResult.error);
+    return emptyAppData(userSummary);
+  }
 
   let staffInviteFeatureEnabled = true;
   let staffInvites: StaffInvite[] = [];
