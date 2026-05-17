@@ -341,3 +341,9 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `createAppointmentAction` and `updateAppointmentAction` now fetch `appointment_services` only for the current workspace's appointment ids.
 - This removes a whole-table read from the appointment conflict-check path while keeping the same validation behavior.
 - Verified with `npm run typecheck`.
+
+## Order line validation message
+
+- `buildOrderLines()` now routes the missing-service validation text through a shared helper.
+- This keeps the traditional Chinese validation message stable when a service does not belong to the current workspace.
+- Verified with `npm run typecheck` and `npm test -- src/lib/order-line-errors.test.ts`.
