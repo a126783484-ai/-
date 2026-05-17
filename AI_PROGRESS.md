@@ -6,6 +6,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Completed in this round
 
+- Fixed the login flow to create Supabase session cookies in the browser, then bootstrap workspace membership server-side after successful sign-in.
+- Added a client-side `LoginForm` component for persistent browser-based auth.
+- Verified the login flow locally with Playwright: authenticated session cookies persisted, `/appointments` and `/customers` stayed on protected pages, and no redirect back to `/login` occurred.
+- Ran `npm run lint` successfully.
+- Ran `npm test` successfully.
+- Ran `npm run build` successfully with production Supabase env variables set locally.
 - Added a beauty-os-specific optimization roadmap at `docs/optimization-roadmap.md`.
 - Fixed README roadmap links to use repo-relative paths.
 - Implemented real workspace settings persistence through Supabase server action.
@@ -79,11 +85,14 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Current round commit: `f29a11e` - `Improve beauty OS operational readiness`
 - Pushed to: `origin/codex/beauty-os-auto-work`
 - Current round push status: completed
+- This round commit: pending
+- This round push status: pending
 - Previous commit: `4da959b` - `Add service creation flow`
 - Latest in-progress round hash: pending
 
 ## Remaining issues
 
+- Need to confirm the same login fix on the live deployed preview URL after this push.
 - Search/filter logic is still client-side and broad.
 - Need final cleanup on remaining demo-only entry points and broad client-side filtering.
 - Need per-module validation and better error propagation.
@@ -96,4 +105,4 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Operational readiness
 
-- Estimated readiness: 85%
+- Estimated readiness: 88%
