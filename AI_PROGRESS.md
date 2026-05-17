@@ -12,9 +12,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Verified the same login flow on the live Vercel preview deployment: authenticated session cookies persisted, `/appointments` and `/customers` stayed protected, and the deployment URL resolved correctly.
 - Re-verified the live login flow after the latest deployment: unauthenticated `/appointments` redirects to `/login`, authenticated login reaches the dashboard, and `/appointments`, `/customers`, `/services`, and `/staff` all render their working module pages.
 - Re-checked the live module pages for their primary controls: `建立預約`, `建立客戶`, `建立服務`, and staff edit forms are present, with no console errors or page errors during the browser run.
+- Replaced the appointment page's fake top-row buttons with functional controls: `新增預約` now scrolls to the form, and `日曆檢視` / `列表檢視` now toggle real calendar/list views.
+- Replaced the technician page's disabled photo upload buttons with a clear workflow notice instead of a fake action.
 - Ran `npm run lint` successfully.
 - Ran `npm test` successfully.
 - Ran `npm run build` successfully with production Supabase env variables set locally.
+- Re-validated the updated code in a local `next start` instance on port `3001`; the build served correctly, but the current test account returned a Supabase auth 401 during local login, so the live-flow browser check remains the source of truth for authenticated verification.
 - Added a beauty-os-specific optimization roadmap at `docs/optimization-roadmap.md`.
 - Fixed README roadmap links to use repo-relative paths.
 - Implemented real workspace settings persistence through Supabase server action.
@@ -129,6 +132,7 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Need broader demo-placeholder cleanup across remaining read-only modules.
 - Need to keep watching the next preview deployment whenever the progress file is updated and pushed.
 - Need to investigate the local Next dev server crash around `public/checkout`/`node_modules` filesystem stat in this Android/Codex environment.
+- Need to re-run live browser verification after the next deployment to confirm the appointment view toggle and technician notice changes on the deployed site.
 
 ## Next step
 
@@ -136,4 +140,4 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Operational readiness
 
-- Estimated readiness: 92%
+- Estimated readiness: 93%
