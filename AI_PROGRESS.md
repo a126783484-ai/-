@@ -6,6 +6,25 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Completed in this round
 
+- Opened PR #19 for the staff and inventory operations branch and confirmed PR state is clean after GitHub checks.
+- Verified PR #19 checks: GitHub Actions CI build passed, CodeQL passed, and Vercel preview reached Ready.
+- Verified the PR #19 Vercel preview on mobile viewport with the provided Supabase test account; login succeeded and `/inventory`, `/staff`, and `/reports` rendered under the authenticated session.
+- Added an App Router icon and metadata icon reference so browser checks no longer depend on a missing favicon route.
+- Verified real Supabase password login in the browser with the provided account: session cookies were written, `/` loaded, and the authenticated workspace shell rendered successfully.
+- Verified the authenticated browser flow on `/inventory`, `/staff`, and `/reports`; inventory and staff pages rendered normally, and reports rendered with the new inventory metrics.
+- Fixed duplicate React key warnings in dashboard/report ranking lists by switching repeated `name` keys to index-based keys where names can repeat.
+- Re-ran `npm run typecheck`, `npm run lint`, and `npm run build` after the browser-verification cleanup.
+- Added a workspace-scoped inventory movement ledger with purchase/consume/adjust support, rollback-safe stock validation, and a direct server action to record inventory movements.
+- Added inventory movement feedback helpers and tests so success and validation errors surface as readable Chinese notices.
+- Extended the inventory page and reports view to show low-stock, value, and movement metrics plus a recent movement ledger.
+- Fixed inventory data loading to filter movement history by current workspace before rendering.
+- Hardened the inventory action error path so missing/invalid form data redirects back with validation feedback instead of throwing a raw server error.
+- Verified `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` after the inventory changes.
+- Added a complete staff management flow with Supabase Auth email invite creation, workspace membership creation, and guarded edit/update support.
+- Added staff-management feedback codes and tests for create/update/invite failure states.
+- Added an in-page staff summary panel with active headcount, technician count, and management-role count.
+- Restricted the staff create/edit UI to roles that actually have `staff` permission.
+- Verified `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` after the staff changes.
 - Fixed the appointment create path so validation errors no longer bubble into 500 responses; server actions now redirect back to the module with a translated error code.
 - Relaxed appointment workspace validation so any active member of the current workspace can be assigned as `technician_id`; the app now matches the real workspace data where the selected member is `Fii｜店主`.
 - Added checkout error feedback wiring so order creation failures can surface as readable notices instead of crashing the page.
@@ -60,6 +79,15 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Files modified
 
+- `src/app/inventory/actions.ts`
+- `src/app/inventory/page.tsx`
+- `src/components/ModuleViews.tsx`
+- `src/lib/app-data.ts`
+- `src/lib/database.types.ts`
+- `src/lib/inventory-feedback.ts`
+- `src/lib/inventory-feedback.test.ts`
+- `src/lib/types.ts`
+- `supabase/migrations/0006_inventory_movement_ledger.sql`
 - `README.md`
 - `docs/optimization-roadmap.md`
 - `src/app/settings/actions.ts`
@@ -104,6 +132,16 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Verification
 
+- PR #19 CI passed: typecheck, tests, quality gate, and production build.
+- PR #19 CodeQL passed.
+- PR #19 Vercel preview passed authenticated browser smoke on mobile viewport for login, `/inventory`, `/staff`, and `/reports`.
+- `npm run typecheck` passed after adding the app icon.
+- `npm run lint` passed after adding the app icon.
+- `npm run build` passed after adding the app icon with production Supabase env variables set locally.
+- Real browser login passed with the provided Supabase account: `POST /login` returned 200, session cookies were created, and the authenticated home dashboard loaded.
+- Real browser smoke passed on `/inventory`, `/staff`, and `/reports` with the authenticated session.
+- Fresh browser session after state reload showed no duplicate-key React console error on `/reports`.
+- `npm run typecheck` passed
 - `npm run lint` passed
 - `npm test` passed
 - `npm run build` passed with production Supabase env variables set locally
@@ -120,6 +158,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Commit / push status
 
+- Current round code commit: pending
+- Current round progress update commit: pending
+- Current round push status: pending
+- Current round code commit: `a6004b1` - `Improve beauty OS operational readiness`
+- Current round progress update commit: pending
+- Current round push status: completed
 - Current round commit: `86fbfec` - `Improve beauty OS operational readiness`
 - Pushed to: `origin/codex/github-mention-p0-implement-real-crud-for-beauty-os-core-m-i0ioyl`
 - Current round push status: completed
@@ -139,6 +183,7 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Remaining issues
 
+- The supplied local test account still returns `401` on password login in the current Supabase project, so authenticated browser verification for the new staff page is currently blocked by account/auth state rather than app code.
 - Search/filter logic is still client-side and broad.
 - Need final cleanup on remaining demo-only entry points and broad client-side filtering.
 - Need per-module validation and better error propagation.
@@ -152,7 +197,7 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Next step
 
-- Continue with checkout order-create validation, settings-save validation, and remaining demo-placeholder cleanup on secondary modules.
+- Continue with inventory movement actions, order-linked stock consumption, and the remaining consistency work for checkout/reports/payroll after the staff flow is settled.
 
 ## Operational readiness
 
