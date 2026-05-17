@@ -266,7 +266,7 @@ export async function loadAppData(): Promise<AppData> {
   const userSummary = { id: user.id, email: user.email ?? null };
 
   try {
-    await ensureOwnerWorkspaceForUser(user);
+    await ensureOwnerWorkspaceForUser(user, supabase);
   } catch (error) {
     console.error("workspace bootstrap failed", error);
     return emptyAppData(userSummary);
@@ -305,7 +305,7 @@ export async function loadAppData(): Promise<AppData> {
       };
     }
 
-    await ensureOwnerWorkspaceForUser(user);
+    await ensureOwnerWorkspaceForUser(user, supabase);
 
     const { data: refreshedMemberships, error: refreshedMembershipError } = await supabase
       .from("workspace_members")
