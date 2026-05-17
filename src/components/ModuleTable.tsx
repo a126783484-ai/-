@@ -1,9 +1,51 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { isValidElement, useMemo, useState, type ReactNode } from "react";
 import { EmptyState, LoadingState, NoticeBanner } from "./ui";
 
-export interface Column<T> { key: string; label: string; render: (row: T) => React.ReactNode; sortValue?: (row: T) => string | number; }
+export interface Column<T> {
+  key: string;
+  label: string;
+  render: (row: T) => ReactNode;
+  sortValue?: (row: T) => string | number;
+  csvValue?: (row: T) => string | number | boolean | null | undefined;
+  exportable?: boolean;
+}
+
+function nodeToText(node: ReactNode): string {
+  if (node === null || node === undefined || typeof node === "boolean") {
+    return "";
+  }
+
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+
+  if (Array.isArray(node)) {
+    return node.map(nodeToText).filter(Boolean).join(" ");
+  }
+
+  if (isValidElement<{ children?: ReactNode }>(node)) {
+    return nodeToText(node.props.children);
+  }
+
+  return "";
+}
+
+function csvEscape(value: string | number | boolean | null | undefined) {
+  const text = String(value ?? "");
+  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function buildCsv<T>(rows: T[], columns: Column<T>[]) {
+  const header = columns.map((column) => csvEscape(column.label)).join(",");
+  const body = rows.map((row) => columns.map((column) => {
+    const value = column.csvValue ? column.csvValue(row) : nodeToText(column.render(row));
+    return csvEscape(value);
+  }).join(","));
+
+  return [header, ...body].join("\r\n");
+}
 
 export function ModuleTable<T>({ rows, columns, searchPlaceholder, filterOptions = [], emptyTitle }: { rows: T[]; columns: Column<T>[]; searchPlaceholder: string; filterOptions?: string[]; emptyTitle: string; }) {
   const [query, setQuery] = useState("");
@@ -25,11 +67,36 @@ export function ModuleTable<T>({ rows, columns, searchPlaceholder, filterOptions
   }, [columns, filter, query, rows, sortKey]);
 
   function handleExport() {
-    setLoading(true);
     setNotice("");
+
+    const exportColumns = columns.filter((column) => column.exportable !== false && !["edit", "actions"].includes(column.key));
+
+    if (visibleRows.length === 0 || exportColumns.length === 0) {
+      setNotice("目前沒有可匯出的資料。");
+      return;
+    }
+
+    setLoading(true);
+
     window.setTimeout(() => {
-      setLoading(false);
-      setNotice(`目前已保留匯出入口，正式 CSV 匯出會接上後端 API。`);
+      try {
+        const csv = buildCsv(visibleRows, exportColumns);
+        const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+
+        anchor.href = url;
+        anchor.download = `beauty-os-${stamp}.csv`;
+        document.body.append(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+
+        setNotice(`已匯出 ${visibleRows.length} 筆資料。`);
+      } finally {
+        setLoading(false);
+      }
     }, 350);
   }
 
