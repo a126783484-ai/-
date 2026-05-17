@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { CustomersView } from "@/components/ModuleViews";
+import { CustomersDeferredView } from "@/components/DeferredViews";
 import { loadAppData } from "@/lib/app-data";
 import { getCustomerError, getCustomerMessage, readCustomerParam } from "@/lib/customer-feedback";
 import { getCustomerUpdateError, getCustomerUpdateMessage, readCustomerUpdateParam } from "@/lib/customer-update-feedback";
@@ -16,5 +16,5 @@ export default async function CustomersPage({ searchParams }: CustomersPageProps
   const error = getCustomerError(readCustomerParam(params?.error)) ?? getCustomerUpdateError(readCustomerUpdateParam(params?.error));
   const notice = error ? { kind: "error" as const, message: error } : message ? { kind: "success" as const, message } : undefined;
 
-  return <CustomersView data={data} notice={notice} />;
+  return <CustomersDeferredView data={data} notice={notice} />;
 }
