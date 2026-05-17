@@ -1,9 +1,9 @@
 import type { Appointment, Customer, InventoryItem, Order, ServiceItem, Shift, StaffMember, Workspace } from "./types";
 
-export const demoNotice = "以下資料皆為 Demo Data，可在接上 Supabase 後改由 workspace_id 隔離的正式資料取代。";
+// Shared fixtures for unit tests.
 
 export const workspace: Workspace = {
-  id: "ws_demo_luxe",
+  id: "ws_test_luxe",
   name: "Lumière Nail & Beauty",
   phone: "02-2722-1688",
   address: "台北市信義區香檳路 18 號 2F",
