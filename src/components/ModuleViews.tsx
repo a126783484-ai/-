@@ -14,6 +14,7 @@ import {
   updateAppointmentStatus,
   updateWorkspaceSettings,
 } from "@/app/crud-actions";
+import { createStaffAction, updateStaffAction } from "@/app/staff/actions";
 import { AppShell } from "@/components/AppShell";
 import { FormNotice } from "@/components/FormNotice";
 import { ModuleTable } from "@/components/ModuleTable";
@@ -21,9 +22,9 @@ import { MetricCard, StatusPill, EmptyState } from "@/components/ui";
 import { statusLabel } from "@/lib/appointments";
 import { dashboardMetrics } from "@/lib/analytics";
 import { orderTotal, outstandingAmount } from "@/lib/orders";
-import { roleLabel } from "@/lib/permissions";
+import { can, roleLabel } from "@/lib/permissions";
 import type { AppData } from "@/lib/app-data";
-import type { Appointment, Customer, Order, ServiceItem } from "@/lib/types";
+import type { Appointment, Customer, Order, ServiceItem, StaffMember } from "@/lib/types";
 import { currency, formatDate, formatTime } from "@/lib/utils";
 
 const liveNotice =
@@ -47,6 +48,7 @@ const paymentMethods = [
 ] as const;
 const orderStatuses = ["unpaid", "partial", "paid", "refunded"] as const;
 const tiers = ["新客", "一般", "VIP", "VVIP"];
+const staffRoles = ["owner", "admin", "technician", "front_desk", "staff"] as const;
 type Notice = { kind: "error" | "success"; message: string };
 
 function NoticeBanner({ notice }: { notice?: Notice }) {
@@ -668,6 +670,95 @@ function AddLineForm({
       />
       <input type="hidden" name="custom_line_quantity" value="1" />
       <SubmitButton tone="white">新增明細</SubmitButton>
+    </form>
+  );
+}
+
+function StaffForm({ staff }: { staff?: StaffMember }) {
+  const action = staff ? updateStaffAction : createStaffAction;
+
+  return (
+    <form action={action} className="card p-5">
+      <input type="hidden" name="memberId" value={staff?.id ?? ""} />
+      <h2 className="text-lg font-bold text-plum">
+        {staff ? "編輯員工" : "新增員工 / 邀請"}
+      </h2>
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        {!staff ? (
+          <label className="text-sm font-semibold text-plum">
+            Email（登入帳號）
+            <input
+              required
+              type="email"
+              name="email"
+              className={fieldClass()}
+              placeholder="staff@example.com"
+            />
+          </label>
+        ) : null}
+        <label className="text-sm font-semibold text-plum">
+          姓名
+          <input
+            required
+            name="displayName"
+            className={fieldClass()}
+            defaultValue={staff?.name}
+            placeholder="Fii"
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          電話
+          <input
+            name="phone"
+            className={fieldClass()}
+            defaultValue={staff?.phone}
+            placeholder="0912-345-678"
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          角色
+          <select name="role" className={fieldClass()} defaultValue={staff?.role ?? "technician"}>
+            {staffRoles.map((role) => (
+              <option key={role} value={role}>
+                {roleLabel(role)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          抽成（0 到 1）
+          <input
+            name="commissionRate"
+            inputMode="decimal"
+            className={fieldClass()}
+            defaultValue={staff?.commissionRate ?? 0.25}
+            placeholder="0.25"
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum md:col-span-2">
+          專長（逗號或換行分隔）
+          <textarea
+            name="specialties"
+            className={fieldClass()}
+            defaultValue={staff?.specialties.join("、")}
+            placeholder="凝膠美甲、手足保養、美睫"
+          />
+        </label>
+        {staff ? (
+          <label className="flex items-center gap-3 text-sm font-semibold text-plum">
+            <input
+              type="checkbox"
+              name="active"
+              defaultChecked={staff.active}
+              className="size-5 accent-plum"
+            />
+            在職 / 可被排班與指派
+          </label>
+        ) : null}
+      </div>
+      <div className="mt-4">
+        <SubmitButton>{staff ? "儲存員工" : "新增並寄送邀請"}</SubmitButton>
+      </div>
     </form>
   );
 }
@@ -1294,17 +1385,52 @@ export function StaffView({
   data: AppData;
   notice?: Notice;
 }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = data.staff.find((staff) => staff.id === editingId);
+  const canManageStaff = can(data.currentMember?.role ?? "staff", "staff");
+  const activeStaff = data.staff.filter((staff) => staff.active).length;
+  const technicians = data.staff.filter((staff) => staff.role === "technician" && staff.active).length;
+  const admins = data.staff.filter((staff) => (staff.role === "owner" || staff.role === "admin") && staff.active).length;
+
   return (
     <AppShell
       title="員工 / 技師管理"
-      subtitle="角色權限、班表、抽成、專長與在職狀態。"
+      subtitle="新增邀請、角色權限、班表、抽成、專長與在職狀態。"
       {...shellProps(data)}
     >
       <NoticeBanner notice={notice} />
+      <div className="mb-5 grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
+        {canManageStaff ? <StaffForm staff={editing} /> : null}
+        <div className="card p-5">
+          <h2 className="text-lg font-bold text-plum">人事概況</h2>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+            <div className="rounded-2xl bg-blush p-4">
+              <p className="text-xs font-semibold text-ink/55">在職人數</p>
+              <p className="mt-1 text-2xl font-bold text-plum">{activeStaff}</p>
+            </div>
+            <div className="rounded-2xl bg-blush p-4">
+              <p className="text-xs font-semibold text-ink/55">可排技師</p>
+              <p className="mt-1 text-2xl font-bold text-plum">{technicians}</p>
+            </div>
+            <div className="rounded-2xl bg-blush p-4">
+              <p className="text-xs font-semibold text-ink/55">管理權限</p>
+              <p className="mt-1 text-2xl font-bold text-plum">{admins}</p>
+            </div>
+          </div>
+          {canManageStaff && editing ? (
+            <button
+              className="mobile-tap mt-4 rounded-2xl bg-white font-semibold text-plum"
+              onClick={() => setEditingId(null)}
+            >
+              清除編輯狀態
+            </button>
+          ) : null}
+        </div>
+      </div>
       <ModuleTable
         rows={data.staff}
         searchPlaceholder="搜尋員工、角色、專長"
-        filterOptions={["technician", "front_desk", "owner"]}
+        filterOptions={["owner", "admin", "technician", "front_desk", "staff"]}
         emptyTitle="尚無員工資料"
         columns={[
           {
@@ -1351,6 +1477,22 @@ export function StaffView({
                 <StatusPill>停用</StatusPill>
               ),
           },
+          ...(canManageStaff
+            ? [
+                {
+                  key: "actions",
+                  label: "操作",
+                  render: (row: StaffMember) => (
+                    <button
+                      className="rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
+                      onClick={() => setEditingId(row.id)}
+                    >
+                      編輯
+                    </button>
+                  ),
+                },
+              ]
+            : []),
         ]}
       />
     </AppShell>
