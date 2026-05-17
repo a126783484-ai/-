@@ -156,10 +156,11 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Need to keep watching the next preview deployment whenever the progress file is updated and pushed.
 - Need to investigate the local Next dev server crash around `public/checkout`/`node_modules` filesystem stat in this Android/Codex environment.
 - Need live browser verification after the next deployment to confirm the new staff invite / acceptance flow on the deployed site.
+- Supabase MCP migration application is currently blocked by `ReauthenticationRequired`, so the new `workspace_member_invites` migration has not yet been applied to the live project from this session.
 
 ## Next step
 
-- Continue demo-placeholder cleanup and verify the invite flow end-to-end in a browser after deployment.
+- Continue demo-placeholder cleanup and revisit the invite flow after Supabase reauthentication or another schema deployment path is available.
 
 ## Operational readiness
 
