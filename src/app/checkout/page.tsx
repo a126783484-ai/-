@@ -1,9 +1,9 @@
 export const dynamic = "force-dynamic";
 
-import { CheckoutView } from "@/components/ModuleViews";
+import { CheckoutDeferredView } from "@/components/DeferredViews";
 import { loadAppData } from "@/lib/app-data";
 
 export default async function CheckoutPage() {
   const data = await loadAppData();
-  return <CheckoutView data={data} />;
+  return <CheckoutDeferredView data={data} />;
 }

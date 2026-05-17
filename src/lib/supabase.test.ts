@@ -47,6 +47,6 @@ describe("Supabase production config", () => {
       url: "https://beautyprod.supabase.co",
       anonKey: "anon",
       demoMode: false
-    })).toThrow("configured project ref");
+    })).toThrow("Supabase project mismatch");
   });
 });

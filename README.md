@@ -6,6 +6,11 @@
 
 > `src/lib/seed.ts` 內資料為 **Demo Data**，用於本機展示與測試。正式環境請連接 Supabase/PostgreSQL 並套用 `supabase/migrations/0001_initial_beauty_nail_os.sql`。
 
+## Roadmap
+
+- [Optimization roadmap](docs/optimization-roadmap.md)
+- [Deployment readiness](docs/deployment-readiness.md)
+
 ## 已建立模組
 
 - 登入 / 註冊 / 角色權限：店主、管理員、技師、櫃台、員工。

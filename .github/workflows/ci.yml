@@ -23,4 +23,21 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: node scripts/quality-gate.mjs
-      - run: npm run build
+      - name: Build
+        shell: bash
+        run: |
+          mapfile -t supabase_env < <(node - <<'NODE'
+          const fs = require("fs");
+          const text = fs.readFileSync("src/lib/supabase.ts", "utf8");
+          const url = text.match(/const EXPECTED_PRODUCTION_SUPABASE_URL = "([^"]+)";/)?.[1];
+          const key = text.match(/const EXPECTED_PRODUCTION_SUPABASE_ANON_KEY = "([^"]+)";/)?.[1];
+          if (!url || !key) process.exit(1);
+          console.log(url);
+          console.log(key);
+          NODE
+          )
+          NEXT_PUBLIC_SUPABASE_URL="${supabase_env[0]}" \
+          NEXT_PUBLIC_SUPABASE_ANON_KEY="${supabase_env[1]}" \
+          SUPABASE_URL="${supabase_env[0]}" \
+          SUPABASE_ANON_KEY="${supabase_env[1]}" \
+          npm run build
