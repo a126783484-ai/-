@@ -403,6 +403,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - This keeps the shared auth context type aligned with the already-trimmed workspace_members query.
 - Verified with `npm run typecheck`.
 
+## Workspace context workspace trim
+
+- `WorkspaceContext.workspace` now exposes only the workspace id, which is the only field downstream callers read.
+- This removes unnecessary workspace payload from the shared auth context object.
+- Verified with `npm run typecheck`.
+
 ## Staff invite payload trim
 
 - The staff invite page and accept action now select only the invite columns they render or persist.
