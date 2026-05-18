@@ -114,7 +114,7 @@ export async function updateServiceAction(formData: FormData) {
       }
     }
 
-    const { error } = await supabase
+    const { data: updatedService, error } = await supabase
       .from("services")
       .update({
         category_id: categoryId,
@@ -126,13 +126,16 @@ export async function updateServiceAction(formData: FormData) {
         is_add_on: addOn
       })
       .eq("workspace_id", workspaceId)
-      .eq("id", serviceId);
+      .eq("id", serviceId)
+      .select("id")
+      .maybeSingle();
 
     if (error) {
-      if (String(error.message).includes("0 rows")) {
-        fail("service_update_invalid_input");
-      }
       throw error;
+    }
+
+    if (!updatedService) {
+      fail("service_update_invalid_input");
     }
   } catch (error) {
     console.error("service update failed", error);
