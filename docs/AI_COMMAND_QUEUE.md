@@ -9,6 +9,7 @@ It gathers:
 - open pull requests
 - failed recent workflow runs
 - active repair / supervisor issues
+- Linear coordination metadata
 - current high-priority next action
 
 It maintains one fixed GitHub issue:
@@ -29,6 +30,7 @@ The queue issue always includes:
 - next command for Codex
 - next command for OpenCode
 - next command for Claude
+- Linear task key and URL
 - human approval required
 - do-not-do list
 
@@ -48,6 +50,25 @@ Treat the queue as an execution packet:
 - follow the command that is already prioritized
 - do not re-derive the same repo context repeatedly
 - do not expand the scope beyond the command item
+
+## Linear Coordination
+
+Linear is used as the planning and status-tracking layer. GitHub remains the source of truth for CI, PR, workflow, and repository state.
+
+The current queue task is:
+
+- Linear issue: `JOH-8`
+- URL: `https://linear.app/j26606611hn/issue/JOH-8/ai-command-queue-beauty-os-next-engineering-command`
+- Team: `Johnnie`
+
+The workflow reads optional GitHub Actions variables:
+
+- `LINEAR_COMMAND_QUEUE_KEY`
+- `LINEAR_COMMAND_QUEUE_URL`
+- `LINEAR_COMMAND_QUEUE_TEAM`
+- `LINEAR_COMMAND_QUEUE_STATUS`
+
+If these variables are not configured, the script falls back to the known `JOH-8` task. No Linear token is required for the GitHub issue update path.
 
 ## Labels
 
