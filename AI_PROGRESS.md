@@ -492,6 +492,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `recordInventoryMovementAction()` now uses a head/count existence check for the inventory item.
 - The RPC already receives `itemId`, so fetching the full item row was unnecessary.
 - Verified with `npm run typecheck`.
+
+## Head/count cleanup batch
+
+- Removed redundant `maybeSingle()` / `limit(1)` from several head/count existence checks.
+- This trims response handling on staff, inventory, invite, and CRUD validation paths.
+- Verified with `npm run typecheck`.
 ## Staff invite payload trim
 
 - The staff invite page and accept action now select only the invite columns they render or persist.

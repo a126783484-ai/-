@@ -212,7 +212,7 @@ export async function createStaffAction(formData: FormData) {
       .select("id", { count: "exact", head: true })
       .eq("workspace_id", context.workspace.id)
       .eq("user_id", user.id)
-      .maybeSingle();
+      ;
 
     if (existingError) {
       throw existingError;

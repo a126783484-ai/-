@@ -87,7 +87,7 @@ export async function recordInventoryMovementAction(formData: FormData) {
     .select("id", { count: "exact", head: true })
     .eq("id", itemId)
     .eq("workspace_id", context.workspace.id)
-    .maybeSingle();
+    ;
 
   if (itemError) {
     console.error("inventory item lookup failed", itemError);
