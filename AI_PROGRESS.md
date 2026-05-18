@@ -397,6 +397,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - This removes the last remaining full-row workspace fetch in the auth bootstrap chain.
 - Verified with `npm run typecheck`.
 
+## Workspace context shape trim
+
+- `WorkspaceContext.membership` now models only the fields the app actually reads.
+- This keeps the shared auth context type aligned with the already-trimmed workspace_members query.
+- Verified with `npm run typecheck`.
+
 ## Staff invite payload trim
 
 - The staff invite page and accept action now select only the invite columns they render or persist.
