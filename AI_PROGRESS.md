@@ -456,6 +456,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `saveCustomer()` now checks for duplicate phone numbers with a head/count query.
 - This removes another row payload from a pure existence check in the CRUD path.
 - Verified with `npm run typecheck`.
+
+## Service update lookup trim
+
+- `updateServiceAction()` no longer preloads the service row before applying the update.
+- The update path now relies on workspace-scoped `eq` filters and a guarded zero-row failure.
+- Verified with `npm run typecheck`.
 ## Staff invite payload trim
 
 - The staff invite page and accept action now select only the invite columns they render or persist.
