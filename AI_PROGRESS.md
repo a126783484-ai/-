@@ -397,6 +397,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - This removes the last remaining full-row workspace fetch in the auth bootstrap chain.
 - Verified with `npm run typecheck`.
 
+## Staff invite payload trim
+
+- The staff invite page and accept action now select only the invite columns they render or persist.
+- This trims the invite hot path without changing acceptance behavior.
+- Verified with `npm run typecheck`.
+
 ## App data column trim
 
 - `loadAppData()` now selects only the fields used by its mappers across members, categories, services, customers, appointments, orders, inventory, movements, and shifts.
