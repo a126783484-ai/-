@@ -438,6 +438,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `createWorkspace()` and `createWorkspaceOwner()` now return only the fields their callers need.
 - This trims the bootstrap fallback inserts without changing workspace creation behavior.
 - Verified with `npm run typecheck`.
+
+## Workspace owner insert trim
+
+- `createWorkspaceOwner()` no longer requests a returned row after insert.
+- This removes an unnecessary response payload from the owner bootstrap write path.
+- Verified with `npm run typecheck`.
 ## Staff invite payload trim
 
 - The staff invite page and accept action now select only the invite columns they render or persist.
