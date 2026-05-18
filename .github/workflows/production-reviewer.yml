@@ -1,0 +1,96 @@
+name: Production Reviewer
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  production-review:
+    name: Automated production review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run production guard
+        run: npm run guard:production
+        continue-on-error: true
+
+      - name: Build PR review report
+        run: |
+          node -e "
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('production-guard-report.json', 'utf8'));
+          const findings = report.findings || [];
+          const errors = findings.filter(f => f.level === 'error');
+          const warns = findings.filter(f => f.level === 'warn');
+          const infos = findings.filter(f => f.level === 'info');
+
+          const lines = [];
+          lines.push('## Beauty OS Automated Production Review');
+          lines.push('');
+          lines.push('This report is generated automatically to reduce engineering cost, token waste, and repeated repo analysis.');
+          lines.push('');
+          lines.push(`- Errors: ${errors.length}`);
+          lines.push(`- Warnings: ${warns.length}`);
+          lines.push(`- Info: ${infos.length}`);
+          lines.push('');
+
+          const grouped = [
+            ['Errors', errors],
+            ['Warnings', warns],
+            ['Info', infos]
+          ];
+
+          for (const [title, items] of grouped) {
+            if (!items.length) continue;
+            lines.push(`### ${title}`);
+            lines.push('');
+            for (const item of items) {
+              lines.push(`- **${item.code}** — ${item.message}`);
+              if (item.files?.length) {
+                lines.push(`  - Files: ${item.files.join(', ')}`);
+              }
+              if (item.suggestion) {
+                lines.push(`  - Suggestion: ${item.suggestion}`);
+              }
+            }
+            lines.push('');
+          }
+
+          const aiItems = findings.filter(f => f.aiPrompt);
+          if (aiItems.length) {
+            lines.push('### AI Handoff Prompts');
+            lines.push('');
+            for (const item of aiItems) {
+              lines.push(`#### ${item.code}`);
+              lines.push('```text');
+              lines.push(item.aiPrompt);
+              lines.push('```');
+              lines.push('');
+            }
+          }
+
+          fs.writeFileSync('production-review-comment.md', lines.join('\n'));
+          "
+
+      - name: Post PR comment
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: production-review
+          path: production-review-comment.md
