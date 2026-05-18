@@ -432,6 +432,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - The appointment action query result types are now split from the conflict-check shape.
 - This keeps the reduced appointment select lists type-safe without widening the public helper again.
 - Verified with `npm run typecheck`.
+
+## Workspace create payload trim
+
+- `createWorkspace()` and `createWorkspaceOwner()` now return only the fields their callers need.
+- This trims the bootstrap fallback inserts without changing workspace creation behavior.
+- Verified with `npm run typecheck`.
 ## Staff invite payload trim
 
 - The staff invite page and accept action now select only the invite columns they render or persist.

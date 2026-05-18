@@ -51,14 +51,14 @@ export async function createWorkspace(input: WorkspaceInsert, client?: AppSupaba
   const { data, error } = await supabase
     .from("workspaces")
     .insert(input)
-    .select()
+    .select("id, name, phone, address, brand_color, business_hours")
     .single();
 
   if (error) {
     throw error;
   }
 
-  return data as WorkspaceRow;
+  return data as WorkspaceSummaryRow as WorkspaceRow;
 }
 
 export async function createWorkspaceOwner(input: WorkspaceMemberInsert, client?: AppSupabaseClient) {
@@ -67,7 +67,7 @@ export async function createWorkspaceOwner(input: WorkspaceMemberInsert, client?
   const { data, error } = await supabase
     .from("workspace_members")
     .insert(input)
-    .select()
+    .select("id")
     .single();
 
   if (error) {
