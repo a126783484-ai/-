@@ -450,6 +450,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `createStaffAction()` now checks for existing workspace membership with a head/count query.
 - This avoids fetching a member row when the code only needs duplicate existence.
 - Verified with `npm run typecheck`.
+
+## Customer duplicate check trim
+
+- `saveCustomer()` now checks for duplicate phone numbers with a head/count query.
+- This removes another row payload from a pure existence check in the CRUD path.
+- Verified with `npm run typecheck`.
 ## Staff invite payload trim
 
 - The staff invite page and accept action now select only the invite columns they render or persist.
