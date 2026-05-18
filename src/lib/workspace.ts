@@ -64,17 +64,13 @@ export async function createWorkspace(input: WorkspaceInsert, client?: AppSupaba
 export async function createWorkspaceOwner(input: WorkspaceMemberInsert, client?: AppSupabaseClient) {
   const supabase = await getClient(client);
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("workspace_members")
-    .insert(input)
-    .select("id")
-    .single();
+    .insert(input);
 
   if (error) {
     throw error;
   }
-
-  return data;
 }
 
 async function getFirstActiveMembership(userId: string, client?: AppSupabaseClient): Promise<WorkspaceMembershipPointer | null> {
