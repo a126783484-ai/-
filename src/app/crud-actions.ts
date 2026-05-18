@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { can } from "@/lib/permissions";
 import { buildMissingOrderLineServiceMessage } from "@/lib/order-line-errors";
+import { getCurrentWorkspaceContext } from "@/lib/workspace";
 import type { Database, Json } from "@/lib/database.types";
 import type {
   AppointmentStatus,
