@@ -504,6 +504,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `hasActiveWorkspaceMembership()` now uses a head/count existence check instead of loading `workspace_id`.
 - This keeps the login bootstrap short-circuit cheap and precise.
 - Verified with `npm run typecheck`.
+
+## Auth callback invite short-circuit
+
+- `auth/callback` now skips owner workspace bootstrap when a pending staff invite exists for the signed-in email.
+- This keeps invite-driven logins from creating an unnecessary owner workspace.
+- Verified with `npm run typecheck`.
 ## Staff invite payload trim
 
 - The staff invite page and accept action now select only the invite columns they render or persist.

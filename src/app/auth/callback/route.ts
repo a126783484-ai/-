@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { normalizeAuthRedirectTarget } from "@/lib/auth-routes";
 import { ensureOwnerWorkspaceForUser } from "@/lib/workspace";
+import { hasPendingStaffInviteForEmail, isMissingStaffInviteTableError } from "@/lib/staff-invites";
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
@@ -16,6 +17,16 @@ export async function GET(request: NextRequest) {
 
       if (error || !data.user || !data.session) {
         return NextResponse.redirect(new URL("/login?error=auth_callback_failed", request.url));
+      }
+
+      try {
+        if (await hasPendingStaffInviteForEmail(supabase, data.user.email ?? "")) {
+          return NextResponse.redirect(new URL(next, request.url));
+        }
+      } catch (inviteError) {
+        if (!isMissingStaffInviteTableError(inviteError as { code?: string; message?: string } | null | undefined)) {
+          console.error("pending invite lookup failed", inviteError);
+        }
       }
 
       await ensureOwnerWorkspaceForUser(data.user, supabase);
