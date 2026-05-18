@@ -1,0 +1,151 @@
+name: AI Next Step Commander
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - Smoke Tests
+      - Production Guard
+      - Production Reviewer
+      - PR Risk Review
+      - Production Supervisor
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  command-next-step:
+    name: Command next engineering step
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Decide next step
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const run = context.payload.workflow_run || null;
+            const workflowName = run?.name || 'Manual command';
+            const conclusion = run?.conclusion || 'manual';
+            const runUrl = run?.html_url || `${context.serverUrl}/${owner}/${repo}/actions`;
+            const pr = run?.pull_requests?.[0] || null;
+
+            if (!pr) {
+              core.info('No PR detected for this workflow run. Nothing to command.');
+              return;
+            }
+
+            const prNumber = pr.number;
+            const { data: pull } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            const { data: files } = await github.rest.pulls.listFiles({ owner, repo, pull_number: prNumber, per_page: 100 });
+            const { data: labels } = await github.rest.issues.listLabelsOnIssue({ owner, repo, issue_number: prNumber });
+
+            const labelNames = labels.map((label) => label.name);
+            const changedFiles = files.map((file) => file.filename);
+            const highRiskLabels = [
+              'risk:security',
+              'risk:migration',
+              'risk:infra',
+              'risk:tenant-isolation',
+              'risk:auth',
+              'risk:staff-member',
+              'guard:blocking',
+              'guard:warning'
+            ];
+            const highRiskFilePatterns = [
+              /^supabase\/migrations\//,
+              /^\.github\/workflows\/sync-vercel-env\.yml$/,
+              /supabase/i,
+              /auth/i,
+              /workspace/i,
+              /staff/i,
+              /invite/i,
+              /member/i,
+              /rls/i,
+              /secret/i,
+              /env/i
+            ];
+
+            const hasHighRiskLabel = labelNames.some((label) => highRiskLabels.includes(label));
+            const hasHighRiskFile = changedFiles.some((file) => highRiskFilePatterns.some((pattern) => pattern.test(file)));
+            const isGreen = conclusion === 'success';
+            const isMergeable = pull.mergeable === true;
+            const isDraft = pull.draft === true;
+            const headSha = pull.head.sha;
+
+            const lines = [];
+            lines.push('## AI Next Step Commander');
+            lines.push('');
+            lines.push(`Workflow: **${workflowName}**`);
+            lines.push(`Conclusion: **${conclusion}**`);
+            lines.push(`Run: ${runUrl}`);
+            lines.push(`PR: #${prNumber}`);
+            lines.push(`Head SHA: ${headSha}`);
+            lines.push('');
+            lines.push('### Decision Inputs');
+            lines.push('');
+            lines.push(`- Green workflow: ${isGreen ? 'yes' : 'no'}`);
+            lines.push(`- Mergeable: ${isMergeable ? 'yes' : 'no'}`);
+            lines.push(`- Draft: ${isDraft ? 'yes' : 'no'}`);
+            lines.push(`- High-risk labels: ${hasHighRiskLabel ? 'yes' : 'no'}`);
+            lines.push(`- High-risk files: ${hasHighRiskFile ? 'yes' : 'no'}`);
+            lines.push(`- Labels: ${labelNames.join(', ') || 'none'}`);
+            lines.push('');
+
+            if (!isGreen) {
+              lines.push('### Command');
+              lines.push('');
+              lines.push('Do not deploy. Dispatch repair work.');
+              await github.rest.issues.addLabels({ owner, repo, issue_number: prNumber, labels: ['commander:repair-needed'] });
+              await github.rest.issues.createComment({ owner, repo, issue_number: prNumber, body: lines.join('\n') });
+              return;
+            }
+
+            if (isDraft || !isMergeable) {
+              lines.push('### Command');
+              lines.push('');
+              lines.push('Do not deploy. PR is draft or not mergeable.');
+              await github.rest.issues.addLabels({ owner, repo, issue_number: prNumber, labels: ['commander:blocked'] });
+              await github.rest.issues.createComment({ owner, repo, issue_number: prNumber, body: lines.join('\n') });
+              return;
+            }
+
+            if (hasHighRiskLabel || hasHighRiskFile) {
+              lines.push('### Command');
+              lines.push('');
+              lines.push('All checks are green, but this PR touches high-risk production surfaces. Require manual final review before deployment.');
+              lines.push('');
+              lines.push('Reason: migration/security/auth/workspace/staff/env/infra changes can affect tenant isolation, secrets, or production operations.');
+              await github.rest.issues.addLabels({ owner, repo, issue_number: prNumber, labels: ['commander:manual-review-required'] });
+              await github.rest.issues.createComment({ owner, repo, issue_number: prNumber, body: lines.join('\n') });
+              return;
+            }
+
+            lines.push('### Command');
+            lines.push('');
+            lines.push('Low-risk PR is green and mergeable. Auto-merge may proceed. Vercel will deploy from main after merge.');
+            await github.rest.issues.addLabels({ owner, repo, issue_number: prNumber, labels: ['commander:auto-deploy-candidate'] });
+            await github.rest.issues.createComment({ owner, repo, issue_number: prNumber, body: lines.join('\n') });
+
+            try {
+              await github.graphql(`
+                mutation($pullRequestId: ID!) {
+                  enablePullRequestAutoMerge(input: { pullRequestId: $pullRequestId, mergeMethod: SQUASH }) {
+                    pullRequest { number }
+                  }
+                }
+              `, { pullRequestId: pull.node_id });
+            } catch (error) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body: `Auto-merge could not be enabled automatically. Reason: ${error.message}`
+              });
+            }
