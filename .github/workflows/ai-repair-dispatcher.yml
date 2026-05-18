@@ -6,11 +6,15 @@ on:
       - CI
       - Smoke Tests
       - Production Guard
-      - Production Reviewer
-      - PR Risk Review
+      - PR Governance
+      - Production Supervisor
     types:
       - completed
   workflow_dispatch:
+
+concurrency:
+  group: ai-repair-${{ github.event.workflow_run.head_branch || 'manual' }}
+  cancel-in-progress: true
 
 jobs:
   dispatch-repair:
@@ -44,7 +48,7 @@ jobs:
             if (workflowName.includes('Smoke')) labels.push('risk:runtime-smoke');
             if (workflowName.includes('Guard')) labels.push('risk:production-guard');
             if (workflowName.includes('CI')) labels.push('risk:ci');
-            if (workflowName.includes('Risk')) labels.push('risk:classification');
+            if (workflowName.includes('Governance')) labels.push('risk:classification');
 
             const title = `[AI Repair] ${workflowName} failed on ${headBranch}`;
 
