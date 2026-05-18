@@ -45,6 +45,44 @@ function defaultWorkspaceName(user: User) {
   return emailPrefix ? `${emailPrefix} 的店鋪` : "我的店鋪";
 }
 
+async function getCanonicalActiveMembership(userId: string, client?: AppSupabaseClient): Promise<WorkspaceMembershipSummaryRow | null> {
+  const supabase = await getClient(client);
+  const select = "id, workspace_id, role, active";
+
+  const { data: ownerMembership, error: ownerMembershipError } = await supabase
+    .from("workspace_members")
+    .select(select)
+    .eq("user_id", userId)
+    .eq("active", true)
+    .eq("role", "owner")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (ownerMembershipError) {
+    throw ownerMembershipError;
+  }
+
+  if (ownerMembership) {
+    return ownerMembership as WorkspaceMembershipSummaryRow;
+  }
+
+  const { data: membership, error: membershipError } = await supabase
+    .from("workspace_members")
+    .select(select)
+    .eq("user_id", userId)
+    .eq("active", true)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (membershipError) {
+    throw membershipError;
+  }
+
+  return membership ? membership as WorkspaceMembershipSummaryRow : null;
+}
+
 export async function createWorkspace(input: WorkspaceInsert, client?: AppSupabaseClient): Promise<WorkspaceRow> {
   const supabase = await getClient(client);
 
@@ -74,21 +112,8 @@ export async function createWorkspaceOwner(input: WorkspaceMemberInsert, client?
 }
 
 async function getFirstActiveMembership(userId: string, client?: AppSupabaseClient): Promise<WorkspaceMembershipPointer | null> {
-  const supabase = await getClient(client);
-  const { data, error } = await supabase
-    .from("workspace_members")
-    .select("workspace_id")
-    .eq("user_id", userId)
-    .eq("active", true)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  return data as WorkspaceMembershipPointer | null;
+  const membership = await getCanonicalActiveMembership(userId, client);
+  return membership ? { workspace_id: membership.workspace_id } : null;
 }
 
 export async function hasActiveWorkspaceMembership(userId: string, client?: AppSupabaseClient) {
@@ -184,6 +209,7 @@ export async function ensureOwnerWorkspaceForUser(
 ) {
   const workspaceName = metadataString(user.user_metadata?.workspace_name) ?? defaultWorkspaceName(user);
   const supabase = await getClient(client);
+
   if (!skipMembershipCheck) {
     const existingMembership = await getFirstActiveMembership(user.id, supabase);
 
@@ -237,19 +263,7 @@ export async function getCurrentWorkspaceContext(client?: AppSupabaseClient): Pr
     throw new Error("AUTH_REQUIRED");
   }
 
-  const { data: memberships, error: membershipError } = await supabase
-    .from("workspace_members")
-    .select("id, workspace_id, role, active")
-    .eq("user_id", authData.user.id)
-    .eq("active", true)
-    .order("created_at", { ascending: true })
-    .limit(1);
-
-  if (membershipError) {
-    throw membershipError;
-  }
-
-  const membership = memberships?.[0];
+  const membership = await getCanonicalActiveMembership(authData.user.id, supabase);
 
   if (!membership) {
     throw new Error("WORKSPACE_MEMBER_MISSING");
