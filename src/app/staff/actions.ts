@@ -8,6 +8,7 @@ import { can } from "@/lib/permissions";
 import type { Role } from "@/lib/types";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
 import type { Database } from "@/lib/database.types";
+import { isMissingStaffInviteTableError } from "@/lib/staff-invites";
 
 type AppSupabaseClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 type AdminSupabaseClient = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
@@ -206,18 +207,18 @@ export async function createStaffAction(formData: FormData) {
       user = data.user;
     }
 
-    const { data: existing, error: existingError } = await supabase
+    const { count: existingCount, error: existingError } = await supabase
       .from("workspace_members")
-      .select("id")
+      .select("id", { count: "exact", head: true })
       .eq("workspace_id", context.workspace.id)
       .eq("user_id", user.id)
-      .maybeSingle();
+      ;
 
     if (existingError) {
       throw existingError;
     }
 
-    if (existing) {
+    if ((existingCount ?? 0) > 0) {
       fail("staff_duplicate");
     }
 
@@ -296,4 +297,83 @@ export async function updateStaffAction(formData: FormData) {
   }
 
   redirect(`/staff?${buildSearchParams({ message: "staff_updated" })}`);
+}
+
+export async function createStaffInviteAction(formData: FormData) {
+  const email = readEmail(formData);
+  const displayName = readRequired(formData, "displayName");
+  const phone = readOptional(formData, "phone");
+  const role = readRole(formData);
+  const commissionRateRaw = readOptional(formData, "commissionRate") ?? "0";
+  const specialties = splitList(readOptional(formData, "specialties"));
+
+  if (!email) {
+    fail("staff_invalid_input");
+  }
+
+  const commissionRate = parseCommissionRate(commissionRateRaw);
+  if (commissionRate === null) {
+    fail("staff_invalid_input");
+  }
+
+  const supabase = await createSupabaseServerClient().catch(() => null);
+  if (!supabase) {
+    fail("staff_config_missing");
+  }
+
+  const context = await requireStaffAdminContext(supabase);
+  const currentRole = context.membership.role as Role;
+  assertRoleAssignable(currentRole, role);
+
+  try {
+    const { data: existingInvite, error: inviteLookupError } = await supabase
+      .from("workspace_member_invites")
+      .select("id, token")
+      .eq("workspace_id", context.workspace.id)
+      .eq("email", email)
+      .eq("status", "pending")
+      .maybeSingle();
+
+    if (inviteLookupError) {
+      if (isMissingStaffInviteTableError(inviteLookupError)) {
+        fail("staff_invite_unavailable");
+      }
+      throw inviteLookupError;
+    }
+
+    const token = existingInvite?.token ?? crypto.randomUUID();
+    const invitePayload = {
+      workspace_id: context.workspace.id,
+      email,
+      display_name: displayName,
+      phone,
+      role,
+      commission_rate: commissionRate,
+      specialties,
+      token,
+      status: "pending" as const,
+      invited_by: context.user.id,
+      accepted_at: null,
+    };
+
+    const result = existingInvite
+      ? await supabase
+          .from("workspace_member_invites")
+          .update(invitePayload)
+          .eq("workspace_id", context.workspace.id)
+          .eq("id", existingInvite.id)
+      : await supabase.from("workspace_member_invites").insert(invitePayload);
+
+    if (result.error) {
+      throw result.error;
+    }
+  } catch (error) {
+    if (isMissingStaffInviteTableError(error as { code?: string; message?: string } | null | undefined)) {
+      fail("staff_invite_unavailable");
+    }
+    console.error("staff invite create failed", error);
+    fail("staff_create_failed");
+  }
+
+  redirect(`/staff?${buildSearchParams({ message: "staff_invite_created" })}`);
 }

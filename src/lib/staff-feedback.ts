@@ -1,11 +1,16 @@
 export const staffMessageText: Record<string, string> = {
+  staff_invite_created: "員工邀請已建立，請將邀請連結分享給對方。",
   staff_created: "員工邀請已建立，請提醒對方到信箱接受邀請。",
+  staff_invite_accepted: "員工邀請已接受，已加入目前店鋪。",
   staff_updated: "員工資料已更新。"
 };
 
 export const staffErrorText: Record<string, string> = {
   staff_config_missing: "系統登入設定尚未完成，無法更新員工資料。",
+  staff_create_failed: "員工邀請建立失敗，請稍後再試。",
   staff_invite_config_missing: "尚未設定 Supabase service role key，無法寄送員工邀請。",
+  staff_invite_unavailable: "員工邀請功能尚未啟用，請先完成資料庫更新。",
+  staff_invite_invalid: "邀請連結無效或已失效，請向店家重新索取。",
   staff_duplicate: "這個 email 已經是目前工作區的員工。",
   staff_forbidden: "你沒有權限更新員工資料。",
   staff_invalid_input: "員工資料格式不正確，請檢查欄位內容。",

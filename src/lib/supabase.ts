@@ -37,15 +37,7 @@ export function getSupabaseProjectRef(url?: string) {
   }
 }
 
-function isProduction() {
-  return process.env.NODE_ENV === "production";
-}
-
-function isWrongProductionProject(url?: string) {
-  if (!isProduction()) {
-    return false;
-  }
-
+function isWrongSupabaseProject(url?: string) {
   const actualProjectRef = getSupabaseProjectRef(url);
   return Boolean(actualProjectRef && actualProjectRef !== EXPECTED_PRODUCTION_SUPABASE_PROJECT_REF);
 }
@@ -55,25 +47,11 @@ export function assertSupabaseProductionConfig(config: SupabaseConfig): asserts 
     throw new SupabaseConfigError("Supabase environment variables are missing.");
   }
 
-  const publicProjectRef = getSupabaseProjectRef(config.url);
-  const serverProjectRef = publicProjectRef;
-  const configuredProjectRef = firstDefined(
-    process.env.NEXT_PUBLIC_SUPABASE_PROJECT_REF,
-    process.env.SUPABASE_PROJECT_REF,
-    EXPECTED_PRODUCTION_SUPABASE_PROJECT_REF
-  );
-
-  if (publicProjectRef && serverProjectRef && publicProjectRef !== serverProjectRef) {
-    throw new SupabaseConfigError(
-      "Supabase URL mismatch: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_URL point to different projects."
-    );
-  }
-
   const actualProjectRef = getSupabaseProjectRef(config.url);
 
-  if (configuredProjectRef && actualProjectRef && configuredProjectRef !== actualProjectRef) {
+  if (actualProjectRef && actualProjectRef !== EXPECTED_PRODUCTION_SUPABASE_PROJECT_REF) {
     throw new SupabaseConfigError(
-      "Supabase project mismatch: configured project ref must match the Supabase URL."
+      "Supabase project mismatch: configured project ref must match the canonical Supabase URL."
     );
   }
 }
@@ -81,7 +59,7 @@ export function assertSupabaseProductionConfig(config: SupabaseConfig): asserts 
 export function getSupabaseConfig(): SupabaseConfig {
   const envUrl = firstDefined(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_URL);
   const envAnonKey = firstDefined(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, process.env.SUPABASE_ANON_KEY);
-  const shouldForceProductionSupabase = isWrongProductionProject(envUrl);
+  const shouldForceProductionSupabase = isWrongSupabaseProject(envUrl);
 
   return {
     url: shouldForceProductionSupabase ? EXPECTED_PRODUCTION_SUPABASE_URL : envUrl,

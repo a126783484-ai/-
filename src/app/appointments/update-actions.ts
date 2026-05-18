@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { can } from "@/lib/permissions";
-import type { Appointment, AppointmentStatus, Role } from "@/lib/types";
+import type { AppointmentStatus, Role } from "@/lib/types";
 import { buildAppointmentEnd, hasTechnicianConflict } from "@/lib/appointments";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
 
@@ -52,17 +52,13 @@ type QueryResult<T> = {
 type CustomerLookupRow = { id: string };
 type StaffLookupRow = { id: string; role: string; active: boolean };
 type ServiceLookupRow = { id: string; duration_min: number };
-type AppointmentLookupRow = {
+type AppointmentDbRow = {
   id: string;
-  customer_id: string;
   technician_id: string;
   start_at: string;
   end_at: string;
   status: AppointmentStatus;
-  source: string;
-  note: string | null;
 };
-type AppointmentServiceLookupRow = { appointment_id: string; service_id: string };
 
 async function loadContext(client: Awaited<ReturnType<typeof createSupabaseServerClient>>) {
   const context = await getCurrentWorkspaceContext(client);
@@ -114,23 +110,20 @@ export async function updateAppointmentAction(formData: FormData) {
   let customersResult: QueryResult<CustomerLookupRow | null> | null = null;
   let staffResult: QueryResult<StaffLookupRow | null> | null = null;
   let servicesResult: QueryResult<ServiceLookupRow[]> | null = null;
-  let appointmentsResult: QueryResult<AppointmentLookupRow[]> | null = null;
-  let appointmentServicesResult: QueryResult<AppointmentServiceLookupRow[]> | null = null;
-
+  let appointmentsResult: QueryResult<AppointmentDbRow[]> | null = null;
   try {
-    [customersResult, staffResult, servicesResult, appointmentsResult, appointmentServicesResult] = await Promise.all([
+    [customersResult, staffResult, servicesResult, appointmentsResult] = await Promise.all([
       supabase.from("customers").select("id").eq("workspace_id", workspaceId).eq("id", customerId).maybeSingle(),
       supabase.from("workspace_members").select("id, role, active").eq("workspace_id", workspaceId).eq("id", technicianId).maybeSingle(),
       supabase.from("services").select("id, duration_min").eq("workspace_id", workspaceId).in("id", serviceIds),
-      supabase.from("appointments").select("id, customer_id, technician_id, start_at, end_at, status, source, note").eq("workspace_id", workspaceId),
-      supabase.from("appointment_services").select("appointment_id, service_id")
+      supabase.from("appointments").select("id, technician_id, start_at, end_at, status").eq("workspace_id", workspaceId)
     ]);
   } catch (error) {
     console.error("appointment update lookup failed", error);
     fail("appointment_update_failed");
   }
 
-  const lookupError = [customersResult, staffResult, servicesResult, appointmentsResult, appointmentServicesResult]
+  const lookupError = [customersResult, staffResult, servicesResult, appointmentsResult]
     .filter((result): result is NonNullable<typeof result> => Boolean(result))
     .find((result) => result.error)?.error;
 
@@ -154,19 +147,12 @@ export async function updateAppointmentAction(formData: FormData) {
   }
 
   const endAt = buildAppointmentEnd(startAt.toISOString(), serviceIds, selectedServices);
-  const appointments: Appointment[] = (appointmentsResult?.data ?? []).map((appointment) => ({
+  const appointments = (appointmentsResult?.data ?? []).map((appointment) => ({
     id: appointment.id,
-    workspaceId,
-    customerId: appointment.customer_id,
     technicianId: appointment.technician_id,
     startAt: appointment.start_at,
     endAt: appointment.end_at,
-    status: appointment.status,
-    source: appointment.source as Appointment["source"],
-    note: appointment.note ?? undefined,
-    serviceIds: (appointmentServicesResult?.data ?? [])
-      .filter((item) => item.appointment_id === appointment.id)
-      .map((item) => item.service_id)
+    status: appointment.status
   }));
 
   if (hasTechnicianConflict({ technicianId, startAt: startAt.toISOString(), endAt }, appointments, appointmentId)) {

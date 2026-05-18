@@ -18,7 +18,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <p className="text-sm font-semibold text-rose">Beauty OS</p>
         <h1 className="mt-2 text-3xl font-bold text-plum">登入店鋪後台</h1>
         <p className="mt-2 text-sm text-ink/60">
-          使用 Supabase Auth 驗證 email 與密碼。登入後會在瀏覽器建立 session，再由後端補齊 workspace。
+          使用 Supabase Auth 驗證 email 與密碼。登入後由後端建立 session，再補齊 workspace。
         </p>
 
         <LoginForm initialError={error} initialMessage={message} next={next} />

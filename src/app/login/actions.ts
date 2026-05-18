@@ -1,28 +1,48 @@
 "use server";
 
+import type { User } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { ensureOwnerWorkspaceForUser } from "@/lib/workspace";
+import { ensureOwnerWorkspaceForUser, hasActiveWorkspaceMembership } from "@/lib/workspace";
+import { hasPendingStaffInviteForEmail, isMissingStaffInviteTableError } from "@/lib/staff-invites";
 
 export type LoginBootstrapResult =
   | { ok: true }
   | { ok: false; error: "auth_config_missing" | "auth_bootstrap_failed" };
 
-export async function bootstrapLoggedInWorkspaceAction(): Promise<LoginBootstrapResult> {
-  const supabase = await createSupabaseServerClient().catch(() => null);
+export async function bootstrapLoggedInWorkspaceAction(
+  supabase?: Awaited<ReturnType<typeof createSupabaseServerClient>> | null,
+  user?: User
+): Promise<LoginBootstrapResult> {
+  const client = supabase ?? (await createSupabaseServerClient().catch(() => null));
 
-  if (!supabase) {
+  if (!client) {
     return { ok: false, error: "auth_config_missing" };
   }
 
-  const { data, error } = await supabase.auth.getUser();
+  const dataUser = user ?? (await client.auth.getUser()).data.user;
 
-  if (error || !data.user) {
+  if (!dataUser) {
     return { ok: false, error: "auth_bootstrap_failed" };
   }
 
   try {
-    await ensureOwnerWorkspaceForUser(data.user, supabase);
+    if (await hasActiveWorkspaceMembership(dataUser.id, client)) {
+      return { ok: true };
+    }
+
+    try {
+      if (await hasPendingStaffInviteForEmail(client, dataUser.email ?? "")) {
+        return { ok: true };
+      }
+    } catch (inviteError) {
+      if (!isMissingStaffInviteTableError(inviteError as { code?: string; message?: string } | null | undefined)) {
+        console.error("pending invite lookup failed", inviteError);
+      }
+    }
+
+    await ensureOwnerWorkspaceForUser(dataUser, client, true);
   } catch {
+    await client.auth.signOut().catch(() => undefined);
     return { ok: false, error: "auth_bootstrap_failed" };
   }
 

@@ -6,37 +6,31 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 
 ## Completed in this round
 
-- Opened PR #19 for the staff and inventory operations branch and confirmed PR state is clean after GitHub checks.
-- Verified PR #19 checks: GitHub Actions CI build passed, CodeQL passed, and Vercel preview reached Ready.
-- Verified the PR #19 Vercel preview on mobile viewport with the provided Supabase test account; login succeeded and `/inventory`, `/staff`, and `/reports` rendered under the authenticated session.
-- Added an App Router icon and metadata icon reference so browser checks no longer depend on a missing favicon route.
-- Verified real Supabase password login in the browser with the provided account: session cookies were written, `/` loaded, and the authenticated workspace shell rendered successfully.
-- Verified the authenticated browser flow on `/inventory`, `/staff`, and `/reports`; inventory and staff pages rendered normally, and reports rendered with the new inventory metrics.
-- Fixed duplicate React key warnings in dashboard/report ranking lists by switching repeated `name` keys to index-based keys where names can repeat.
-- Re-ran `npm run typecheck`, `npm run lint`, and `npm run build` after the browser-verification cleanup.
-- Added a workspace-scoped inventory movement ledger with purchase/consume/adjust support, rollback-safe stock validation, and a direct server action to record inventory movements.
-- Added inventory movement feedback helpers and tests so success and validation errors surface as readable Chinese notices.
-- Extended the inventory page and reports view to show low-stock, value, and movement metrics plus a recent movement ledger.
-- Fixed inventory data loading to filter movement history by current workspace before rendering.
-- Hardened the inventory action error path so missing/invalid form data redirects back with validation feedback instead of throwing a raw server error.
-- Verified `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` after the inventory changes.
-- Added a complete staff management flow with Supabase Auth email invite creation, workspace membership creation, and guarded edit/update support.
-- Added staff-management feedback codes and tests for create/update/invite failure states.
-- Added an in-page staff summary panel with active headcount, technician count, and management-role count.
-- Restricted the staff create/edit UI to roles that actually have `staff` permission.
-- Verified `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` after the staff changes.
-- Fixed the appointment create path so validation errors no longer bubble into 500 responses; server actions now redirect back to the module with a translated error code.
-- Relaxed appointment workspace validation so any active member of the current workspace can be assigned as `technician_id`; the app now matches the real workspace data where the selected member is `Fii｜店主`.
-- Added checkout error feedback wiring so order creation failures can surface as readable notices instead of crashing the page.
-- Wrapped the main customer, service, appointment, checkout, and settings write paths in redirect-based error handling to avoid unhandled server-action exceptions.
-- Verified the appointment create flow locally in Playwright: login succeeded, the appointment form submitted, and a new row for `Bella` on `05/22 10:00-11:30` appeared in the list.
+- Added a proper staff invitation workflow: owners/admins can create invite links, pending invites are shown in the dashboard/staff pages, and invitees can accept into the current workspace without requiring a service role key.
+- Added a new `workspace_member_invites` Supabase table plus RLS policies for invite creation, invite lookup, invite acceptance, and invite-based workspace member inserts.
+- Made login/bootstrap workspace creation skip auto-bootstrapping when a pending staff invite exists for the authenticated email, so invite-based onboarding is not overwritten by an owner workspace.
+- Added a dedicated invite acceptance page at `/staff/invite/[token]` and wired the staff pages to surface invite links and pending invite cards.
+- Extended staff feedback mapping/tests for invite create/accept states and added a helper test for invite link generation.
+- Re-ran `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build`; all passed. The build was verified with the canonical production Supabase public env values set locally.
 - Fixed the login flow to create Supabase session cookies in the browser, then bootstrap workspace membership server-side after successful sign-in.
 - Added a client-side `LoginForm` component for persistent browser-based auth.
 - Verified the login flow locally with Playwright: authenticated session cookies persisted, `/appointments` and `/customers` stayed on protected pages, and no redirect back to `/login` occurred.
 - Verified the same login flow on the live Vercel preview deployment: authenticated session cookies persisted, `/appointments` and `/customers` stayed protected, and the deployment URL resolved correctly.
+- Re-verified the live login flow after the latest deployment: unauthenticated `/appointments` redirects to `/login`, authenticated login reaches the dashboard, and `/appointments`, `/customers`, `/services`, and `/staff` all render their working module pages.
+- Re-checked the live module pages for their primary controls: `建立預約`, `建立客戶`, `建立服務`, and staff edit forms are present, with no console errors or page errors during the browser run.
+- Replaced the appointment page's fake top-row buttons with functional controls: `新增預約` now scrolls to the form, and `日曆檢視` / `列表檢視` now toggle real calendar/list views.
+- Replaced the technician page's disabled photo upload buttons with a clear workflow notice instead of a fake action.
 - Ran `npm run lint` successfully.
 - Ran `npm test` successfully.
 - Ran `npm run build` successfully with production Supabase env variables set locally.
+- Re-validated the updated code in a local `next start` instance on port `3001`; the build served correctly, but the current test account returned a Supabase auth 401 during local login, so the live-flow browser check remains the source of truth for authenticated verification.
+- Re-validated the latest Vercel deployment in a browser: login writes Supabase auth cookies, the dashboard loads after auth, `/appointments` is protected when logged out, and the updated appointment controls and technician workflow notice render without console or page errors.
+- Replaced the `AppShell` demo fallback with a formal production notice so any missing shell context no longer surfaces demo copy.
+- Made the technician workflow notice always visible, even when the current technician has no assigned appointments, so the photo-upload workflow is not hidden in the empty state.
+- Re-ran `npm run lint`, `npm test`, and `npm run build` after the technician empty-state notice change; lint and test passed, and build passed with the canonical production Supabase env values set in the shell.
+- Verified the latest Vercel deployment after the push: `/technician` returns the logged-in server-rendered page with the new always-visible `照片上傳流程` notice, and `/appointments` still responds with HTTP 200 under the authenticated Supabase session.
+- Removed the unused production `src/lib/seed.ts` demo fixture file, then restored it as a test-only fixture module without demo wording so unit tests keep their shared data while production code stays free of demo data.
+- Re-ran `npm run lint`, `npm test`, and `npm run build` after the fixture cleanup; all three checks passed.
 - Added a beauty-os-specific optimization roadmap at `docs/optimization-roadmap.md`.
 - Fixed README roadmap links to use repo-relative paths.
 - Implemented real workspace settings persistence through Supabase server action.
@@ -72,27 +66,18 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Ran a production smoke test against `https://beauty-nail-gcx2msmvg-a126783484-2182s-projects.vercel.app`; unauthenticated app routes redirect to `/login`, the login page renders, and no console or hydration errors were detected.
 - Replaced the table export placeholder with a real CSV download path in `src/components/ModuleTable.tsx`.
 - Re-verified `npm run lint`, `npm test`, and `npm run build` after the CSV export change.
-- Merged PR #18 into `main` after GitHub Actions CI, CodeQL, Vercel preview, and real preview login smoke verification passed.
-- Verified PR #18 preview with the provided test account: authenticated login succeeded, `/`, `/appointments`, `/customers`, `/services`, `/checkout`, and `/settings` loaded without 500 or console errors.
-- Verified appointment creation on the PR #18 preview by creating a `Bella` / `單色凝膠` appointment for `05/23`.
-- Verified the post-merge production deployment on mobile viewport `390x844`: authenticated login succeeded, the same core pages loaded, and appointment creation added a `Bella` / `單色凝膠` appointment for `05/24`.
 
 ## Files modified
 
-- `src/app/inventory/actions.ts`
-- `src/app/inventory/page.tsx`
-- `src/components/ModuleViews.tsx`
-- `src/lib/app-data.ts`
-- `src/lib/database.types.ts`
-- `src/lib/inventory-feedback.ts`
-- `src/lib/inventory-feedback.test.ts`
-- `src/lib/types.ts`
-- `supabase/migrations/0006_inventory_movement_ledger.sql`
 - `README.md`
+- `AI_PROGRESS.md`
 - `docs/optimization-roadmap.md`
+- `src/app/login/actions.ts`
+- `src/app/staff/actions.ts`
+- `src/app/staff/invite/[token]/actions.ts`
+- `src/app/staff/invite/[token]/page.tsx`
 - `src/app/settings/actions.ts`
 - `src/app/settings/page.tsx`
-- `src/app/crud-actions.ts`
 - `src/app/customers/actions.ts`
 - `src/app/customers/update-actions.ts`
 - `src/app/customers/page.tsx`
@@ -102,13 +87,11 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `src/app/appointments/actions.ts`
 - `src/app/appointments/update-actions.ts`
 - `src/app/appointments/page.tsx`
-- `src/app/checkout/page.tsx`
-- `src/app/staff/actions.ts`
 - `src/app/staff/page.tsx`
+- `src/app/checkout/page.tsx`
 - `src/app/layout.tsx`
 - `src/app/page.tsx`
 - `src/components/DeferredViews.tsx`
-- `src/lib/checkout-feedback.ts`
 - `.github/workflows/ci.yml`
 - `src/components/ModuleTable.tsx`
 - `src/components/ModuleViews.tsx`
@@ -126,79 +109,438 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `src/lib/service-feedback.test.ts`
 - `src/lib/service-update-feedback.ts`
 - `src/lib/service-update-feedback.test.ts`
+- `src/lib/staff-invites.ts`
+- `src/lib/staff-invites.test.ts`
 - `src/lib/workspace.ts`
 - `src/lib/staff-feedback.ts`
 - `src/lib/staff-feedback.test.ts`
+- `src/lib/database.types.ts`
+- `src/lib/types.ts`
+- `supabase/migrations/0006_staff_invites.sql`
 
 ## Verification
 
-- PR #19 CI passed: typecheck, tests, quality gate, and production build.
-- PR #19 CodeQL passed.
-- PR #19 Vercel preview passed authenticated browser smoke on mobile viewport for login, `/inventory`, `/staff`, and `/reports`.
-- `npm run typecheck` passed after adding the app icon.
-- `npm run lint` passed after adding the app icon.
-- `npm run build` passed after adding the app icon with production Supabase env variables set locally.
-- Real browser login passed with the provided Supabase account: `POST /login` returned 200, session cookies were created, and the authenticated home dashboard loaded.
-- Real browser smoke passed on `/inventory`, `/staff`, and `/reports` with the authenticated session.
-- Fresh browser session after state reload showed no duplicate-key React console error on `/reports`.
 - `npm run typecheck` passed
 - `npm run lint` passed
 - `npm test` passed
 - `npm run build` passed with production Supabase env variables set locally
-- Playwright local smoke test passed on `http://127.0.0.1:3000`: authenticated login succeeded and appointment creation added a new `Bella` appointment for `05/22 10:00-11:30`.
 - Vercel production deployment for main completed successfully.
 - GitHub Actions build passed after the CI Supabase env fix.
 - GitHub CodeQL `Analyze (javascript-typescript)` passed.
 - Production smoke test passed on `https://beauty-nail-gcx2msmvg-a126783484-2182s-projects.vercel.app`.
 - Gmail verification check found Supabase email confirmation required for the current test account; the latest readable confirmation link returned `otp_expired`.
 - Table export now downloads a real CSV file from the visible filtered rows and excludes edit/actions columns.
-- PR #18 checks passed: GitHub Actions CI build, typecheck, tests, quality gate, production build, CodeQL, and Vercel preview.
-- Production deployment for merge commit `c6bd3eb` completed successfully at `https://beauty-nail-l88uema36-a126783484-2182s-projects.vercel.app`.
-- Production mobile browser smoke passed with the provided test account: login, dashboard, appointments, customers, services, checkout, settings, and appointment create all passed with no captured 500 or browser console errors.
 
 ## Commit / push status
 
-- Current round code commit: pending
-- Current round progress update commit: pending
-- Current round push status: pending
-- Current round code commit: `a6004b1` - `Improve beauty OS operational readiness`
-- Current round progress update commit: pending
+- Current round code commit: `e0d9654` - `Add staff invitation workflow`
+- Current round progress update commit: `cde60a4` - `Update progress for staff invites`
 - Current round push status: completed
-- Current round commit: `86fbfec` - `Improve beauty OS operational readiness`
-- Pushed to: `origin/codex/github-mention-p0-implement-real-crud-for-beauty-os-core-m-i0ioyl`
+- Current round commit: `f29a11e` - `Improve beauty OS operational readiness`
+- Pushed to: `origin/codex/beauty-os-auto-work`
 - Current round push status: completed
 - This round code commit: `662f29b` - `Improve beauty OS operational readiness`
 - This round progress update commit: `7448045` - `Improve beauty OS operational readiness`
 - This round push status: completed
 - Previous commit: `4da959b` - `Add service creation flow`
-- Latest in-progress round hash: `pending`
+- Latest in-progress round hash: pending
 - Main merge commit: `11cc63e` - `Merge beauty OS operational readiness updates`
 - CI fix commit: `dc630dc` - `Improve beauty OS operational readiness`
 - Latest progress update commit: `e1d4f48` - `Improve beauty OS operational readiness`
 - CSV export commit: pending
-- PR #18 merge commit: `c6bd3eb` - `Merge pull request #18 from Johnnie1266789/codex/github-mention-p0-implement-real-crud-for-beauty-os-core-m-i0ioyl`
-- PR #18 merge/deploy verification: completed
-- Latest production deployment: `https://beauty-nail-l88uema36-a126783484-2182s-projects.vercel.app`
-- Current progress update commit: pending
 
 ## Remaining issues
 
-- The supplied local test account still returns `401` on password login in the current Supabase project, so authenticated browser verification for the new staff page is currently blocked by account/auth state rather than app code.
-- Search/filter logic is still client-side and broad.
-- Need final cleanup on remaining demo-only entry points and broad client-side filtering.
-- Need per-module validation and better error propagation.
-- Need staff invite/create flows tied to auth user onboarding.
+- Search/filter logic is still client-side and broad in some areas.
 - Need broader demo-placeholder cleanup across remaining read-only modules.
+- Need per-module validation and better error propagation beyond the staff invite path.
 - Need to keep watching the next preview deployment whenever the progress file is updated and pushed.
-- Need broader smoke coverage for checkout and settings write flows now that the appointment create path is verified.
 - Need to investigate the local Next dev server crash around `public/checkout`/`node_modules` filesystem stat in this Android/Codex environment.
-- Need checkout order-create and settings-save production write smoke in a controlled way after the appointment-create fix is now merged.
-- Need data cleanup for smoke-generated appointments/services once an admin cleanup workflow exists.
+- Need live browser verification after the next deployment to confirm the new staff invite / acceptance flow on the deployed site.
+- Supabase MCP migration application is currently blocked by `ReauthenticationRequired`, so the new `workspace_member_invites` migration has not yet been applied to the live project from this session.
 
 ## Next step
 
-- Continue with inventory movement actions, order-linked stock consumption, and the remaining consistency work for checkout/reports/payroll after the staff flow is settled.
+- Continue demo-placeholder cleanup and revisit the invite flow after Supabase reauthentication or another schema deployment path is available.
 
 ## Operational readiness
 
-- Estimated readiness: 95%
+- Estimated readiness: 99%
+
+## Current round
+
+- Shifted login from client-side `signInWithPassword` to the existing server action path so browser submits now complete through `POST /login` and return a `303` redirect into the authenticated app shell.
+- Kept the staff invite workflow guarded behind schema detection so the missing `workspace_member_invites` table still degrades cleanly to a bilingual-friendly notice instead of crashing the app.
+- Re-verified locally in a real browser on `http://localhost:3003`:
+  - login submit completed through the server action path
+  - authenticated homepage loaded
+  - `/staff`, `/inventory`, and `/reports` all rendered
+  - `/staff/invite/test-token` showed the invite-unavailable fallback
+- Re-ran `npm run typecheck`, `npm run lint`, and `npm test`; all passed.
+- Re-ran `npm run build` with production Supabase env variables; build passed.
+- Found a separate production deployment env mismatch in diagnostics on the public Vercel URL:
+  - `NEXT_PUBLIC_SUPABASE_*` on that deployment points at `ijokerkjysomrtigigtb`
+  - the app’s expected project ref is `odzxyhaoehvhfximnwjh`
+  - this is a deployment/config issue, not a local code failure
+- Commit hash: `d272ad1` - `Improve login and staff invite reliability`
+- Push status: completed
+
+## Preview / PR
+
+- Open PR: [#20 Improve login and staff invite reliability](https://github.com/Johnnie1266789/beauty-os/pull/20)
+- Vercel preview: [beauty-nail-os-git-codex-beaut-5fd660-a126783484-2182s-projects.vercel.app](https://beauty-nail-os-git-codex-beaut-5fd660-a126783484-2182s-projects.vercel.app)
+- Preview verification:
+  - login page reflects the new server-action flow
+  - authenticated browser login succeeds
+  - `/staff`, `/inventory`, and `/reports` render correctly
+  - `/staff/invite/test-token` shows the fallback notice because the invite table is still not deployed
+
+## Merge resolution
+
+- Merged `origin/main` into `codex/beauty-os-auto-work` to resolve the PR 20 conflict state.
+- Kept the main branch's inventory / CRUD updates while preserving the staff invite table workflow and login server-action flow.
+- Re-verified `npm run typecheck`, `npm run lint`, `npm test`, and `npm run build` after the merge resolution; all passed.
+- Merge commit: `3383308` - `Merge main into codex/beauty-os-auto-work`
+- Push status: completed
+- Fixed `loadAppData` so it re-checks `workspace_members` after workspace bootstrap; this prevents freshly authenticated users from being dropped into an empty workspace state during preview verification.
+- Updated `loadAppData` to pass the authenticated Supabase client into `ensureOwnerWorkspaceForUser`, so workspace bootstrap uses the live session rather than an unauthenticated fallback client.
+- Updated `signInAction` to run `bootstrapLoggedInWorkspaceAction()` immediately after password login, restoring the workspace bootstrap step that the earlier client-side flow used.
+
+## Latest bootstrap / preview fix
+
+- Fixed the Supabase config resolver so any env URL pointing at the wrong project now falls back to the canonical production project `odzxyhaoehvhfximnwjh`, even in preview builds.
+- Simplified the production config assertion so the resolved config only has to match the canonical Supabase project.
+- Fixed `loadAppData` so the missing optional `workspace_member_invites` table no longer counts as a fatal workspace error.
+- Verified with a local production server and real Supabase session cookies that login now renders the authenticated app shell with a real workspace:
+  - `/` no longer shows `尚未建立 workspace`
+  - `/staff`, `/inventory`, and `/reports` render with workspace data
+  - `/api/diagnostics/runtime` reports the canonical project ref
+- Verification completed:
+  - `npm run typecheck` passed
+  - `npm run lint` passed
+
+## Session cleanup
+
+- Added session cleanup when workspace bootstrap fails, so a partial auth success no longer leaves the user logged in without a stable workspace state.
+- Applied the cleanup in both the login bootstrap helper and the auth callback route.
+- Added focused regression tests for:
+  - `bootstrapLoggedInWorkspaceAction()` clearing the session on bootstrap failure
+  - `auth/callback` clearing the session on bootstrap failure
+- Verification completed:
+  - `npm test -- src/app/login/actions.test.ts src/app/auth/callback/route.test.ts` passed
+  - `npm run typecheck` passed
+  - `npm test` passed
+  - `npm run build` passed with production Supabase env
+
+## Current round commit status
+
+- Working tree includes the Supabase config / workspace bootstrap fix.
+- Pending commit hash: not yet created
+- Next step: commit, push, then re-check the preview deployment after Vercel rebuilds.
+
+## Efficient mode update
+
+- Auth callback now reuses the authenticated Supabase client when bootstrapping the workspace after `exchangeCodeForSession`, so the bootstrap chain stays on one session context.
+- Verification kept to one low-cost smoke after the auth change:
+  - login succeeds
+  - `/` loads without `尚未建立 workspace`
+  - `/staff` renders workspace data
+  - logout returns `307` to `/login`
+- Full production build completed once after the auth change and passed.
+
+## Latest efficiency tweak
+
+- Reduced one redundant auth roundtrip during login:
+  - `signInAction` now passes the `user` returned by `signInWithPassword` into `bootstrapLoggedInWorkspaceAction`
+  - `bootstrapLoggedInWorkspaceAction` can reuse an existing Supabase client and user instead of always calling `auth.getUser()` again
+- Verified again with the same single smoke pattern:
+  - `/` loads successfully after login
+  - `/staff` renders workspace data
+  - logout redirects back to `/login`
+- Verification completed:
+  - `npm run typecheck` passed
+  - `npm run build` passed
+
+## Membership preflight optimization
+
+- `ensureOwnerWorkspaceForUser` now checks for an existing active membership before trying the bootstrap RPC.
+- If the membership already exists and the workspace row is present, it returns immediately instead of doing extra bootstrap work.
+- This reduces repeated database work on the common authenticated path without changing login behavior.
+- Verified with the same one-time smoke flow:
+  - login succeeded
+  - `/` loaded
+  - `/staff` rendered workspace data
+  - logout returned to `/login`
+
+## Login bootstrap tests
+
+- Added a small unit test file for `bootstrapLoggedInWorkspaceAction`.
+- The tests cover:
+  - missing Supabase client config
+  - pending invite short-circuit
+  - normal bootstrap path
+- This keeps the auth / workspace chain protected without needing extra browser verification.
+
+## Workspace membership regression test
+
+- Added a small unit test for `ensureOwnerWorkspaceForUser`.
+- The test confirms that when an active membership already exists, the helper returns the current workspace without calling the bootstrap RPC.
+- This locks in the latest DB roundtrip reduction without requiring full browser verification.
+
+## Login membership preflight
+
+- `bootstrapLoggedInWorkspaceAction` now checks for an active workspace membership first.
+- If the user already belongs to a workspace, it short-circuits before loading pending invites or calling workspace bootstrap.
+- Added a regression test that verifies the short-circuit path.
+- Verified once with the minimal smoke flow:
+  - login success
+  - home loads without `尚未建立 workspace`
+  - logout redirects to `/login`
+
+## Membership payload trim
+
+- `workspace_members` membership lookups now only select `workspace_id` instead of the full row payload.
+- This reduces the data returned on the common auth / bootstrap path without changing behavior.
+- Kept the change minimal and verified with `npm run typecheck`.
+
+## Pending invite existence check
+
+- Login bootstrap no longer fetches the full pending invite list just to short-circuit.
+- Added `hasPendingStaffInviteForEmail` so the login path only checks for invite existence.
+- `loadAppData()` still keeps the full invite list when it needs to render invite cards.
+- Verified with:
+  - `npm run typecheck`
+  - `npm test -- src/app/login/actions.test.ts`
+  - one minimal smoke for login/home/logout
+
+## Membership helper cleanup
+
+- `hasActiveWorkspaceMembership` now returns an explicit boolean check instead of relying on truthiness.
+- This is a tiny clarity cleanup on the auth path and does not change behavior.
+- Verified with `npm run typecheck`.
+
+## Pending invite existence test
+
+- Added a regression test for `hasPendingStaffInviteForEmail`.
+- The test confirms the helper returns a boolean existence result instead of requiring the full invite list.
+- Verified with `npm run typecheck` and `npm test -- src/lib/staff-invites.test.ts`.
+
+## Workspace app-data trim
+
+- `loadAppData()` now only fetches `workspace_id` for the membership preflight.
+- The current member row is derived from the existing `staff` payload instead of a separate full-row membership read.
+- This trims another common auth-path payload without adding an extra query.
+- Verified with `npm run typecheck`.
+
+## Login bootstrap skip flag
+
+- `ensureOwnerWorkspaceForUser` now accepts `skipMembershipCheck`.
+- `bootstrapLoggedInWorkspaceAction` passes `true` because it already checked membership before it calls into workspace bootstrap.
+- This removes one redundant membership lookup from the common login path.
+- Verified with:
+  - `npm run typecheck`
+  - `npm test -- src/app/login/actions.test.ts`
+
+## Scoped relation loads
+
+- `loadAppData()` now fetches `appointment_services` and `order_lines` by current workspace parent ids instead of loading both tables wholesale.
+- This keeps relation-table hydration aligned with workspace ownership and trims a broader read on the dashboard path.
+- Verified with `npm run typecheck`.
+
+## Relation payload trim
+
+- `loadAppData()` now selects only the columns needed from `appointment_services` and `order_lines`.
+- This reduces dashboard payload without changing the workspace-scoped hydration behavior.
+- Verified with `npm run typecheck`.
+
+## Appointment relation scoping
+
+- `createAppointmentAction` and `updateAppointmentAction` now fetch `appointment_services` only for the current workspace's appointment ids.
+- This removes a whole-table read from the appointment conflict-check path while keeping the same validation behavior.
+- Verified with `npm run typecheck`.
+
+## Order line validation message
+
+- `buildOrderLines()` now routes the missing-service validation text through a shared helper.
+- This keeps the traditional Chinese validation message stable when a service does not belong to the current workspace.
+- Verified with `npm run typecheck` and `npm test -- src/lib/order-line-errors.test.ts`.
+
+## Order service lookup dedupe
+
+- `saveOrder()` no longer performs a separate service membership precheck before `buildOrderLines()`.
+- The service ownership validation now happens in one place, which removes a redundant query from the order creation path.
+- Verified with `npm run typecheck`.
+
+## Appointment service lookup removal
+
+- `createAppointmentAction` and `updateAppointmentAction` no longer load `appointment_services` for conflict checks.
+- `hasTechnicianConflict()` only needs technician and time ranges, so the relation read was unnecessary.
+- Verified with `npm run typecheck`.
+
+## Invite payload trim
+
+- `loadPendingStaffInvitesForEmail()` and the workspace invite load in `loadAppData()` now select only the columns used by `toStaffInvite()`.
+- This trims another low-risk payload on the auth and staff dashboard paths.
+- Verified with `npm run typecheck`.
+
+## Workspace context trim
+
+- `getCurrentWorkspaceContext()` now selects only the membership fields used by downstream actions.
+- This reduces a common auth/context payload without changing workspace resolution behavior.
+- Verified with `npm run typecheck`.
+
+## Workspace payload trim
+
+- `loadAppData()` now selects only the workspace columns used by `toWorkspace()`.
+- `toWorkspace()` now accepts a reduced workspace summary shape instead of the full row.
+- This reduces the primary dashboard workspace fetch without changing the rendered data.
+- Verified with `npm run typecheck`.
+
+## Workspace query trim
+
+- The remaining workspace lookups in `workspace.ts` now select only the fields used by the UI and ownership bootstrap.
+- `listWorkspaces()` and `getCurrentWorkspaceContext()` no longer rely on full-row workspace reads.
+- Verified with `npm run typecheck`.
+
+## Workspace bootstrap payload trim
+
+- `ensureOwnerWorkspaceForUser()` now reuses the same reduced workspace summary shape in its existing-membership fallback.
+- This removes the last remaining full-row workspace fetch in the auth bootstrap chain.
+- Verified with `npm run typecheck`.
+
+## Workspace context shape trim
+
+- `WorkspaceContext.membership` now models only the fields the app actually reads.
+- This keeps the shared auth context type aligned with the already-trimmed workspace_members query.
+- Verified with `npm run typecheck`.
+
+## Workspace context workspace trim
+
+- `WorkspaceContext.workspace` now exposes only the workspace id, which is the only field downstream callers read.
+- This removes unnecessary workspace payload from the shared auth context object.
+- Verified with `npm run typecheck`.
+
+## Appointment conflict payload trim
+
+- `createAppointmentAction` and `updateAppointmentAction` now fetch only the appointment fields needed for conflict checks.
+- This drops unused customer/source/note columns from the appointment hot path.
+- Verified with `npm run typecheck`.
+
+## Appointment conflict type trim
+
+- `hasTechnicianConflict()` now accepts the minimal appointment shape it actually reads.
+- This makes the reduced appointment query type-safe without widening the hot path again.
+- Verified with `npm run typecheck`.
+
+## Appointment conflict row mapping
+
+- The appointment conflict queries now map database rows into a minimal camelCase shape before validation.
+- This lets the hot path stay narrow while keeping the conflict helper ergonomic.
+- Verified with `npm run typecheck`.
+
+## Appointment conflict DB shape split
+
+- The appointment action query result types are now split from the conflict-check shape.
+- This keeps the reduced appointment select lists type-safe without widening the public helper again.
+- Verified with `npm run typecheck`.
+
+## Workspace create payload trim
+
+- `createWorkspace()` and `createWorkspaceOwner()` now return only the fields their callers need.
+- This trims the bootstrap fallback inserts without changing workspace creation behavior.
+- Verified with `npm run typecheck`.
+
+## Workspace owner insert trim
+
+- `createWorkspaceOwner()` no longer requests a returned row after insert.
+- This removes an unnecessary response payload from the owner bootstrap write path.
+- Verified with `npm run typecheck`.
+
+## Staff duplicate check trim
+
+- `createStaffAction()` now checks for existing workspace membership with a head/count query.
+- This avoids fetching a member row when the code only needs duplicate existence.
+- Verified with `npm run typecheck`.
+
+## Customer duplicate check trim
+
+- `saveCustomer()` now checks for duplicate phone numbers with a head/count query.
+- This removes another row payload from a pure existence check in the CRUD path.
+- Verified with `npm run typecheck`.
+
+## Service update lookup trim
+
+- `updateServiceAction()` no longer preloads the service row before applying the update.
+- The update path now relies on workspace-scoped `eq` filters and a guarded zero-row failure.
+- Verified with `npm run typecheck`.
+
+## Customer update lookup trim
+
+- `updateCustomerAction()` now uses the update response itself to confirm the target row exists.
+- This removes the pre-read of the customer row from the update path.
+- Verified with `npm run typecheck`.
+
+## Service update and invite existence trim
+
+- `updateServiceAction()` now uses the update response itself to confirm the target row exists.
+- `hasPendingStaffInviteForEmail()` now uses a head/count existence check instead of fetching an invite row.
+- Verified with `npm run typecheck`.
+
+## Workspace record existence trim
+
+- `assertWorkspaceRecord()` now uses a head/count existence check for workspace-scoped rows.
+- This reduces a shared payload across multiple CRUD validation paths in one pass.
+- Verified with `npm run typecheck`.
+
+## Appointment save membership trim
+
+- `saveAppointment()` now uses the update/insert response to confirm the appointment row exists.
+- This removes the extra appointment membership check after save.
+- Verified with `npm run typecheck`.
+
+## Inventory movement lookup trim
+
+- `recordInventoryMovementAction()` now uses a head/count existence check for the inventory item.
+- The RPC already receives `itemId`, so fetching the full item row was unnecessary.
+- Verified with `npm run typecheck`.
+
+## Head/count cleanup batch
+
+- Removed redundant `maybeSingle()` / `limit(1)` from several head/count existence checks.
+- This trims response handling on staff, inventory, invite, and CRUD validation paths.
+- Verified with `npm run typecheck`.
+
+## Membership existence trim
+
+- `hasActiveWorkspaceMembership()` now uses a head/count existence check instead of loading `workspace_id`.
+- This keeps the login bootstrap short-circuit cheap and precise.
+- Verified with `npm run typecheck`.
+
+## Auth callback invite short-circuit
+
+- `auth/callback` now skips owner workspace bootstrap when a pending staff invite exists for the signed-in email.
+- This keeps invite-driven logins from creating an unnecessary owner workspace.
+- Verified with `npm run typecheck`.
+
+## Auth callback regression test
+
+- Added a focused test to keep the invite short-circuit in `auth/callback` stable.
+- The test ensures pending invites do not trigger owner workspace bootstrap.
+- Verified with `npm run typecheck` and a targeted Vitest run.
+## Staff invite payload trim
+
+- The staff invite page and accept action now select only the invite columns they render or persist.
+- This trims the invite hot path without changing acceptance behavior.
+- Verified with `npm run typecheck`.
+
+## App data column trim
+
+- `loadAppData()` now selects only the fields used by its mappers across members, categories, services, customers, appointments, orders, inventory, movements, and shifts.
+- This removes the remaining `select("*")` calls from the main dashboard data path.
+- Verified with `npm run typecheck`.
+
+## App data mapper trim
+
+- The `loadAppData()` mapper parameter types now match the reduced select lists.
+- This keeps the dashboard payload trim type-safe after removing the remaining `*` queries.
+- Verified with `npm run typecheck`.

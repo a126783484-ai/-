@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
@@ -14,7 +15,7 @@ import {
   updateAppointmentStatus,
   updateWorkspaceSettings,
 } from "@/app/crud-actions";
-import { createStaffAction, updateStaffAction } from "@/app/staff/actions";
+import { createStaffAction, createStaffInviteAction, updateStaffAction } from "@/app/staff/actions";
 import { recordInventoryMovementAction } from "@/app/inventory/actions";
 import { AppShell } from "@/components/AppShell";
 import { FormNotice } from "@/components/FormNotice";
@@ -26,6 +27,7 @@ import { orderTotal, outstandingAmount } from "@/lib/orders";
 import { can, roleLabel } from "@/lib/permissions";
 import type { AppData } from "@/lib/app-data";
 import type { Appointment, Customer, Order, ServiceItem, StaffMember } from "@/lib/types";
+import { buildStaffInvitePath } from "@/lib/staff-invites";
 import { currency, formatDate, formatTime } from "@/lib/utils";
 
 const liveNotice =
@@ -855,8 +857,31 @@ export function DashboardView({ data }: { data: AppData }) {
       {data.needsWorkspace ? (
         <EmptyState
           title="尚未完成 workspace 初始化"
-          action="請重新登入，系統會依註冊資料補齊 workspace、owner profile 與 membership。"
+          action={
+            data.staffInviteFeatureEnabled && data.staffInvites.length > 0
+              ? "你有待加入的店鋪邀請，請先開啟邀請卡完成加入。"
+              : "請重新登入，系統會依註冊資料補齊 workspace、owner profile 與 membership。"
+          }
         />
+      ) : null}
+      {data.needsWorkspace && data.staffInviteFeatureEnabled && data.staffInvites.length > 0 ? (
+        <div className="mt-4 card p-5">
+          <h2 className="text-lg font-bold text-plum">你有待加入的店鋪邀請</h2>
+          <p className="mt-1 text-sm text-ink/60">先接受邀請，再進入對應店鋪後台。</p>
+          <div className="mt-4 space-y-3">
+            {data.staffInvites.map((invite) => (
+              <div key={invite.id} className="flex flex-col gap-3 rounded-2xl bg-blush p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <strong className="block text-plum">{invite.displayName}</strong>
+                  <p className="text-sm text-ink/60">{invite.email} ｜ {roleLabel(invite.role)}</p>
+                </div>
+                <Link href={buildStaffInvitePath(invite.token)} className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-center font-semibold text-white">
+                  開啟邀請
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : null}
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
@@ -1544,6 +1569,76 @@ export function StaffView({
       {...shellProps(data)}
     >
       <NoticeBanner notice={notice} />
+      {canManageStaff && data.staffInviteFeatureEnabled ? (
+        <form action={createStaffInviteAction} className="card p-5">
+          <h2 className="text-lg font-bold text-plum">新增員工邀請</h2>
+          <p className="mt-1 text-sm text-ink/60">輸入對方 email 後會產生可分享的加入連結。對方登入並接受後，會成為目前店鋪成員。</p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <label className="block text-sm font-semibold text-plum">
+              顯示名稱
+              <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="displayName" required />
+            </label>
+            <label className="block text-sm font-semibold text-plum">
+              Email
+              <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="email" type="email" autoComplete="email" required />
+            </label>
+            <label className="block text-sm font-semibold text-plum">
+              電話
+              <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="phone" autoComplete="tel" />
+            </label>
+            <label className="block text-sm font-semibold text-plum">
+              角色
+              <select className="mt-2 w-full rounded-2xl border border-champagne p-3" name="role" defaultValue="staff">
+                <option value="staff">一般員工</option>
+                <option value="front_desk">櫃台</option>
+                <option value="technician">技師</option>
+                <option value="admin">管理員</option>
+                <option value="owner">店主</option>
+              </select>
+            </label>
+            <label className="block text-sm font-semibold text-plum">
+              抽成
+              <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="commissionRate" type="number" min="0" max="1" step="0.01" defaultValue="0" />
+            </label>
+            <label className="block text-sm font-semibold text-plum">
+              專長
+              <textarea className="mt-2 min-h-24 w-full rounded-2xl border border-champagne p-3" name="specialties" placeholder="例如：凝膠美甲, 眉型設計" />
+            </label>
+          </div>
+          <button type="submit" className="mobile-tap mt-5 rounded-2xl bg-plum font-semibold text-white">
+            建立邀請連結
+          </button>
+        </form>
+      ) : canManageStaff ? (
+        <div className="card p-5">
+          <h2 className="text-lg font-bold text-plum">員工邀請</h2>
+          <p className="mt-1 text-sm text-ink/60">目前資料庫尚未啟用邀請表，請先完成 schema 更新。</p>
+        </div>
+      ) : null}
+      {data.staffInviteFeatureEnabled && data.staffInvites.some((invite) => invite.status === "pending") ? (
+        <div className="card p-5">
+          <h2 className="text-lg font-bold text-plum">待處理邀請</h2>
+          <div className="mt-4 space-y-3">
+            {data.staffInvites.filter((invite) => invite.status === "pending").map((invite) => (
+              <div key={invite.id} className="rounded-2xl bg-blush p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <strong className="block text-plum">{invite.displayName}</strong>
+                    <p className="text-sm text-ink/60">{invite.email} ｜ {roleLabel(invite.role)}</p>
+                  </div>
+                  <StatusPill tone="amber">待接受</StatusPill>
+                </div>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <code className="break-all rounded-2xl bg-white px-3 py-2 text-xs text-ink/70">{buildStaffInvitePath(invite.token)}</code>
+                  <Link href={buildStaffInvitePath(invite.token)} className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-center font-semibold text-white">
+                    開啟邀請
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="mb-5 grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
         {canManageStaff ? <StaffForm staff={editing} /> : null}
         <div className="card p-5">

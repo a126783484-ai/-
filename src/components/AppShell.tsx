@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { CalendarDays, ChartNoAxesCombined, CreditCard, Gauge, Package, Scissors, Settings, Sparkles, UsersRound, UserRoundCog } from "lucide-react";
+import { CalendarDays, ChartNoAxesCombined, CreditCard, Gauge, LogOut, Package, Scissors, Settings, Sparkles, UsersRound, UserRoundCog } from "lucide-react";
+import { signOutAction } from "@/app/account/actions";
 import type { Role, Workspace } from "@/lib/types";
-import { demoNotice, workspace as demoWorkspace } from "@/lib/seed";
 import { roleLabel } from "@/lib/permissions";
 
 const nav = [
@@ -21,9 +21,9 @@ export function AppShell({
   title,
   subtitle,
   children,
-  workspace = demoWorkspace,
+  workspace = { name: "Beauty OS" },
   role = "owner",
-  notice = demoNotice
+  notice = "正式資料模式已啟用，請透過 Supabase Auth 與 workspace 進行操作。"
 }: {
   title: string;
   subtitle: string;
@@ -46,6 +46,15 @@ export function AppShell({
           <div className="mt-auto rounded-3xl bg-plum p-4 text-white">
             <p className="text-sm opacity-80">目前角色</p><p className="font-semibold">{roleLabel(role)}</p>
             <p className="mt-3 text-xs leading-5 opacity-75">{notice}</p>
+            <form action={signOutAction} className="mt-4">
+              <button
+                type="submit"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-white/15 px-4 py-3 text-sm font-semibold text-white hover:bg-white/25"
+              >
+                <LogOut size={16} />
+                登出
+              </button>
+            </form>
           </div>
         </aside>
         <section className="min-w-0 flex-1">
@@ -68,6 +77,12 @@ export function AppShell({
               {item.label}
             </Link>
           ))}
+          <form action={signOutAction} className="grid min-w-[4.75rem] shrink-0 place-items-center">
+            <button type="submit" className="grid place-items-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-semibold text-ink/60">
+              <LogOut size={18} />
+              登出
+            </button>
+          </form>
         </div>
       </nav>
     </main>

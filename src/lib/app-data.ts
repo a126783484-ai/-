@@ -10,29 +10,68 @@ import type {
   ServiceCategory,
   ServiceItem,
   Shift,
+  StaffInvite,
   StaffMember,
   Workspace,
 } from "@/lib/types";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseConfig } from "@/lib/supabase";
+import {
+  isMissingStaffInviteTableError,
+  loadPendingStaffInvitesForEmail,
+  toStaffInvite,
+} from "@/lib/staff-invites";
 import { ensureOwnerWorkspaceForUser } from "@/lib/workspace";
 
 type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
-type WorkspaceMemberRow =
-  Database["public"]["Tables"]["workspace_members"]["Row"];
-type ServiceCategoryRow =
-  Database["public"]["Tables"]["service_categories"]["Row"];
-type ServiceRow = Database["public"]["Tables"]["services"]["Row"];
-type CustomerRow = Database["public"]["Tables"]["customers"]["Row"];
-type AppointmentRow = Database["public"]["Tables"]["appointments"]["Row"];
-type AppointmentServiceRow =
-  Database["public"]["Tables"]["appointment_services"]["Row"];
-type OrderRow = Database["public"]["Tables"]["orders"]["Row"];
-type OrderLineRow = Database["public"]["Tables"]["order_lines"]["Row"];
-type InventoryRow = Database["public"]["Tables"]["inventory_items"]["Row"];
-type InventoryMovementRow =
-  Database["public"]["Tables"]["inventory_movements"]["Row"];
-type ShiftRow = Database["public"]["Tables"]["shifts"]["Row"];
+type WorkspaceSummaryRow = Pick<
+  WorkspaceRow,
+  "id" | "name" | "phone" | "address" | "brand_color" | "business_hours"
+>;
+type WorkspaceMemberSummaryRow = Pick<
+  Database["public"]["Tables"]["workspace_members"]["Row"],
+  "id" | "workspace_id" | "user_id" | "display_name" | "role" | "phone" | "active" | "commission_rate" | "specialties"
+>;
+type ServiceCategorySummaryRow = Pick<
+  Database["public"]["Tables"]["service_categories"]["Row"],
+  "id" | "workspace_id" | "name" | "sort_order"
+>;
+type ServiceSummaryRow = Pick<
+  Database["public"]["Tables"]["services"]["Row"],
+  "id" | "workspace_id" | "category_id" | "name" | "price" | "duration_min" | "description" | "enabled" | "is_add_on"
+>;
+type CustomerSummaryRow = Pick<
+  Database["public"]["Tables"]["customers"]["Row"],
+  "id" | "workspace_id" | "name" | "phone" | "birthday" | "line_id" | "note" | "preferences" | "cautions" | "tier" | "tags" | "last_visit" | "next_reminder"
+>;
+type AppointmentSummaryRow = Pick<
+  Database["public"]["Tables"]["appointments"]["Row"],
+  "id" | "workspace_id" | "customer_id" | "technician_id" | "start_at" | "end_at" | "status" | "source" | "note"
+>;
+type AppointmentServiceSummaryRow = Pick<
+  Database["public"]["Tables"]["appointment_services"]["Row"],
+  "appointment_id" | "service_id"
+>;
+type OrderSummaryRow = Pick<
+  Database["public"]["Tables"]["orders"]["Row"],
+  "id" | "workspace_id" | "appointment_id" | "customer_id" | "technician_id" | "discount" | "tip" | "paid_amount" | "payment_method" | "status" | "created_at"
+>;
+type OrderLineSummaryRow = Pick<
+  Database["public"]["Tables"]["order_lines"]["Row"],
+  "id" | "order_id" | "service_id" | "name" | "quantity" | "unit_price"
+>;
+type InventorySummaryRow = Pick<
+  Database["public"]["Tables"]["inventory_items"]["Row"],
+  "id" | "workspace_id" | "brand" | "category" | "name" | "cost" | "retail_price" | "quantity" | "low_stock_threshold"
+>;
+type InventoryMovementSummaryRow = Pick<
+  Database["public"]["Tables"]["inventory_movements"]["Row"],
+  "id" | "workspace_id" | "item_id" | "order_id" | "movement_type" | "quantity" | "note" | "created_at"
+>;
+type ShiftSummaryRow = Pick<
+  Database["public"]["Tables"]["shifts"]["Row"],
+  "id" | "workspace_id" | "staff_id" | "shift_date" | "start_time" | "end_time" | "leave"
+>;
 
 export interface AppData {
   user: { id: string; email: string | null };
@@ -40,6 +79,8 @@ export interface AppData {
   currentMember: StaffMember | null;
   staff: StaffMember[];
   categories: ServiceCategory[];
+  staffInvites: StaffInvite[];
+  staffInviteFeatureEnabled: boolean;
   services: ServiceItem[];
   customers: Customer[];
   appointments: Appointment[];
@@ -68,6 +109,8 @@ function emptyAppData(user: { id: string; email: string | null }): AppData {
     currentMember: null,
     staff: [],
     categories: [],
+    staffInvites: [],
+    staffInviteFeatureEnabled: false,
     services: [],
     customers: [],
     appointments: [],
@@ -79,7 +122,7 @@ function emptyAppData(user: { id: string; email: string | null }): AppData {
   };
 }
 
-function toWorkspace(row: WorkspaceRow): Workspace {
+function toWorkspace(row: WorkspaceSummaryRow): Workspace {
   return {
     id: row.id,
     name: row.name,
@@ -90,7 +133,7 @@ function toWorkspace(row: WorkspaceRow): Workspace {
   };
 }
 
-function toStaff(row: WorkspaceMemberRow): StaffMember {
+function toStaff(row: WorkspaceMemberSummaryRow): StaffMember {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -103,7 +146,7 @@ function toStaff(row: WorkspaceMemberRow): StaffMember {
   };
 }
 
-function toCustomer(row: CustomerRow): Customer {
+function toCustomer(row: CustomerSummaryRow): Customer {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -121,7 +164,7 @@ function toCustomer(row: CustomerRow): Customer {
   };
 }
 
-function toCategory(row: ServiceCategoryRow): ServiceCategory {
+function toCategory(row: ServiceCategorySummaryRow): ServiceCategory {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -131,8 +174,8 @@ function toCategory(row: ServiceCategoryRow): ServiceCategory {
 }
 
 function toService(
-  row: ServiceRow,
-  categories: ServiceCategoryRow[],
+  row: ServiceSummaryRow,
+  categories: ServiceCategorySummaryRow[],
 ): ServiceItem {
   return {
     id: row.id,
@@ -151,8 +194,8 @@ function toService(
 }
 
 function toAppointment(
-  row: AppointmentRow,
-  appointmentServices: AppointmentServiceRow[],
+  row: AppointmentSummaryRow,
+  appointmentServices: AppointmentServiceSummaryRow[],
 ): Appointment {
   return {
     id: row.id,
@@ -170,7 +213,7 @@ function toAppointment(
   };
 }
 
-function toOrder(row: OrderRow, lines: OrderLineRow[]): Order {
+function toOrder(row: OrderSummaryRow, lines: OrderLineSummaryRow[]): Order {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -195,7 +238,7 @@ function toOrder(row: OrderRow, lines: OrderLineRow[]): Order {
   };
 }
 
-function toInventory(row: InventoryRow): InventoryItem {
+function toInventory(row: InventorySummaryRow): InventoryItem {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -209,7 +252,7 @@ function toInventory(row: InventoryRow): InventoryItem {
   };
 }
 
-function toInventoryMovement(row: InventoryMovementRow): InventoryMovement {
+function toInventoryMovement(row: InventoryMovementSummaryRow): InventoryMovement {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -222,7 +265,7 @@ function toInventoryMovement(row: InventoryMovementRow): InventoryMovement {
   };
 }
 
-function toShift(row: ShiftRow): Shift {
+function toShift(row: ShiftSummaryRow): Shift {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -255,16 +298,9 @@ export async function loadAppData(): Promise<AppData> {
   const { supabase, user } = await getUser();
   const userSummary = { id: user.id, email: user.email ?? null };
 
-  try {
-    await ensureOwnerWorkspaceForUser(user);
-  } catch (error) {
-    console.error("workspace bootstrap failed", error);
-    return emptyAppData(userSummary);
-  }
-
   const { data: memberships, error: membershipError } = await supabase
     .from("workspace_members")
-    .select("*")
+    .select("workspace_id")
     .eq("user_id", user.id)
     .eq("active", true)
     .order("created_at", { ascending: true });
@@ -274,13 +310,54 @@ export async function loadAppData(): Promise<AppData> {
     return emptyAppData(userSummary);
   }
 
-  const currentMembership = memberships?.[0] ?? null;
+  let currentWorkspaceId = memberships?.[0]?.workspace_id ?? null;
 
-  if (!currentMembership) {
-    return emptyAppData(userSummary);
+  if (!currentWorkspaceId) {
+    let pendingInvites: StaffInvite[] = [];
+
+    try {
+      pendingInvites = await loadPendingStaffInvitesForEmail(supabase, user.email ?? "");
+    } catch (inviteError) {
+      if (!isMissingStaffInviteTableError(inviteError as { code?: string; message?: string } | null | undefined)) {
+        console.error("pending invite lookup failed", inviteError);
+      }
+    }
+
+    if (pendingInvites.length > 0) {
+      return {
+        ...emptyAppData(userSummary),
+        staffInvites: pendingInvites,
+        staffInviteFeatureEnabled: true,
+      };
+    }
+
+    try {
+      await ensureOwnerWorkspaceForUser(user, supabase);
+    } catch (error) {
+      console.error("workspace bootstrap failed", error);
+      return emptyAppData(userSummary);
+    }
+
+    const { data: refreshedMemberships, error: refreshedMembershipError } = await supabase
+      .from("workspace_members")
+      .select("workspace_id")
+      .eq("user_id", user.id)
+      .eq("active", true)
+      .order("created_at", { ascending: true });
+
+    if (refreshedMembershipError) {
+      console.error("workspace membership query failed", refreshedMembershipError);
+      return emptyAppData(userSummary);
+    }
+
+    currentWorkspaceId = refreshedMemberships?.[0]?.workspace_id ?? null;
+
+    if (!currentWorkspaceId) {
+      return emptyAppData(userSummary);
+    }
   }
 
-  const workspaceId = currentMembership.workspace_id;
+  const workspaceId = currentWorkspaceId;
   const [
     workspaceResult,
     staffResult,
@@ -288,62 +365,68 @@ export async function loadAppData(): Promise<AppData> {
     servicesResult,
     customersResult,
     appointmentsResult,
-    appointmentServicesResult,
     ordersResult,
-    orderLinesResult,
     inventoryResult,
     inventoryMovementsResult,
     shiftsResult,
+    staffInvitesResult,
   ] = await Promise.all([
-    supabase.from("workspaces").select("*").eq("id", workspaceId).maybeSingle(),
+    supabase
+      .from("workspaces")
+      .select("id, name, phone, address, brand_color, business_hours")
+      .eq("id", workspaceId)
+      .maybeSingle(),
     supabase
       .from("workspace_members")
-      .select("*")
+      .select("id, workspace_id, user_id, display_name, role, phone, active, commission_rate, specialties")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: true }),
     supabase
       .from("service_categories")
-      .select("*")
+      .select("id, workspace_id, name, sort_order")
       .eq("workspace_id", workspaceId)
       .order("sort_order", { ascending: true }),
     supabase
       .from("services")
-      .select("*")
+      .select("id, workspace_id, category_id, name, price, duration_min, description, enabled, is_add_on")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false }),
     supabase
       .from("customers")
-      .select("*")
+      .select("id, workspace_id, name, phone, birthday, line_id, note, preferences, cautions, tier, tags, last_visit, next_reminder")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false }),
     supabase
       .from("appointments")
-      .select("*")
+      .select("id, workspace_id, customer_id, technician_id, start_at, end_at, status, source, note")
       .eq("workspace_id", workspaceId)
       .order("start_at", { ascending: true }),
-    supabase.from("appointment_services").select("*"),
     supabase
       .from("orders")
-      .select("*")
+      .select("id, workspace_id, appointment_id, customer_id, technician_id, discount, tip, paid_amount, payment_method, status, created_at")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false }),
-    supabase.from("order_lines").select("*"),
     supabase
       .from("inventory_items")
-      .select("*")
+      .select("id, workspace_id, brand, category, name, cost, retail_price, quantity, low_stock_threshold")
       .eq("workspace_id", workspaceId)
       .order("name", { ascending: true }),
     supabase
       .from("inventory_movements")
-      .select("*")
+      .select("id, workspace_id, item_id, order_id, movement_type, quantity, note, created_at")
       .eq("workspace_id", workspaceId)
       .order("created_at", { ascending: false })
       .limit(100),
     supabase
       .from("shifts")
-      .select("*")
+      .select("id, workspace_id, staff_id, shift_date, start_time, end_time, leave")
       .eq("workspace_id", workspaceId)
       .order("shift_date", { ascending: false }),
+    supabase
+      .from("workspace_member_invites")
+      .select("id, workspace_id, email, display_name, phone, role, commission_rate, specialties, token, status, invited_by, created_at, accepted_at")
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false }),
   ]);
 
   const firstError = [
@@ -353,9 +436,7 @@ export async function loadAppData(): Promise<AppData> {
     servicesResult,
     customersResult,
     appointmentsResult,
-    appointmentServicesResult,
     ordersResult,
-    orderLinesResult,
     inventoryResult,
     inventoryMovementsResult,
     shiftsResult,
@@ -370,6 +451,49 @@ export async function loadAppData(): Promise<AppData> {
     return emptyAppData(userSummary);
   }
 
+  const currentMemberRow = (staffResult.data ?? []).find((member) => member.user_id === user.id) ?? null;
+  const appointmentIdList = (appointmentsResult.data ?? []).map((appointment) => appointment.id);
+  const orderIdList = (ordersResult.data ?? []).map((order) => order.id);
+
+  const [appointmentServicesResult, orderLinesResult] = await Promise.all([
+    appointmentIdList.length
+      ? supabase
+          .from("appointment_services")
+          .select("appointment_id, service_id")
+          .in("appointment_id", appointmentIdList)
+      : Promise.resolve({ data: [], error: null } as const),
+    orderIdList.length
+      ? supabase
+          .from("order_lines")
+          .select("order_id, service_id, name, quantity, unit_price, id")
+          .in("order_id", orderIdList)
+      : Promise.resolve({ data: [], error: null } as const),
+  ]);
+
+  if (appointmentServicesResult.error) {
+    console.error("workspace appointment services query failed", appointmentServicesResult.error);
+    return emptyAppData(userSummary);
+  }
+
+  if (orderLinesResult.error) {
+    console.error("workspace order lines query failed", orderLinesResult.error);
+    return emptyAppData(userSummary);
+  }
+
+  let staffInviteFeatureEnabled = true;
+  let staffInvites: StaffInvite[] = [];
+
+  if (staffInvitesResult.error) {
+    if (isMissingStaffInviteTableError(staffInvitesResult.error)) {
+      staffInviteFeatureEnabled = false;
+    } else {
+      console.error("workspace invite query failed", staffInvitesResult.error);
+      return emptyAppData(userSummary);
+    }
+  } else {
+    staffInvites = (staffInvitesResult.data ?? []).map(toStaffInvite);
+  }
+
   const appointmentIds = new Set(
     (appointmentsResult.data ?? []).map((appointment) => appointment.id),
   );
@@ -378,9 +502,11 @@ export async function loadAppData(): Promise<AppData> {
   return {
     user: userSummary,
     workspace: toWorkspace(workspaceResult.data),
-    currentMember: toStaff(currentMembership),
+    currentMember: currentMemberRow ? toStaff(currentMemberRow) : null,
     staff: (staffResult.data ?? []).map(toStaff),
     categories: (categoriesResult.data ?? []).map(toCategory),
+    staffInvites,
+    staffInviteFeatureEnabled,
     services: (servicesResult.data ?? []).map((service) =>
       toService(service, categoriesResult.data ?? []),
     ),

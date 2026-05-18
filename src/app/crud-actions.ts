@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { can } from "@/lib/permissions";
+import { buildMissingOrderLineServiceMessage } from "@/lib/order-line-errors";
 import type { Database, Json } from "@/lib/database.types";
 import type {
   AppointmentStatus,
@@ -197,16 +198,16 @@ async function assertWorkspaceRecord(
   workspaceId: string,
   supabase: AppSupabaseClient,
 ) {
-  const { data, error } = await supabase
+  const { count, error } = await supabase
     .from(table)
-    .select("id")
+    .select("id", { count: "exact", head: true })
     .eq("id", id)
     .eq("workspace_id", workspaceId)
-    .maybeSingle();
+    ;
   if (error) {
     throw new Error(`資料權限檢查失敗：${error.message}`);
   }
-  if (!data) {
+  if ((count ?? 0) <= 0) {
     throw new Error("找不到此工作區內的資料，已取消操作。");
   }
 }
@@ -313,16 +314,16 @@ export async function saveCustomer(formData: FormData) {
     if (!name) throw new Error("請填寫客戶姓名。");
     if (!phone) throw new Error("請填寫客戶電話。");
 
-    const { data: duplicate, error: duplicateError } = await supabase
+    const { count: duplicateCount, error: duplicateError } = await supabase
       .from("customers")
-      .select("id")
+      .select("id", { count: "exact", head: true })
       .eq("workspace_id", workspaceId)
       .eq("phone", phone)
       .neq("id", id ?? "00000000-0000-0000-0000-000000000000")
-      .maybeSingle();
+      ;
 
     if (duplicateError) throw new Error(`檢查電話是否重複失敗：${duplicateError.message}`);
-    if (duplicate) throw new Error("此電話已存在於同一工作區，請改用編輯既有客戶。");
+    if ((duplicateCount ?? 0) > 0) throw new Error("此電話已存在於同一工作區，請改用編輯既有客戶。");
 
     const payload = {
       workspace_id: workspaceId,
@@ -548,12 +549,15 @@ export async function saveAppointment(formData: FormData) {
 
     let appointmentId = id;
     if (appointmentId) {
-      const { error } = await supabase
+      const { data: updatedAppointment, error } = await supabase
         .from("appointments")
         .update(payload)
         .eq("id", appointmentId)
-        .eq("workspace_id", workspaceId);
+        .eq("workspace_id", workspaceId)
+        .select("id")
+        .maybeSingle();
       if (error) throw new Error(`更新預約失敗：${error.message}`);
+      if (!updatedAppointment) throw new Error("找不到此工作區內的資料，已取消操作。");
     } else {
       const { data, error } = await supabase
         .from("appointments")
@@ -563,8 +567,6 @@ export async function saveAppointment(formData: FormData) {
       if (error) throw new Error(`建立預約失敗：${error.message}`);
       appointmentId = data.id;
     }
-
-    await assertWorkspaceMembership("appointments", appointmentId!, workspaceId, supabase);
 
     const { error: deleteError } = await supabase
       .from("appointment_services")
@@ -633,7 +635,7 @@ async function buildOrderLines(
     if (found.length !== serviceIds.length) {
       const foundIds = new Set(found.map((service) => service.id));
       const missingServiceIds = serviceIds.filter((serviceId) => !foundIds.has(serviceId));
-      throw new Error(`訂單明細中的服務不存在於目前工作區，請重新選擇：${missingServiceIds.join("、")}`);
+      throw new Error(buildMissingOrderLineServiceMessage(missingServiceIds));
     }
     lines.push(
       ...found.map((service) => ({
@@ -679,7 +681,7 @@ export async function saveOrder(formData: FormData) {
       await assertWorkspaceMembership("appointments", appointmentId, workspaceId, supabase);
     }
 
-    await assertWorkspaceReferences(supabase, workspaceId, customerId, technicianId, selectedValues(formData, "line_service_ids"));
+    await assertWorkspaceReferences(supabase, workspaceId, customerId, technicianId);
 
     const lineTemplates = await buildOrderLines(supabase, workspaceId, formData);
     const discount = integerValue(formData, "discount");

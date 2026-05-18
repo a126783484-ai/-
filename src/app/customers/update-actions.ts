@@ -70,22 +70,7 @@ export async function updateCustomerAction(formData: FormData) {
   }
 
   try {
-    const { data: customer, error: lookupError } = await supabase
-      .from("customers")
-      .select("id")
-      .eq("workspace_id", workspaceId)
-      .eq("id", customerId)
-      .maybeSingle();
-
-    if (lookupError) {
-      throw lookupError;
-    }
-
-    if (!customer) {
-      fail("customer_update_invalid_input");
-    }
-
-    const { error } = await supabase
+    const { data: customer, error } = await supabase
       .from("customers")
       .update({
         name,
@@ -100,10 +85,16 @@ export async function updateCustomerAction(formData: FormData) {
         next_reminder: nextReminder
       })
       .eq("workspace_id", workspaceId)
-      .eq("id", customerId);
+      .eq("id", customerId)
+      .select("id")
+      .maybeSingle();
 
     if (error) {
       throw error;
+    }
+
+    if (!customer) {
+      fail("customer_update_invalid_input");
     }
   } catch (error) {
     console.error("customer update failed", error);
