@@ -7,6 +7,16 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'src/**'
+      - 'supabase/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+
+concurrency:
+  group: production-supervisor-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   supervise:
