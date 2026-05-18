@@ -314,16 +314,16 @@ export async function saveCustomer(formData: FormData) {
     if (!name) throw new Error("請填寫客戶姓名。");
     if (!phone) throw new Error("請填寫客戶電話。");
 
-    const { data: duplicate, error: duplicateError } = await supabase
+    const { count: duplicateCount, error: duplicateError } = await supabase
       .from("customers")
-      .select("id")
+      .select("id", { count: "exact", head: true })
       .eq("workspace_id", workspaceId)
       .eq("phone", phone)
       .neq("id", id ?? "00000000-0000-0000-0000-000000000000")
       .maybeSingle();
 
     if (duplicateError) throw new Error(`檢查電話是否重複失敗：${duplicateError.message}`);
-    if (duplicate) throw new Error("此電話已存在於同一工作區，請改用編輯既有客戶。");
+    if ((duplicateCount ?? 0) > 0) throw new Error("此電話已存在於同一工作區，請改用編輯既有客戶。");
 
     const payload = {
       workspace_id: workspaceId,
