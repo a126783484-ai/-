@@ -79,21 +79,6 @@ export async function updateServiceAction(formData: FormData) {
   }
 
   try {
-    const { data: service, error: lookupError } = await supabase
-      .from("services")
-      .select("id")
-      .eq("workspace_id", workspaceId)
-      .eq("id", serviceId)
-      .maybeSingle();
-
-    if (lookupError) {
-      throw lookupError;
-    }
-
-    if (!service) {
-      fail("service_update_invalid_input");
-    }
-
     let categoryId: string | null = null;
 
     if (category) {
@@ -144,6 +129,9 @@ export async function updateServiceAction(formData: FormData) {
       .eq("id", serviceId);
 
     if (error) {
+      if (String(error.message).includes("0 rows")) {
+        fail("service_update_invalid_input");
+      }
       throw error;
     }
   } catch (error) {
