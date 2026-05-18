@@ -11,6 +11,7 @@ on:
       - Semgrep
       - Actionlint
       - Supabase Live Health
+      - Dependency Security
       - Production Supervisor
       - AI Repair Dispatcher
     types:

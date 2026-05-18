@@ -12,7 +12,8 @@
     "test": "vitest run src",
     "guard:production": "node scripts/production-guard.mjs",
     "db:types": "echo 'Supabase types can be generated with: supabase gen types typescript --project-id <id> > src/lib/database.types.ts'",
-    "verify:production-env": "node scripts/verify-production-env.mjs"
+    "verify:production-env": "node scripts/verify-production-env.mjs",
+    "audit:security": "npm audit --audit-level=high --omit=dev"
   },
   "dependencies": {
     "@supabase/ssr": "0.7.0",
