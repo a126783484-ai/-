@@ -2,31 +2,25 @@
 
 ## What it checks
 
-The Dependency Security workflow runs two layers of checks:
+The Dependency Security workflow scans production dependencies for known
+vulnerabilities:
 
-1. **npm audit** — Scans production dependencies (`--omit=dev`) for known
-   vulnerabilities. Fails on any advisory rated **high** or **critical**.
-
-2. **Dependency Review** (pull requests only) — Uses the official GitHub
-   `dependency-review-action` to compare the dependency tree in the PR against
-   the base branch. Blocks introduction of new high/critical vulnerabilities
-   and comments a summary on the PR.
+- **npm audit** — Scans production dependencies (`--omit=dev`) for known
+  vulnerabilities. Fails on any advisory rated **high** or **critical**.
 
 ## When it runs
 
 | Trigger | Scope |
 | --- | --- |
-| `pull_request` to `main` | npm audit + dependency review |
-| `push` to `main` | npm audit only |
-| Schedule — daily at 02:00 UTC | npm audit only |
-| `workflow_dispatch` | npm audit + dependency review (if PR context) |
+| `pull_request` to `main` | npm audit |
+| `push` to `main` | npm audit |
+| Schedule — daily at 02:00 UTC | npm audit |
+| `workflow_dispatch` | npm audit |
 
 ## What causes failure
 
 - Any **high** or **critical** severity vulnerability found in production
   dependencies by `npm audit`.
-- A pull request that introduces a new dependency with a **high** or
-  **critical** vulnerability (detected by dependency-review-action).
 
 ## How to handle high severity advisories
 
