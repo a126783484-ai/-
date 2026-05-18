@@ -179,7 +179,7 @@ export async function ensureOwnerWorkspaceForUser(
     if (existingMembership) {
       const { data: workspace, error: workspaceError } = await supabase
         .from("workspaces")
-        .select("*")
+        .select("id, name, phone, address, brand_color, business_hours")
         .eq("id", existingMembership.workspace_id)
         .maybeSingle();
 
@@ -188,7 +188,7 @@ export async function ensureOwnerWorkspaceForUser(
       }
 
       if (workspace) {
-        return workspace as WorkspaceRow;
+        return workspace as WorkspaceSummaryRow as WorkspaceRow;
       }
     }
   }
