@@ -30,8 +30,10 @@ jobs:
 
       - name: Collect changed files
         id: changed
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          git diff --name-only origin/${{ github.base_ref }}...HEAD > changed-files.txt
+          git diff --name-only "origin/${BASE_REF}...HEAD" > changed-files.txt
           cat changed-files.txt
 
       - name: Run production guard
