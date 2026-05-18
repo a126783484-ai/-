@@ -409,6 +409,29 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - This removes unnecessary workspace payload from the shared auth context object.
 - Verified with `npm run typecheck`.
 
+## Appointment conflict payload trim
+
+- `createAppointmentAction` and `updateAppointmentAction` now fetch only the appointment fields needed for conflict checks.
+- This drops unused customer/source/note columns from the appointment hot path.
+- Verified with `npm run typecheck`.
+
+## Appointment conflict type trim
+
+- `hasTechnicianConflict()` now accepts the minimal appointment shape it actually reads.
+- This makes the reduced appointment query type-safe without widening the hot path again.
+- Verified with `npm run typecheck`.
+
+## Appointment conflict row mapping
+
+- The appointment conflict queries now map database rows into a minimal camelCase shape before validation.
+- This lets the hot path stay narrow while keeping the conflict helper ergonomic.
+- Verified with `npm run typecheck`.
+
+## Appointment conflict DB shape split
+
+- The appointment action query result types are now split from the conflict-check shape.
+- This keeps the reduced appointment select lists type-safe without widening the public helper again.
+- Verified with `npm run typecheck`.
 ## Staff invite payload trim
 
 - The staff invite page and accept action now select only the invite columns they render or persist.

@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { can } from "@/lib/permissions";
-import type { Appointment, Role } from "@/lib/types";
+import type { AppointmentStatus, Role } from "@/lib/types";
 import { buildAppointmentEnd, hasTechnicianConflict } from "@/lib/appointments";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
 
@@ -27,15 +27,12 @@ type ServiceLookupRow = {
   duration_min: number;
 };
 
-type AppointmentLookupRow = {
+type AppointmentDbRow = {
   id: string;
-  customer_id: string;
   technician_id: string;
   start_at: string;
   end_at: string;
-  status: Appointment["status"];
-  source: Appointment["source"] | string;
-  note: string | null;
+  status: AppointmentStatus;
 };
 
 function readRequired(formData: FormData, key: string) {
@@ -115,13 +112,13 @@ export async function createAppointmentAction(formData: FormData) {
   let customersResult: QueryResult<CustomerLookupRow | null> | null = null;
   let staffResult: QueryResult<StaffLookupRow | null> | null = null;
   let servicesResult: QueryResult<ServiceLookupRow[]> | null = null;
-  let appointmentsResult: QueryResult<AppointmentLookupRow[]> | null = null;
+  let appointmentsResult: QueryResult<AppointmentDbRow[]> | null = null;
   try {
     [customersResult, staffResult, servicesResult, appointmentsResult] = await Promise.all([
       supabase.from("customers").select("id").eq("workspace_id", workspaceId).eq("id", customerId).maybeSingle(),
       supabase.from("workspace_members").select("id, role, active").eq("workspace_id", workspaceId).eq("id", technicianId).maybeSingle(),
       supabase.from("services").select("id, duration_min").eq("workspace_id", workspaceId).in("id", serviceIds),
-      supabase.from("appointments").select("id, customer_id, technician_id, start_at, end_at, status, source, note").eq("workspace_id", workspaceId)
+      supabase.from("appointments").select("id, technician_id, start_at, end_at, status").eq("workspace_id", workspaceId)
     ]);
   } catch (error) {
     console.error("appointment create failed", error);
@@ -152,17 +149,12 @@ export async function createAppointmentAction(formData: FormData) {
   }
 
   const endAt = buildAppointmentEnd(startAt.toISOString(), serviceIds, selectedServices);
-  const appointments: Appointment[] = (appointmentsResult?.data ?? []).map((appointment) => ({
+  const appointments = (appointmentsResult?.data ?? []).map((appointment) => ({
     id: appointment.id,
-    workspaceId,
-    customerId: appointment.customer_id,
     technicianId: appointment.technician_id,
     startAt: appointment.start_at,
     endAt: appointment.end_at,
-    status: appointment.status,
-    source: appointment.source as Appointment["source"],
-    note: appointment.note ?? undefined,
-    serviceIds
+    status: appointment.status
   }));
 
   if (hasTechnicianConflict({ technicianId, startAt: startAt.toISOString(), endAt }, appointments)) {
