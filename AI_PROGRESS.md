@@ -391,6 +391,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `listWorkspaces()` and `getCurrentWorkspaceContext()` no longer rely on full-row workspace reads.
 - Verified with `npm run typecheck`.
 
+## Workspace bootstrap payload trim
+
+- `ensureOwnerWorkspaceForUser()` now reuses the same reduced workspace summary shape in its existing-membership fallback.
+- This removes the last remaining full-row workspace fetch in the auth bootstrap chain.
+- Verified with `npm run typecheck`.
+
 ## App data column trim
 
 - `loadAppData()` now selects only the fields used by its mappers across members, categories, services, customers, appointments, orders, inventory, movements, and shifts.
