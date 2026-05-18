@@ -1,0 +1,142 @@
+name: Production Guard
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'supabase/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/production-guard.yml'
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: production-guard-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: Production safety guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      report-available: ${{ steps.check.outputs.available }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run production guard
+        run: npm run guard:production
+        continue-on-error: true
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-guard-report
+          path: production-guard-report.json
+          retention-days: 1
+
+      - name: Check report exists
+        id: check
+        if: always()
+        run: |
+          if [ -f production-guard-report.json ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  pr-comment:
+    name: Post PR review comment
+    needs: guard
+    if: github.event_name == 'pull_request' && needs.guard.outputs.report-available == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Download report artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: production-guard-report
+
+      - name: Build PR review comment
+        run: |
+          node -e "
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('production-guard-report.json', 'utf8'));
+          const findings = report.findings || [];
+          const errors = findings.filter(f => f.level === 'error');
+          const warns = findings.filter(f => f.level === 'warn');
+          const infos = findings.filter(f => f.level === 'info');
+
+          const lines = [];
+          lines.push('## Beauty OS Automated Production Review');
+          lines.push('');
+          lines.push('This report is generated automatically to reduce engineering cost, token waste, and repeated repo analysis.');
+          lines.push('');
+          lines.push(\`- Errors: \${errors.length}\`);
+          lines.push(\`- Warnings: \${warns.length}\`);
+          lines.push(\`- Info: \${infos.length}\`);
+          lines.push('');
+
+          const grouped = [
+            ['Errors', errors],
+            ['Warnings', warns],
+            ['Info', infos]
+          ];
+
+          for (const [title, items] of grouped) {
+            if (!items.length) continue;
+            lines.push(\`### \${title}\`);
+            lines.push('');
+            for (const item of items) {
+              lines.push(\`- **\${item.code}** — \${item.message}\`);
+              if (item.files?.length) {
+                lines.push(\`  - Files: \${item.files.join(', ')}\`);
+              }
+              if (item.suggestion) {
+                lines.push(\`  - Suggestion: \${item.suggestion}\`);
+              }
+            }
+            lines.push('');
+          }
+
+          const aiItems = findings.filter(f => f.aiPrompt);
+          if (aiItems.length) {
+            lines.push('### AI Handoff Prompts');
+            lines.push('');
+            for (const item of aiItems) {
+              lines.push(\`#### \${item.code}\`);
+              lines.push('\`\`\`text');
+              lines.push(item.aiPrompt);
+              lines.push('\`\`\`');
+              lines.push('');
+            }
+          }
+
+          fs.writeFileSync('production-review-comment.md', lines.join('\n'));
+          "
+
+      - name: Post PR comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: production-review
+          path: production-review-comment.md
