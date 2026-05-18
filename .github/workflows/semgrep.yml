@@ -4,6 +4,16 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - 'src/**'
+      - 'api/**'
+      - 'scripts/**'
+      - '**/*.js'
+      - '**/*.ts'
+      - '**/*.tsx'
+      - '**/*.jsx'
+      - '**/*.mjs'
+      - '.github/workflows/semgrep.yml'
   workflow_dispatch:
 
 concurrency:
