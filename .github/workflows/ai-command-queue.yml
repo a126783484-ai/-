@@ -1,0 +1,130 @@
+name: AI Command Queue
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - Smoke Tests
+      - Production Guard
+      - Production Reviewer
+      - PR Risk Review
+      - Semgrep
+      - Actionlint
+      - Production Supervisor
+      - AI Repair Dispatcher
+    types:
+      - completed
+  issues:
+    types:
+      - opened
+      - edited
+      - labeled
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - labeled
+      - closed
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ai-command-queue-${{ github.event_name }}
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  update-command-queue:
+    name: Update AI command queue issue
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build command queue report
+        run: node scripts/ai-command-queue.mjs > ai-command-queue-report.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Ensure command queue labels exist
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = [
+              { name: 'ai-command-queue', color: '6f42c1', description: 'AI command queue issue for engineering coordination' },
+              { name: 'automated', color: 'd4c5f9', description: 'Created or maintained by automation' },
+              { name: 'ai-ready', color: '1f883d', description: 'Ready for AI command generation' },
+              { name: 'commander:repair-needed', color: 'b60205', description: 'AI dispatcher should repair the current failure' },
+              { name: 'commander:manual-review-required', color: 'fbca04', description: 'Human final review is required before merge or deploy' },
+              { name: 'commander:auto-deploy-candidate', color: '0e8a16', description: 'Low-risk candidate that still needs normal review gates' },
+              { name: 'risk:p0', color: 'd73a4a', description: 'Production blocker or highest-priority risk' },
+              { name: 'risk:p1', color: 'fbca04', description: 'Production hardening risk' }
+            ];
+
+            for (const label of labels) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name
+                });
+              } catch (error) {
+                if (error.status !== 404) {
+                  throw error;
+                }
+
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                  color: label.color,
+                  description: label.description
+                });
+              }
+            }
+
+      - name: Upsert command queue issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs');
+            const report = JSON.parse(fs.readFileSync('ai-command-queue-report.json', 'utf8'));
+            const title = '[AI Command Queue] Beauty OS Next Engineering Commands';
+            const labels = report.issueLabels;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const existing = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              labels: 'ai-command-queue',
+              per_page: 100
+            });
+
+            const issue = existing.data.find((item) => item.title === title);
+
+            if (issue) {
+              await github.rest.issues.update({
+                owner,
+                repo,
+                issue_number: issue.number,
+                body: report.issueBody,
+                labels
+              });
+            } else {
+              await github.rest.issues.create({
+                owner,
+                repo,
+                title,
+                body: report.issueBody,
+                labels
+              });
+            }
