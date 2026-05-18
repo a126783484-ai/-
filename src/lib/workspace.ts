@@ -4,6 +4,10 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 type AppSupabaseClient = SupabaseClient<Database, "public">;
 type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
+type WorkspaceSummaryRow = Pick<
+  WorkspaceRow,
+  "id" | "name" | "phone" | "address" | "brand_color" | "business_hours"
+>;
 type WorkspaceInsert = Database["public"]["Tables"]["workspaces"]["Insert"];
 type WorkspaceMemberRow = Database["public"]["Tables"]["workspace_members"]["Row"];
 type WorkspaceMemberInsert = Database["public"]["Tables"]["workspace_members"]["Insert"];
@@ -106,7 +110,7 @@ async function bootstrapOwnerWorkspaceWithAuthenticatedInserts(params: {
       const supabase = await getClient(params.client);
       const { data, error } = await supabase
         .from("workspaces")
-        .select("*")
+        .select("id, name, phone, address, brand_color, business_hours")
         .eq("id", existingMembership.workspace_id)
         .maybeSingle();
 
@@ -204,7 +208,7 @@ export async function listWorkspaces() {
 
   const { data, error } = await supabase
     .from("workspaces")
-    .select("*")
+    .select("id, name, phone, address, brand_color, business_hours")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -242,7 +246,7 @@ export async function getCurrentWorkspaceContext(client?: AppSupabaseClient): Pr
 
   const { data: workspace, error: workspaceError } = await supabase
     .from("workspaces")
-    .select("*")
+    .select("id, name, phone, address, brand_color, business_hours")
     .eq("id", membership.workspace_id)
     .maybeSingle();
 

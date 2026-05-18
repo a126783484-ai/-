@@ -385,6 +385,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - This reduces the primary dashboard workspace fetch without changing the rendered data.
 - Verified with `npm run typecheck`.
 
+## Workspace query trim
+
+- The remaining workspace lookups in `workspace.ts` now select only the fields used by the UI and ownership bootstrap.
+- `listWorkspaces()` and `getCurrentWorkspaceContext()` no longer rely on full-row workspace reads.
+- Verified with `npm run typecheck`.
+
 ## App data column trim
 
 - `loadAppData()` now selects only the fields used by its mappers across members, categories, services, customers, appointments, orders, inventory, movements, and shifts.
