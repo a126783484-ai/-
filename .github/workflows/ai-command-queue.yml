@@ -1,36 +1,12 @@
 name: AI Command Queue
 
 on:
-  workflow_run:
-    workflows:
-      - CI
-      - Smoke Tests
-      - Production Guard
-      - Production Reviewer
-      - PR Risk Review
-      - Semgrep
-      - Actionlint
-      - Production Supervisor
-      - AI Repair Dispatcher
-    types:
-      - completed
-  issues:
-    types:
-      - opened
-      - edited
-      - labeled
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - labeled
-      - closed
   schedule:
     - cron: '0 * * * *'
   workflow_dispatch:
 
 concurrency:
-  group: ai-command-queue-${{ github.event_name }}
+  group: ai-command-queue
   cancel-in-progress: false
 
 permissions:

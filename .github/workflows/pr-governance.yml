@@ -1,0 +1,203 @@
+name: PR Governance
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'supabase/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+concurrency:
+  group: pr-governance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  classify:
+    name: Classify risk and post comment
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Collect changed files
+        id: changed
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git diff --name-only "origin/${BASE_REF}...HEAD" > changed-files.txt
+          cat changed-files.txt
+
+      - name: Run production guard
+        run: npm run guard:production
+        continue-on-error: true
+
+      - name: Run PR risk classifier
+        run: |
+          export CHANGED_FILES="$(cat changed-files.txt)"
+          node scripts/pr-risk-classifier.mjs
+
+      - name: Apply labels and post consolidated comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = context.payload.pull_request.number;
+
+            const riskReport = JSON.parse(fs.readFileSync('pr-risk-report.json', 'utf8'));
+            const guardReport = (() => {
+              try { return JSON.parse(fs.readFileSync('production-guard-report.json', 'utf8')); }
+              catch { return null; }
+            })();
+
+            const guardCounts = guardReport?.counts || { error: 0, warn: 0, info: 0 };
+            const guardFindings = guardReport?.findings || [];
+
+            const labels = riskReport.labels || [];
+
+            if (guardCounts.error > 0 && !labels.includes('guard:blocking')) labels.push('guard:blocking');
+            else if (guardCounts.warn > 0 && !labels.includes('guard:warning')) labels.push('guard:warning');
+            else if (!labels.includes('guard:clean')) labels.push('guard:clean');
+
+            const { data: pull } = await github.rest.pulls.get({ owner, repo, pull_number: issue_number });
+            const { data: files } = await github.rest.pulls.listFiles({ owner, repo, pull_number: issue_number, per_page: 100 });
+            const changedFiles = files.map((file) => file.filename);
+
+            const highRiskLabels = [
+              'risk:security', 'risk:migration', 'risk:infra',
+              'risk:tenant-isolation', 'risk:auth', 'risk:staff-member',
+              'guard:blocking', 'guard:warning'
+            ];
+            const highRiskFilePatterns = [
+              /^supabase\/migrations\//,
+              /^\.github\/workflows\/sync-vercel-env\.yml$/,
+              /supabase/i, /auth/i, /workspace/i, /staff/i,
+              /invite/i, /member/i, /rls/i, /secret/i, /env/i
+            ];
+
+            const hasHighRiskLabel = labels.some((l) => highRiskLabels.includes(l));
+            const hasHighRiskFile = changedFiles.some((f) => highRiskFilePatterns.some((p) => p.test(f)));
+
+            const lines = [];
+            lines.push('## Automated PR Review');
+            lines.push('');
+            lines.push('This PR was automatically classified to reduce repeated AI analysis and improve engineering coordination.');
+            lines.push('');
+
+            lines.push('### Risk Classification');
+            lines.push('');
+            lines.push(`Labels: ${labels.join(', ') || 'none'}`);
+            lines.push('');
+
+            for (const [label, items] of Object.entries(riskReport.categories || {})) {
+              lines.push(`#### ${label}`);
+              lines.push('');
+              for (const item of items) {
+                lines.push(`- ${item.file}`);
+                lines.push(`  - ${item.reason}`);
+              }
+              lines.push('');
+            }
+
+            lines.push('### Production Guard Summary');
+            lines.push('');
+            lines.push(`- Errors: ${guardCounts.error}`);
+            lines.push(`- Warnings: ${guardCounts.warn}`);
+            lines.push(`- Info: ${guardCounts.info}`);
+            lines.push('');
+
+            if (guardFindings.length > 0) {
+              const actionable = guardFindings.filter((f) => f.level === 'error' || f.level === 'warn');
+              if (actionable.length > 0) {
+                lines.push('### Actionable Guard Findings');
+                lines.push('');
+                for (const item of actionable) {
+                  lines.push(`- **${item.code}** — ${item.message}`);
+                  if (item.files?.length) lines.push(`  - Files: ${item.files.join(', ')}`);
+                  if (item.suggestion) lines.push(`  - Suggestion: ${item.suggestion}`);
+                }
+                lines.push('');
+              }
+            }
+
+            lines.push('### Next Step Command');
+            lines.push('');
+
+            if (guardCounts.error > 0) {
+              lines.push('Do not deploy. Production guard found blocking errors. Fix errors before merge.');
+              if (!labels.includes('commander:repair-needed')) labels.push('commander:repair-needed');
+            } else if (pull.draft || pull.mergeable !== true) {
+              lines.push('Do not deploy. PR is draft or not mergeable.');
+              if (!labels.includes('commander:blocked')) labels.push('commander:blocked');
+            } else if (hasHighRiskLabel || hasHighRiskFile) {
+              lines.push('All checks are green, but this PR touches high-risk production surfaces. Require manual final review before deployment.');
+              lines.push('');
+              lines.push('Reason: migration/security/auth/workspace/staff/env/infra changes can affect tenant isolation, secrets, or production operations.');
+              if (!labels.includes('commander:manual-review-required')) labels.push('commander:manual-review-required');
+            } else {
+              lines.push('Low-risk PR is green and mergeable. Auto-merge may proceed. Vercel will deploy from main after merge.');
+              if (!labels.includes('commander:auto-deploy-candidate')) labels.push('commander:auto-deploy-candidate');
+            }
+
+            lines.push('');
+
+            const aiItems = guardFindings.filter((f) => f.aiPrompt);
+            if (aiItems.length) {
+              lines.push('### AI Handoff Prompts');
+              lines.push('');
+              for (const item of aiItems) {
+                lines.push(`#### ${item.code}`);
+                lines.push('```text');
+                lines.push(item.aiPrompt);
+                lines.push('```');
+                lines.push('');
+              }
+            }
+
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({ owner, repo, issue_number, labels });
+            }
+
+            await github.rest.issues.createComment({
+              owner, repo, issue_number,
+              body: lines.join('\n')
+            });
+
+            if (labels.includes('commander:auto-deploy-candidate')) {
+              try {
+                await github.graphql(`
+                  mutation($pullRequestId: ID!) {
+                    enablePullRequestAutoMerge(input: { pullRequestId: $pullRequestId, mergeMethod: SQUASH }) {
+                      pullRequest { number }
+                    }
+                  }
+                `, { pullRequestId: pull.node_id });
+              } catch (error) {
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number,
+                  body: `Auto-merge could not be enabled automatically. Reason: ${error.message}`
+                });
+              }
+            }
