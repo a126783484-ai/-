@@ -218,6 +218,17 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - Verification completed:
   - `npm run typecheck` passed
   - `npm run lint` passed
+
+## Session cleanup
+
+- Added session cleanup when workspace bootstrap fails, so a partial auth success no longer leaves the user logged in without a stable workspace state.
+- Applied the cleanup in both the login bootstrap helper and the auth callback route.
+- Added focused regression tests for:
+  - `bootstrapLoggedInWorkspaceAction()` clearing the session on bootstrap failure
+  - `auth/callback` clearing the session on bootstrap failure
+- Verification completed:
+  - `npm test -- src/app/login/actions.test.ts src/app/auth/callback/route.test.ts` passed
+  - `npm run typecheck` passed
   - `npm test` passed
   - `npm run build` passed with production Supabase env
 

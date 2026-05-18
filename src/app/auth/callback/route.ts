@@ -9,10 +9,11 @@ export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const next = normalizeAuthRedirectTarget(requestUrl.searchParams.get("next"));
+  let supabase: Awaited<ReturnType<typeof createSupabaseServerClient>> | null = null;
 
   if (code) {
     try {
-      const supabase = await createSupabaseServerClient();
+      supabase = await createSupabaseServerClient();
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
       if (error || !data.user || !data.session) {
@@ -31,6 +32,7 @@ export async function GET(request: NextRequest) {
 
       await ensureOwnerWorkspaceForUser(data.user, supabase);
     } catch {
+      await supabase?.auth.signOut().catch(() => undefined);
       return NextResponse.redirect(new URL("/login?error=auth_bootstrap_failed", request.url));
     }
   }

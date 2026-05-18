@@ -25,7 +25,8 @@ vi.mock("@/lib/supabase-server", () => ({
 function createSupabaseStub(user: { id: string; email: string | null }) {
   return {
     auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user }, error: null })
+      getUser: vi.fn().mockResolvedValue({ data: { user }, error: null }),
+      signOut: vi.fn().mockResolvedValue({ error: null })
     }
   } as never;
 }
@@ -71,6 +72,20 @@ describe("bootstrapLoggedInWorkspaceAction", () => {
       supabase,
       true
     );
+  });
+
+  it("clears the session when workspace bootstrap fails", async () => {
+    const supabase = createSupabaseStub({ id: "user-2", email: "owner@example.com" });
+    mocks.createSupabaseServerClientMock.mockResolvedValue(supabase);
+    mocks.hasActiveWorkspaceMembershipMock.mockResolvedValue(false);
+    mocks.hasPendingStaffInviteForEmailMock.mockResolvedValue(false);
+    mocks.ensureOwnerWorkspaceForUserMock.mockRejectedValue(new Error("boom"));
+
+    await expect(bootstrapLoggedInWorkspaceAction(supabase, { id: "user-2", email: "owner@example.com" } as never)).resolves.toEqual({
+      ok: false,
+      error: "auth_bootstrap_failed"
+    });
+    expect((supabase as { auth: { signOut: ReturnType<typeof vi.fn> } }).auth.signOut).toHaveBeenCalledTimes(1);
   });
 
   it("short-circuits when the user already has an active membership", async () => {
