@@ -10,6 +10,7 @@ on:
       - PR Risk Review
       - Semgrep
       - Actionlint
+      - Supabase Live Health
       - Production Supervisor
       - AI Repair Dispatcher
     types:
