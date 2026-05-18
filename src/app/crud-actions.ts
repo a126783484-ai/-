@@ -198,16 +198,16 @@ async function assertWorkspaceRecord(
   workspaceId: string,
   supabase: AppSupabaseClient,
 ) {
-  const { data, error } = await supabase
+  const { count, error } = await supabase
     .from(table)
-    .select("id")
+    .select("id", { count: "exact", head: true })
     .eq("id", id)
     .eq("workspace_id", workspaceId)
     .maybeSingle();
   if (error) {
     throw new Error(`資料權限檢查失敗：${error.message}`);
   }
-  if (!data) {
+  if ((count ?? 0) <= 0) {
     throw new Error("找不到此工作區內的資料，已取消操作。");
   }
 }

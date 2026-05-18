@@ -474,6 +474,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `updateServiceAction()` now uses the update response itself to confirm the target row exists.
 - `hasPendingStaffInviteForEmail()` now uses a head/count existence check instead of fetching an invite row.
 - Verified with `npm run typecheck`.
+
+## Workspace record existence trim
+
+- `assertWorkspaceRecord()` now uses a head/count existence check for workspace-scoped rows.
+- This reduces a shared payload across multiple CRUD validation paths in one pass.
+- Verified with `npm run typecheck`.
 ## Staff invite payload trim
 
 - The staff invite page and accept action now select only the invite columns they render or persist.
