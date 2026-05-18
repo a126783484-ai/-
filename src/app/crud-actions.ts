@@ -549,12 +549,15 @@ export async function saveAppointment(formData: FormData) {
 
     let appointmentId = id;
     if (appointmentId) {
-      const { error } = await supabase
+      const { data: updatedAppointment, error } = await supabase
         .from("appointments")
         .update(payload)
         .eq("id", appointmentId)
-        .eq("workspace_id", workspaceId);
+        .eq("workspace_id", workspaceId)
+        .select("id")
+        .maybeSingle();
       if (error) throw new Error(`更新預約失敗：${error.message}`);
+      if (!updatedAppointment) throw new Error("找不到此工作區內的資料，已取消操作。");
     } else {
       const { data, error } = await supabase
         .from("appointments")
@@ -564,8 +567,6 @@ export async function saveAppointment(formData: FormData) {
       if (error) throw new Error(`建立預約失敗：${error.message}`);
       appointmentId = data.id;
     }
-
-    await assertWorkspaceMembership("appointments", appointmentId!, workspaceId, supabase);
 
     const { error: deleteError } = await supabase
       .from("appointment_services")
