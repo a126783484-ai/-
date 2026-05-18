@@ -21,6 +21,7 @@ if (!owner || !repoName) {
 }
 
 const apiBase = `https://api.github.com/repos/${owner}/${repoName}`;
+const graphqlBase = 'https://api.github.com/graphql';
 const headers = {
   Accept: 'application/vnd.github+json',
   Authorization: `Bearer ${token}`,
@@ -51,6 +52,29 @@ async function api(path, options = {}) {
   }
 
   return response.json();
+}
+
+async function graphql(query, variables = {}) {
+  const response = await fetch(graphqlBase, {
+    method: 'POST',
+    headers: {
+      ...headers,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ query, variables })
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`GitHub GraphQL ${response.status} ${response.statusText}: ${text}`);
+  }
+
+  const payload = await response.json();
+  if (payload.errors?.length) {
+    throw new Error(`GitHub GraphQL error: ${JSON.stringify(payload.errors)}`);
+  }
+
+  return payload.data;
 }
 
 async function paginate(path, transform = (items) => items) {
@@ -95,11 +119,11 @@ function table(headers, rows) {
 }
 
 function priorityRank(priority) {
-  return { P0: 0, P1: 1, P2: 2 }[priority] ?? 3;
+  return { P0: 0, P1: 1, P2: 2, NONE: 3 }[priority] ?? 3;
 }
 
-function buildPrompt(target, item) {
-  const sharedRules = [
+function baseRules() {
+  return [
     'Do not touch secrets.',
     'Do not deploy production manually.',
     'Do not merge high-risk PRs automatically.',
@@ -109,15 +133,17 @@ function buildPrompt(target, item) {
     'Open a PR when the work is done.',
     'Report changed files, tests run, risks, and rollback plan.'
   ];
+}
 
-  const targetRules = {
+function targetRules(target) {
+  const rules = {
     Codex: [
       'Prefer precise code edits over broad refactors.',
       'Keep the patch scoped to the current command queue item.'
     ],
     OpenCode: [
       'Use the smallest safe patch in the repo.',
-      'Keep the implementation and verification tightly scoped.'
+      'Keep implementation and verification tightly scoped.'
     ],
     Claude: [
       'Explain the root cause first, then the smallest safe fix.',
@@ -125,25 +151,455 @@ function buildPrompt(target, item) {
     ]
   };
 
-  return [
+  return rules[target] || [];
+}
+
+function promptEnvelope(target, command) {
+  const lines = [
     `You are ${target} working on Beauty OS governance.`,
     '',
-    `Priority: ${item.priority}`,
-    `Action: ${item.title}`,
-    `Context: ${item.detail}`,
-    '',
-    'Rules:',
-    ...sharedRules.map((line) => `- ${line}`),
-    ...(targetRules[target] || []).map((line) => `- ${line}`),
-    '',
-    'Expected response:',
-    '1. root cause or objective',
-    '2. smallest safe change',
-    '3. files changed',
-    '4. checks run',
-    '5. remaining risk',
-    '6. rollback plan'
-  ].join('\n');
+    `Priority: ${command.priority}`,
+    `Command: ${command.title}`,
+    `Type: ${command.kind}`,
+    `Summary: ${command.summary}`,
+    ''
+  ];
+
+  if (command.kind === 'failed-workflow') {
+    lines.push(
+      `Workflow: ${command.workflowName}`,
+      `Run URL: ${command.runUrl}`,
+      `Branch: ${command.branch}`,
+      `PR: ${command.prNumber}`,
+      `Repair prompt: ${command.repairPrompt}`,
+      ''
+    );
+  } else if (command.kind === 'production-hardening') {
+    lines.push(
+      `Issue: #${command.issueNumber} ${command.issueTitle}`,
+      `Finding: ${command.findingCode}`,
+      `Risk reason: ${command.riskReason}`,
+      `Files: ${command.files.join(', ') || 'unknown'}`,
+      `Smallest safe patch: ${command.smallestSafePatch}`,
+      ''
+    );
+  } else if (command.kind === 'pr-review') {
+    lines.push(
+      `PR: #${command.prNumber} ${command.prTitle}`,
+      `PR URL: ${command.prUrl}`,
+      `Risk level: ${command.riskLevel}`,
+      `Checks: ${command.checkState}`,
+      `Review directive: ${command.reviewDirective}`,
+      ''
+    );
+  } else {
+    lines.push(command.detail || '', '');
+  }
+
+  lines.push('Rules:');
+  for (const rule of baseRules()) lines.push(`- ${rule}`);
+  for (const rule of targetRules(target)) lines.push(`- ${rule}`);
+  lines.push('');
+  lines.push('Expected response:');
+  lines.push('1. root cause or objective');
+  lines.push('2. smallest safe change');
+  lines.push('3. files changed');
+  lines.push('4. checks run');
+  lines.push('5. remaining risk');
+  lines.push('6. rollback plan');
+  return lines.join('\n');
+}
+
+function promptBlock(target, command) {
+  return ['```text', promptEnvelope(target, command), '```'].join('\n');
+}
+
+function isHighRiskLabel(label) {
+  return new Set([
+    'risk:p0',
+    'risk:p1',
+    'risk:infra',
+    'guard:blocking',
+    'commander:manual-review-required'
+  ]).has(label);
+}
+
+function normalizeLabels(labels = []) {
+  return labels.map((label) => label.name || label).filter(Boolean);
+}
+
+function parseSupervisorFindings(issue) {
+  const body = issue.body || '';
+  const lines = body.split('\n');
+  const findings = [];
+  let current = null;
+
+  const flush = () => {
+    if (current) {
+      findings.push(current);
+    }
+    current = null;
+  };
+
+  for (const line of lines) {
+    const heading = line.match(/^####\s+(ERROR|WARN|INFO)\s+—\s+([A-Z0-9_]+)\s*$/);
+    if (heading) {
+      flush();
+      const severity = heading[1];
+      const code = heading[2];
+      current = {
+        severity,
+        priority: severity === 'ERROR' ? 'P0' : severity === 'WARN' ? 'P1' : 'P2',
+        code,
+        title: '',
+        description: '',
+        files: [],
+        suggestion: '',
+        handoffPrompt: ''
+      };
+      continue;
+    }
+
+    if (!current) continue;
+
+    if (!current.title && line.trim() && !line.startsWith('Files:') && !line.startsWith('Suggested action:') && !line.startsWith('AI handoff prompt:')) {
+      current.title = line.trim();
+      continue;
+    }
+
+    const filesMatch = line.match(/^Files:\s*(.+)$/);
+    if (filesMatch) {
+      current.files = filesMatch[1].split(',').map((item) => item.trim()).filter(Boolean);
+      continue;
+    }
+
+    const actionMatch = line.match(/^Suggested action:\s*(.+)$/);
+    if (actionMatch) {
+      current.suggestion = actionMatch[1].trim();
+      continue;
+    }
+
+    if (line.startsWith('AI handoff prompt:')) {
+      current.capturePrompt = true;
+      current.promptLines = [];
+      continue;
+    }
+
+    if (current.capturePrompt) {
+      if (line.startsWith('```')) {
+        if (current.promptLines?.length > 0) {
+          current.handoffPrompt = current.promptLines.join('\n').trim();
+          current.capturePrompt = false;
+          delete current.promptLines;
+        }
+        continue;
+      }
+      current.promptLines.push(line);
+      continue;
+    }
+
+    if (!current.description && line.trim()) {
+      current.description = line.trim();
+    }
+  }
+
+  flush();
+
+  return findings
+    .filter((finding) => finding.priority === 'P0' || finding.priority === 'P1')
+    .map((finding) => ({
+      ...finding,
+      riskReason: finding.description || finding.suggestion || finding.title || finding.code,
+      smallestSafePatch: finding.handoffPrompt || finding.suggestion || `Apply the smallest safe fix for ${finding.code}.`
+    }));
+}
+
+function buildFailedWorkflowCommand(run) {
+  const prNumber = run.prNumber ? `#${run.prNumber}` : 'none';
+  const repairPrompt = [
+    `Repair the failed ${run.name} workflow.`,
+    `Run URL: ${run.html_url}.`,
+    `Branch: ${run.head_branch}.`,
+    `PR: ${prNumber}.`,
+    'Inspect the workflow logs, identify the first failing step, and fix only the smallest affected files.',
+    'Do not touch unrelated files, secrets, deployment surfaces, or production config.',
+    'After the fix, run the relevant checks for the changed surface and open a PR.'
+  ].join(' ');
+
+  return {
+    kind: 'failed-workflow',
+    priority: 'P0',
+    title: `Repair failed workflow: ${run.name}`,
+    summary: `${run.name} failed on ${run.head_branch} (${run.head_sha.slice(0, 7)}).`,
+    detail: `${run.name} failed on ${run.head_branch} (${run.head_sha.slice(0, 7)}).`,
+    workflowName: run.name,
+    runUrl: run.html_url,
+    branch: run.head_branch,
+    prNumber,
+    repairPrompt,
+    url: run.html_url,
+    target: 'Codex'
+  };
+}
+
+function buildSupervisorCommand(issue, finding) {
+  const files = finding.files.length > 0 ? finding.files : ['unknown'];
+  const smallestSafePatch = finding.handoffPrompt || finding.suggestion || `Apply the smallest safe patch for ${finding.code}.`;
+  const riskReason = finding.description || finding.suggestion || finding.title || finding.code;
+
+  return {
+    kind: 'production-hardening',
+    priority: finding.priority,
+    title: `${finding.priority} hardening: ${finding.code}`,
+    summary: `${finding.priority} finding ${finding.code} in ${files.join(', ')}.`,
+    detail: `${finding.priority} finding ${finding.code} in ${files.join(', ')}.`,
+    issueNumber: issue.number,
+    issueTitle: issue.title,
+    findingCode: finding.code,
+    riskReason,
+    files,
+    smallestSafePatch,
+    url: issue.html_url,
+    target: 'OpenCode'
+  };
+}
+
+function buildPrCommand(pr) {
+  const riskLabels = pr.labels.filter((label) => ['risk:p0', 'risk:p1', 'risk:infra', 'guard:blocking', 'commander:manual-review-required'].includes(label));
+  const riskLevel = riskLabels.some((label) => ['risk:p0', 'risk:p1'].includes(label)) ? 'high-risk' : 'low-risk';
+  const reviewDirective = riskLevel === 'high-risk'
+    ? `Human final review required for PR #${pr.number}. Do not auto-merge.`
+    : `Mark PR #${pr.number} as auto-deploy candidate only. Do not deploy production manually.`;
+
+  return {
+    kind: 'pr-review',
+    priority: 'P2',
+    title: `${riskLevel === 'high-risk' ? 'Review' : 'Mark'} PR #${pr.number}: ${pr.title}`,
+    summary: `${riskLevel === 'high-risk' ? 'High-risk' : 'Low-risk'} PR ${pr.mergeStateStatus}/${pr.checkState} (${pr.number}).`,
+    detail: `${riskLevel === 'high-risk' ? 'High-risk' : 'Low-risk'} PR ${pr.mergeStateStatus}/${pr.checkState} (${pr.number}).`,
+    prNumber: pr.number,
+    prTitle: pr.title,
+    prUrl: pr.url,
+    riskLevel,
+    checkState: pr.checkState,
+    reviewDirective,
+    labels: riskLabels,
+    url: pr.url,
+    target: riskLevel === 'high-risk' ? 'Claude' : 'OpenCode'
+  };
+}
+
+function buildNoopCommand() {
+  return {
+    kind: 'noop',
+    priority: 'NONE',
+    title: 'No actionable engineering command right now.',
+    summary: 'No failed workflows, no active production risks, and no open PRs require immediate AI intervention.',
+    detail: 'No failed workflows, no active production risks, and no open PRs require immediate AI intervention.',
+    target: 'Codex',
+    url: ''
+  };
+}
+
+function commandKey(command) {
+  return [
+    command.kind,
+    command.priority,
+    command.title,
+    command.workflowName || '',
+    command.issueNumber || '',
+    command.prNumber || '',
+    command.url || ''
+  ].join('|');
+}
+
+function buildCommands({ failedWorkflowRuns, supervisorFindings, openPRs }) {
+  const commands = [];
+
+  for (const run of failedWorkflowRuns.slice().sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())) {
+    commands.push(buildFailedWorkflowCommand(run));
+    break;
+  }
+
+  if (commands.length === 0) {
+    const firstFinding = supervisorFindings
+      .slice()
+      .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority))
+      .find((finding) => finding.priority === 'P0' || finding.priority === 'P1');
+
+    if (firstFinding) {
+      const issue = firstFinding.issue;
+      commands.push(buildSupervisorCommand(issue, firstFinding));
+    }
+  }
+
+  if (commands.length === 0) {
+    const orderedPRs = openPRs
+      .slice()
+      .filter((pr) => !pr.isDraft)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    const greenPRs = orderedPRs.filter((pr) => pr.isGreen);
+    const highRiskPR = greenPRs.find((pr) => pr.labels.some(isHighRiskLabel));
+    if (highRiskPR) {
+      commands.push(buildPrCommand(highRiskPR));
+    } else if (greenPRs.length > 0) {
+      commands.push(buildPrCommand(greenPRs[0]));
+    }
+  }
+
+  if (commands.length === 0) {
+    commands.push(buildNoopCommand());
+  }
+
+  return commands;
+}
+
+function commandForTarget(command, target) {
+  if (command.kind === 'failed-workflow') {
+    const detail = [
+      `Workflow: ${command.workflowName}`,
+      `Run URL: ${command.runUrl}`,
+      `Branch: ${command.branch}`,
+      `PR: ${command.prNumber}`,
+      `Repair prompt: ${command.repairPrompt}`
+    ].join('\n');
+
+    return {
+      ...command,
+      target,
+      detail
+    };
+  }
+
+  if (command.kind === 'production-hardening') {
+    const detail = [
+      `Issue: #${command.issueNumber} ${command.issueTitle}`,
+      `Finding: ${command.findingCode}`,
+      `Risk reason: ${command.riskReason}`,
+      `Files: ${command.files.join(', ')}`,
+      `Smallest safe patch: ${command.smallestSafePatch}`
+    ].join('\n');
+
+    return {
+      ...command,
+      target,
+      detail
+    };
+  }
+
+  if (command.kind === 'pr-review') {
+    const detail = [
+      `PR: #${command.prNumber} ${command.prTitle}`,
+      `PR URL: ${command.prUrl}`,
+      `Risk level: ${command.riskLevel}`,
+      `Checks: ${command.checkState}`,
+      `Review directive: ${command.reviewDirective}`
+    ].join('\n');
+
+    return {
+      ...command,
+      target,
+      detail
+    };
+  }
+
+  return {
+    ...command,
+    target,
+    detail: command.detail || command.summary
+  };
+}
+
+function determineIssueLabels({ commands, supervisorFindings, openPRs }) {
+  const labels = new Set(['ai-command-queue', 'automated', 'ai-ready']);
+  const top = commands[0] || buildNoopCommand();
+
+  if (top.kind === 'failed-workflow' || top.kind === 'production-hardening') {
+    labels.add('commander:repair-needed');
+  }
+
+  if (top.kind === 'production-hardening') {
+    if (top.priority === 'P0') labels.add('risk:p0');
+    if (top.priority === 'P1') labels.add('risk:p1');
+  }
+
+  if (top.kind === 'pr-review') {
+    if (top.riskLevel === 'high-risk') {
+      labels.add('commander:manual-review-required');
+      for (const label of top.labels || []) {
+        if (label === 'risk:p0' || label === 'risk:p1') {
+          labels.add(label);
+        }
+      }
+    } else {
+      labels.add('commander:auto-deploy-candidate');
+    }
+  }
+
+  for (const finding of supervisorFindings) {
+    if (finding.priority === 'P0') labels.add('risk:p0');
+    if (finding.priority === 'P1') labels.add('risk:p1');
+  }
+
+  const highRiskPrExists = openPRs.some((pr) => !pr.isDraft && pr.isGreen && pr.labels.some(isHighRiskLabel));
+  const lowRiskGreenPrExists = openPRs.some((pr) => !pr.isDraft && pr.isGreen && !pr.labels.some(isHighRiskLabel));
+
+  if (!labels.has('commander:repair-needed') && !labels.has('commander:manual-review-required') && !labels.has('commander:auto-deploy-candidate')) {
+    if (highRiskPrExists) {
+      labels.add('commander:manual-review-required');
+    } else if (lowRiskGreenPrExists) {
+      labels.add('commander:auto-deploy-candidate');
+    }
+  }
+
+  return Array.from(labels);
+}
+
+async function fetchOpenPullRequests() {
+  const data = await graphql(`
+    query($owner: String!, $name: String!) {
+      repository(owner: $owner, name: $name) {
+        pullRequests(first: 25, states: OPEN, orderBy: { field: UPDATED_AT, direction: DESC }) {
+          nodes {
+            number
+            title
+            url
+            isDraft
+            updatedAt
+            headRefName
+            headRefOid
+            mergeStateStatus
+            mergeable
+            reviewDecision
+            labels(first: 20) {
+              nodes {
+                name
+              }
+            }
+            statusCheckRollup {
+              state
+            }
+          }
+        }
+      }
+    }
+  `, { owner, name: repoName });
+
+  return (data.repository.pullRequests.nodes || []).map((node) => ({
+    number: node.number,
+    title: node.title,
+    url: node.url,
+    isDraft: node.isDraft,
+    updatedAt: node.updatedAt,
+    headBranch: node.headRefName,
+    headSha: node.headRefOid,
+    mergeStateStatus: node.mergeStateStatus,
+    mergeable: node.mergeable,
+    reviewDecision: node.reviewDecision,
+    checkState: node.statusCheckRollup?.state || 'UNKNOWN',
+    isGreen: node.statusCheckRollup?.state === 'SUCCESS' && node.mergeStateStatus === 'CLEAN',
+    labels: normalizeLabels(node.labels?.nodes || [])
+  }));
 }
 
 async function main() {
@@ -152,16 +608,19 @@ async function main() {
   const sha = safeExec('git rev-parse HEAD') || process.env.GITHUB_SHA || 'unknown';
   const dirty = safeExec('git status --short');
   const status = dirty ? 'dirty' : 'clean';
-  const trigger = eventPath ? (() => {
-    try {
-      return JSON.parse(readFileSync(eventPath, 'utf8'));
-    } catch {
-      return {};
-    }
-  })() : {};
+  const trigger = eventPath
+    ? (() => {
+        try {
+          return JSON.parse(readFileSync(eventPath, 'utf8'));
+        } catch {
+          return {};
+        }
+      })()
+    : {};
 
-  const openPRs = uniqueById(await paginate('/pulls?state=open&sort=updated&direction=desc'));
-  const failedRunsRaw = await paginate('/actions/runs?status=completed&per_page=100');
+  const openPRs = uniqueById(await fetchOpenPullRequests());
+
+  const failedRunsRaw = await paginate('/actions/runs?status=completed');
   const relevantWorkflows = new Set([
     'CI',
     'Smoke Tests',
@@ -185,6 +644,7 @@ async function main() {
       conclusion: run.conclusion,
       event: run.event,
       updated_at: run.updated_at,
+      prNumber: run.pull_requests?.[0]?.number || null,
       repository: run.repository?.full_name || repo
     }));
 
@@ -201,89 +661,57 @@ async function main() {
   for (const label of labelNames) {
     const issues = await paginate(`/issues?state=open&labels=${encodeURIComponent(label)}&sort=updated&direction=desc`);
     for (const issue of issues) {
-      if (!issue.pull_request) {
-        issueMap.set(issue.id, {
-          id: issue.id,
-          number: issue.number,
-          title: issue.title,
-          html_url: issue.html_url,
-          labels: (issue.labels || []).map((item) => item.name),
-          updated_at: issue.updated_at,
-          state: issue.state,
-          trigger_label: label
-        });
-      }
+      if (issue.pull_request) continue;
+      issueMap.set(issue.id, {
+        id: issue.id,
+        number: issue.number,
+        title: issue.title,
+        html_url: issue.html_url,
+        labels: normalizeLabels(issue.labels || []),
+        updated_at: issue.updated_at,
+        state: issue.state,
+        trigger_label: label,
+        body: issue.body || ''
+      });
     }
   }
 
   const activeIssues = Array.from(issueMap.values()).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
-  const queue = [];
-  if (failedWorkflowRuns.length > 0) {
-    const topFailure = failedWorkflowRuns[0];
-    queue.push({
-      priority: 'P0',
-      title: `Repair failed workflow: ${topFailure.name}`,
-      detail: `${topFailure.name} failed on ${topFailure.head_branch} (${topFailure.head_sha.slice(0, 7)}).`,
-      url: topFailure.html_url,
-      target: 'Codex'
-    });
+  const supervisorIssues = activeIssues
+    .filter((issue) => normalizeLabels(issue.labels).includes('production-supervisor') || normalizeLabels(issue.labels).includes('production-guard'));
+
+  const supervisorFindings = [];
+  for (const issue of supervisorIssues) {
+    const findings = parseSupervisorFindings(issue).map((finding) => ({
+      ...finding,
+      issue
+    }));
+    supervisorFindings.push(...findings);
   }
 
-  const issuePriorityOrder = [
-    ['P0', ['ai-repair', 'production-supervisor', 'commander:repair-needed']],
-    ['P1', ['automation-calibrator', 'commander:manual-review-required']],
-    ['P2', ['commander:auto-deploy-candidate']]
-  ];
+  const commands = buildCommands({ failedWorkflowRuns, supervisorFindings, openPRs });
+  const highestPriorityNextAction = commands[0] || buildNoopCommand();
+  const issueLabels = determineIssueLabels({ commands, supervisorFindings, openPRs });
 
-  for (const [priority, labels] of issuePriorityOrder) {
-    for (const label of labels) {
-      const issue = activeIssues.find((item) => item.labels.includes(label));
-      if (issue) {
-        queue.push({
-          priority,
-          title: `Resolve issue #${issue.number}: ${issue.title}`,
-          detail: `Issue label ${label} is still open.`,
-          url: issue.html_url,
-          target: priority === 'P0' ? 'Codex' : priority === 'P1' ? 'OpenCode' : 'Claude'
-        });
-        break;
-      }
-    }
-    if (queue.some((item) => item.priority === priority)) break;
-  }
-
-  if (queue.length === 0 && openPRs.length > 0) {
-    const pr = openPRs[0];
-    queue.push({
-      priority: 'P2',
-      title: `Review open PR #${pr.number}: ${pr.title}`,
-      detail: `Open PR updated at ${formatDate(pr.updated_at)}.`,
-      url: pr.html_url,
-      target: 'Claude'
-    });
-  }
-
-  const highestPriorityNextAction = queue.length > 0 ? queue.slice().sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority))[0] : {
-    priority: 'P2',
-    title: 'No actionable engineering command right now.',
-    detail: 'No failed workflows, no active repair/supervisor issues, and no open PRs require immediate AI intervention.',
-    url: '',
-    target: 'Codex'
-  };
+  const codexCommand = commandForTarget(highestPriorityNextAction, 'Codex');
+  const openCodeCommand = commandForTarget(highestPriorityNextAction, 'OpenCode');
+  const claudeCommand = commandForTarget(highestPriorityNextAction, 'Claude');
 
   const promptContexts = {
-    Codex: buildPrompt('Codex', highestPriorityNextAction),
-    OpenCode: buildPrompt('OpenCode', highestPriorityNextAction),
-    Claude: buildPrompt('Claude', highestPriorityNextAction)
+    Codex: promptEnvelope('Codex', codexCommand),
+    OpenCode: promptEnvelope('OpenCode', openCodeCommand),
+    Claude: promptEnvelope('Claude', claudeCommand)
   };
 
   const openPrRows = openPRs.slice(0, 10).map((pr) => [
     `#${pr.number}`,
     pr.title,
-    pr.draft ? 'draft' : 'ready',
-    formatDate(pr.updated_at),
-    pr.html_url
+    pr.isDraft ? 'draft' : pr.isGreen ? 'green' : 'pending',
+    pr.mergeStateStatus,
+    pr.checkState,
+    formatDate(pr.updatedAt),
+    pr.url
   ]);
 
   const failedRunRows = failedWorkflowRuns.slice(0, 10).map((run) => [
@@ -291,6 +719,7 @@ async function main() {
     run.head_branch,
     run.head_sha.slice(0, 7),
     run.conclusion,
+    run.prNumber ? `#${run.prNumber}` : 'none',
     formatDate(run.updated_at),
     run.html_url
   ]);
@@ -303,17 +732,48 @@ async function main() {
     issue.html_url
   ]);
 
-  const queueRows = queue.map((item) => [
-    item.priority,
-    item.title,
-    item.detail,
-    item.url || '-'
+  const priorityQueueRows = commands.map((command) => [
+    command.priority,
+    command.kind,
+    command.title,
+    command.summary,
+    command.url || '-'
   ]);
+
+  const highestPriorityLabel = highestPriorityNextAction.kind === 'noop'
+    ? 'NONE'
+    : highestPriorityNextAction.priority;
+
+  const humanApprovalLines = [];
+  if (issueLabels.includes('commander:repair-needed')) {
+    humanApprovalLines.push('Human approval required before any production deploy or merge of the repaired surface.');
+  }
+  if (issueLabels.includes('commander:manual-review-required')) {
+    humanApprovalLines.push('Human final review required before merge. Do not auto-merge or auto-deploy.');
+  }
+  if (issueLabels.includes('commander:auto-deploy-candidate')) {
+    humanApprovalLines.push('Human approval still required before any production deploy. This is only a candidate.');
+  }
+  if (issueLabels.includes('risk:p0') || issueLabels.includes('risk:p1')) {
+    humanApprovalLines.push('Human review required before changing production-risk code, workflows, secrets, or security posture.');
+  }
+  if (humanApprovalLines.length === 0) {
+    humanApprovalLines.push('No additional human gate is required beyond normal review discipline.');
+  }
+
+  const doNotDoLines = [
+    'Do not touch secrets.',
+    'Do not deploy production manually.',
+    'Do not merge high-risk PRs automatically.',
+    'Do not modify unrelated files.',
+    'Do not widen the patch beyond the queue item.',
+    'Do not change migrations, Supabase SQL, or production env in this governance workflow.'
+  ];
 
   const issueBody = [
     '## AI Command Queue',
     '',
-    'This issue is automatically maintained by the AI command queue workflow. It gives Codex, OpenCode, and Claude a shared, low-noise next-step packet.',
+    'This issue is automatically maintained by the AI command queue workflow. It now generates the next engineering command, not just a status snapshot.',
     '',
     '### Current repo status',
     '',
@@ -334,13 +794,13 @@ async function main() {
     '### Open PRs',
     '',
     openPrRows.length > 0
-      ? table(['PR', 'Title', 'State', 'Updated', 'URL'], openPrRows)
+      ? table(['PR', 'Title', 'State', 'Merge state', 'Checks', 'Updated', 'URL'], openPrRows)
       : '_No open PRs found._',
     '',
     '### Failed workflow runs',
     '',
     failedRunRows.length > 0
-      ? table(['Workflow', 'Branch', 'SHA', 'Conclusion', 'Updated', 'URL'], failedRunRows)
+      ? table(['Workflow', 'Branch', 'SHA', 'Conclusion', 'PR', 'Updated', 'URL'], failedRunRows)
       : '_No failed recent workflow runs found._',
     '',
     '### Active repair / supervisor issues',
@@ -355,48 +815,35 @@ async function main() {
     '- `P1`: production hardening',
     '- `P2`: improvement',
     '',
-    queueRows.length > 0
-      ? table(['Priority', 'Command', 'Detail', 'Link'], queueRows)
+    priorityQueueRows.length > 0
+      ? table(['Priority', 'Type', 'Command', 'Summary', 'Link'], priorityQueueRows)
       : '_No actionable queue items right now._',
     '',
     '### Highest-priority next action',
     '',
-    `**${highestPriorityNextAction.priority}** - ${highestPriorityNextAction.title}`,
+    `**${highestPriorityLabel}** - ${highestPriorityNextAction.title}`,
     '',
-    highestPriorityNextAction.detail,
+    highestPriorityNextAction.summary,
     '',
-    '### Prompt for Codex',
+    '### Next command for Codex',
     '',
-    '```text',
-    promptContexts.Codex,
-    '```',
+    promptBlock('Codex', codexCommand),
     '',
-    '### Prompt for OpenCode',
+    '### Next command for OpenCode',
     '',
-    '```text',
-    promptContexts.OpenCode,
-    '```',
+    promptBlock('OpenCode', openCodeCommand),
     '',
-    '### Prompt for Claude',
+    '### Next command for Claude',
     '',
-    '```text',
-    promptContexts.Claude,
-    '```',
+    promptBlock('Claude', claudeCommand),
     '',
-    '### Human approval gates',
+    '### Human approval required',
     '',
-    '- Human approval required before any production deploy.',
-    '- Human approval required before any auto-merge of a high-risk PR.',
-    '- Human approval required before any secret, env, migration, or database policy change.',
-    '- Human approval required before changing workflows that can trigger production actions.',
+    ...humanApprovalLines.map((line) => `- ${line}`),
     '',
-    '### What must never be automated',
+    '### Do-not-do list',
     '',
-    '- Secret creation, rotation, or disclosure.',
-    '- Manual production deployment.',
-    '- High-risk PR merge decisions.',
-    '- Any unrelated code changes outside the current queue item.',
-    '- Broad refactors that are not required to fix the queue item.'
+    ...doNotDoLines.map((line) => `- ${line}`)
   ].join('\n');
 
   const report = {
@@ -411,16 +858,25 @@ async function main() {
     openPullRequests: openPRs.map((pr) => ({
       number: pr.number,
       title: pr.title,
-      html_url: pr.html_url,
-      draft: pr.draft,
-      updated_at: pr.updated_at,
-      labels: (pr.labels || []).map((label) => label.name)
+      url: pr.url,
+      isDraft: pr.isDraft,
+      updatedAt: pr.updatedAt,
+      labels: pr.labels,
+      mergeStateStatus: pr.mergeStateStatus,
+      checkState: pr.checkState,
+      isGreen: pr.isGreen
     })),
     failedWorkflowRuns,
     activeIssues,
-    priorityQueue: queue,
+    supervisorFindings,
+    priorityQueue: commands,
     highestPriorityNextAction,
-    prompts: promptContexts,
+    nextCommands: {
+      Codex: codexCommand,
+      OpenCode: openCodeCommand,
+      Claude: claudeCommand
+    },
+    issueLabels,
     issueBody
   };
 

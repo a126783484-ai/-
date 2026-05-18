@@ -1,49 +1,78 @@
 # AI Command Queue
 
-The AI Command Queue is the repo's coordination layer for next-step engineering work.
+The AI Command Queue is Beauty OS's engineering command dispatcher.
 
-It gathers a current snapshot of:
+It does more than report status. It turns the current repo signal into the next concrete command for Codex, OpenCode, and Claude.
+
+It gathers:
 
 - open pull requests
 - failed recent workflow runs
-- open issues that need AI attention
-- the highest-priority next action
+- active repair / supervisor issues
+- current high-priority next action
 
-It then maintains one fixed GitHub issue:
+It maintains one fixed GitHub issue:
 
 - `[AI Command Queue] Beauty OS Next Engineering Commands`
 
-The workflow is read-only for code, database, and deployment surfaces. Its only write operation is updating that single issue.
+The workflow is governance-only. It must not touch app feature code, secrets, database migrations, or production deployment.
+
+## What It Produces
+
+The queue issue always includes:
+
+- current repo status
+- open PR list
+- failed workflow list
+- active repair / supervisor issues
+- priority queue
+- next command for Codex
+- next command for OpenCode
+- next command for Claude
+- human approval required
+- do-not-do list
+
+The command engine follows this priority order:
+
+1. Any failed workflow becomes the highest-priority repair command.
+2. Any Production Guard / Supervisor P0 or P1 finding becomes a hardening command.
+3. If an open PR is all green but high-risk, the command becomes human final review.
+4. If an open PR is all green and low-risk, the command becomes an auto-deploy candidate only.
 
 ## How To Use It
 
-Codex, OpenCode, and Claude should read the command queue issue first when they need the next task.
+Codex, OpenCode, and Claude should read the queue issue first when they need the next engineering instruction.
 
-Use it to decide:
+Treat the queue as an execution packet:
 
-- which workflow failure to repair first
-- which production risk to inspect next
-- which PR is ready for safe review
-- whether a human approval gate is still required
-
-Use the queue as an execution packet, not as a spec rewrite surface.
+- follow the command that is already prioritized
+- do not re-derive the same repo context repeatedly
+- do not expand the scope beyond the command item
 
 ## Labels
 
-### Command queue labels
+### Queue labels
 
-- `ai-command-queue`: the fixed queue issue itself
-- `automated`: maintained by workflow automation
-- `ai-ready`: the queue has a fresh actionable snapshot
+- `ai-command-queue`: the fixed queue issue
+- `automated`: maintained by automation
+- `ai-ready`: the queue has a fresh actionable command
 
-### Work intake labels
+### Command labels
+
+- `commander:repair-needed`: a failed workflow or hardening item needs repair
+- `commander:manual-review-required`: human final review is required
+- `commander:auto-deploy-candidate`: low-risk PR ready for normal review gates
+
+### Risk labels
+
+- `risk:p0`: production blocker or highest-priority risk
+- `risk:p1`: production hardening risk
+
+### Intake labels
 
 - `ai-repair`: workflow or automation repair needed
 - `production-supervisor`: production risk needs attention
 - `automation-calibrator`: workflow/tooling calibration needed
-- `commander:repair-needed`: AI dispatcher should repair the current failure
-- `commander:manual-review-required`: a human must review before merge or deploy
-- `commander:auto-deploy-candidate`: low-risk PR that still needs normal review gates
 
 ## Human Approval Gates
 
@@ -53,7 +82,7 @@ Humans still must approve:
 - high-risk PR merges
 - secret, env, or credential changes
 - database migrations and policy changes
-- any workflow change that could trigger deployment or alter security posture
+- workflow changes that alter security posture or deployment behavior
 
 ## What Must Never Be Automated
 
@@ -61,20 +90,19 @@ Do not automate:
 
 - secret creation, rotation, or disclosure
 - production deployment
-- high-risk merge decisions
+- auto-merge of high-risk PRs
 - schema or policy changes without human review
 - unrelated file edits while repairing one queue item
 - broad refactors that are not required for the queue item
 
 ## Practical Expectations
 
-The command queue should keep AI work focused on the smallest safe next step.
+Each generated command should tell the AI agent to:
 
-Each generated prompt should tell the AI agent to:
-
+- make the smallest safe patch
 - avoid unrelated files
 - run only relevant checks
 - report changed files, tests, risks, and rollback plan
 - open a PR when the work is finished
 
-That keeps the repo moving without making the AI re-derive the same context repeatedly.
+That keeps the repo moving while still preserving human approval where it matters.

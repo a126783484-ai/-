@@ -60,7 +60,12 @@ jobs:
             const labels = [
               { name: 'ai-command-queue', color: '6f42c1', description: 'AI command queue issue for engineering coordination' },
               { name: 'automated', color: 'd4c5f9', description: 'Created or maintained by automation' },
-              { name: 'ai-ready', color: '1f883d', description: 'Ready for AI command generation' }
+              { name: 'ai-ready', color: '1f883d', description: 'Ready for AI command generation' },
+              { name: 'commander:repair-needed', color: 'b60205', description: 'AI dispatcher should repair the current failure' },
+              { name: 'commander:manual-review-required', color: 'fbca04', description: 'Human final review is required before merge or deploy' },
+              { name: 'commander:auto-deploy-candidate', color: '0e8a16', description: 'Low-risk candidate that still needs normal review gates' },
+              { name: 'risk:p0', color: 'd73a4a', description: 'Production blocker or highest-priority risk' },
+              { name: 'risk:p1', color: 'fbca04', description: 'Production hardening risk' }
             ];
 
             for (const label of labels) {
@@ -92,7 +97,7 @@ jobs:
             const fs = require('node:fs');
             const report = JSON.parse(fs.readFileSync('ai-command-queue-report.json', 'utf8'));
             const title = '[AI Command Queue] Beauty OS Next Engineering Commands';
-            const labels = ['ai-command-queue', 'automated', 'ai-ready'];
+            const labels = report.issueLabels;
             const owner = context.repo.owner;
             const repo = context.repo.repo;
 
