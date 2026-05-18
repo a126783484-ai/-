@@ -510,6 +510,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `auth/callback` now skips owner workspace bootstrap when a pending staff invite exists for the signed-in email.
 - This keeps invite-driven logins from creating an unnecessary owner workspace.
 - Verified with `npm run typecheck`.
+
+## Auth callback regression test
+
+- Added a focused test to keep the invite short-circuit in `auth/callback` stable.
+- The test ensures pending invites do not trigger owner workspace bootstrap.
+- Verified with `npm run typecheck` and a targeted Vitest run.
 ## Staff invite payload trim
 
 - The staff invite page and accept action now select only the invite columns they render or persist.
