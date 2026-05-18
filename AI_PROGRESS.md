@@ -462,6 +462,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `updateServiceAction()` no longer preloads the service row before applying the update.
 - The update path now relies on workspace-scoped `eq` filters and a guarded zero-row failure.
 - Verified with `npm run typecheck`.
+
+## Customer update lookup trim
+
+- `updateCustomerAction()` now uses the update response itself to confirm the target row exists.
+- This removes the pre-read of the customer row from the update path.
+- Verified with `npm run typecheck`.
 ## Staff invite payload trim
 
 - The staff invite page and accept action now select only the invite columns they render or persist.
