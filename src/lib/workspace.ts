@@ -10,13 +10,17 @@ type WorkspaceSummaryRow = Pick<
 >;
 type WorkspaceInsert = Database["public"]["Tables"]["workspaces"]["Insert"];
 type WorkspaceMemberRow = Database["public"]["Tables"]["workspace_members"]["Row"];
+type WorkspaceMembershipSummaryRow = Pick<
+  WorkspaceMemberRow,
+  "id" | "workspace_id" | "role" | "active"
+>;
 type WorkspaceMemberInsert = Database["public"]["Tables"]["workspace_members"]["Insert"];
 type WorkspaceMembershipPointer = Pick<WorkspaceMemberRow, "workspace_id">;
 
 export interface WorkspaceContext {
   user: User;
   workspace: WorkspaceRow;
-  membership: WorkspaceMemberRow;
+  membership: WorkspaceMembershipSummaryRow;
 }
 
 async function getClient(client?: AppSupabaseClient) {
@@ -261,6 +265,6 @@ export async function getCurrentWorkspaceContext(client?: AppSupabaseClient): Pr
   return {
     user: authData.user,
     workspace: workspace as WorkspaceRow,
-    membership: membership as WorkspaceMemberRow
+    membership: membership as WorkspaceMembershipSummaryRow
   };
 }
