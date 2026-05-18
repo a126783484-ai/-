@@ -486,6 +486,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `saveAppointment()` now uses the update/insert response to confirm the appointment row exists.
 - This removes the extra appointment membership check after save.
 - Verified with `npm run typecheck`.
+
+## Inventory movement lookup trim
+
+- `recordInventoryMovementAction()` now uses a head/count existence check for the inventory item.
+- The RPC already receives `itemId`, so fetching the full item row was unnecessary.
+- Verified with `npm run typecheck`.
 ## Staff invite payload trim
 
 - The staff invite page and accept action now select only the invite columns they render or persist.
