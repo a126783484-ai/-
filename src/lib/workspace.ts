@@ -19,7 +19,7 @@ type WorkspaceMembershipPointer = Pick<WorkspaceMemberRow, "workspace_id">;
 
 export interface WorkspaceContext {
   user: User;
-  workspace: WorkspaceRow;
+  workspace: Pick<WorkspaceRow, "id">;
   membership: WorkspaceMembershipSummaryRow;
 }
 
@@ -264,7 +264,7 @@ export async function getCurrentWorkspaceContext(client?: AppSupabaseClient): Pr
 
   return {
     user: authData.user,
-    workspace: workspace as WorkspaceRow,
+    workspace: { id: workspace.id },
     membership: membership as WorkspaceMembershipSummaryRow
   };
 }
