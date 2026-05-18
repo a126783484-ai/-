@@ -444,6 +444,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `createWorkspaceOwner()` no longer requests a returned row after insert.
 - This removes an unnecessary response payload from the owner bootstrap write path.
 - Verified with `npm run typecheck`.
+
+## Staff duplicate check trim
+
+- `createStaffAction()` now checks for existing workspace membership with a head/count query.
+- This avoids fetching a member row when the code only needs duplicate existence.
+- Verified with `npm run typecheck`.
 ## Staff invite payload trim
 
 - The staff invite page and accept action now select only the invite columns they render or persist.
