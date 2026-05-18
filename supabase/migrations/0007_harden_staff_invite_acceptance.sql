@@ -12,6 +12,7 @@ declare
   current_email text := lower(coalesce(auth.jwt() ->> 'email', ''));
   invite_row public.workspace_member_invites%rowtype;
   inserted_member_id uuid;
+  existing_member record;
 begin
   if current_user_id is null or current_email = '' then
     raise exception 'Authentication is required to accept staff invite.' using errcode = '28000';
@@ -53,7 +54,21 @@ begin
   returning id into inserted_member_id;
 
   if inserted_member_id is null then
-    raise exception '您已經是此工作區的成員。' using errcode = 'P0002';
+    select id, active
+    into existing_member
+    from public.workspace_members
+    where workspace_id = invite_row.workspace_id
+      and user_id = current_user_id;
+
+    if not found then
+      raise exception '您已經是此工作區的成員。' using errcode = 'P0002';
+    end if;
+
+    if not existing_member.active then
+      raise exception '您的成員資格已停用，請聯繫管理員。' using errcode = 'P0003';
+    end if;
+
+    inserted_member_id := existing_member.id;
   end if;
 
   update public.workspace_member_invites

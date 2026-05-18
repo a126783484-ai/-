@@ -58,6 +58,9 @@ export async function acceptStaffInviteAction(formData: FormData) {
     }
   } catch (error) {
     const err = error as { code?: string; message?: string };
+    if (err.code === "P0003") {
+      redirect(`/staff/invite/${token}?${buildSearchParams({ error: "staff_invite_member_inactive" })}`);
+    }
     if (err.code === "P0002") {
       redirect(`/staff/invite/${token}?${buildSearchParams({ error: "staff_invite_already_accepted" })}`);
     }
