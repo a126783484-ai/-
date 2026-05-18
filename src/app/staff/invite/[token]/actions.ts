@@ -16,10 +16,6 @@ function buildSearchParams(input: Record<string, string>) {
   return new URLSearchParams(input).toString();
 }
 
-function isUniqueViolation(error: { code?: string; message?: string }) {
-  return error.code === "23505" || error.message?.toLowerCase().includes("duplicate key") === true;
-}
-
 export async function acceptStaffInviteAction(formData: FormData) {
   const token = readRequired(formData, "token");
   const supabase = await createSupabaseServerClient().catch(() => null);
@@ -53,33 +49,24 @@ export async function acceptStaffInviteAction(formData: FormData) {
   }
 
   try {
-    const { error: insertError } = await supabase.from("workspace_members").insert({
-      workspace_id: invite.workspace_id,
-      user_id: authData.user.id,
-      role: invite.role,
-      display_name: invite.display_name,
-      phone: invite.phone,
-      commission_rate: invite.commission_rate,
-      specialties: invite.specialties,
-      active: true
+    const { error: rpcError } = await (supabase.rpc as unknown as (fn: string, params: Record<string, unknown>) => Promise<{ error: { code?: string; message?: string } | null }>)("accept_workspace_member_invite", {
+      invite_token: token,
     });
 
-    if (insertError && !isUniqueViolation(insertError)) {
-      throw insertError;
-    }
-
-    const { error: updateError } = await supabase
-      .from("workspace_member_invites")
-      .update({
-        status: "accepted",
-        accepted_at: new Date().toISOString()
-      })
-      .eq("id", invite.id);
-
-    if (updateError) {
-      throw updateError;
+    if (rpcError) {
+      throw rpcError;
     }
   } catch (error) {
+    const err = error as { code?: string; message?: string };
+    if (err.code === "P0003") {
+      redirect(`/staff/invite/${token}?${buildSearchParams({ error: "staff_invite_member_inactive" })}`);
+    }
+    if (err.code === "P0002") {
+      redirect(`/staff/invite/${token}?${buildSearchParams({ error: "staff_invite_already_accepted" })}`);
+    }
+    if (err.code === "P0001" || err.code === "28000") {
+      redirect(`/staff/invite/${token}?${buildSearchParams({ error: "staff_invite_invalid" })}`);
+    }
     console.error("acceptStaffInviteAction failed", error);
     redirect(`/staff/invite/${token}?${buildSearchParams({ error: "staff_invite_failed" })}`);
   }
