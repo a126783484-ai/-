@@ -42,6 +42,7 @@ export async function bootstrapLoggedInWorkspaceAction(
 
     await ensureOwnerWorkspaceForUser(dataUser, client, true);
   } catch {
+    await client.auth.signOut().catch(() => undefined);
     return { ok: false, error: "auth_bootstrap_failed" };
   }
 
