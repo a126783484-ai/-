@@ -82,19 +82,19 @@ export async function recordInventoryMovementAction(formData: FormData) {
     fail("inventory_forbidden");
   }
 
-  const { data: item, error: itemError } = await supabase
+  const { count: itemCount, error: itemError } = await supabase
     .from("inventory_items")
-    .select("id, workspace_id")
+    .select("id", { count: "exact", head: true })
     .eq("id", itemId)
     .eq("workspace_id", context.workspace.id)
-    .maybeSingle();
+    ;
 
   if (itemError) {
     console.error("inventory item lookup failed", itemError);
     fail("inventory_movement_failed");
   }
 
-  if (!item) {
+  if ((itemCount ?? 0) <= 0) {
     fail("inventory_invalid_input");
   }
 
@@ -102,7 +102,7 @@ export async function recordInventoryMovementAction(formData: FormData) {
     const { error } = await (supabase as typeof supabase & {
       rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
     }).rpc("record_inventory_movement", {
-      p_item_id: item.id,
+      p_item_id: itemId,
       p_movement_type: movementType,
       p_quantity: quantity,
       p_note: note,

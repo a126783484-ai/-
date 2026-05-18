@@ -8,6 +8,7 @@ export type AppointmentStatus =
   | "no_show";
 export type OrderStatus = "unpaid" | "partial" | "paid" | "refunded";
 export type PaymentMethod = "cash" | "card" | "transfer" | "line_pay" | "other";
+export type StaffInviteStatus = "pending" | "accepted" | "revoked";
 
 export interface Workspace {
   id: string;
@@ -27,6 +28,22 @@ export interface StaffMember {
   active: boolean;
   commissionRate: number;
   specialties: string[];
+}
+
+export interface StaffInvite {
+  id: string;
+  workspaceId: string;
+  email: string;
+  displayName: string;
+  phone: string;
+  role: Role;
+  commissionRate: number;
+  specialties: string[];
+  token: string;
+  status: StaffInviteStatus;
+  invitedBy?: string;
+  createdAt: string;
+  acceptedAt?: string;
 }
 
 export interface ServiceCategory {

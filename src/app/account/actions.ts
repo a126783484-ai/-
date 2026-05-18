@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { normalizeAuthRedirectTarget } from "@/lib/auth-routes";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { bootstrapOwnerWorkspace } from "@/lib/workspace";
+import { bootstrapLoggedInWorkspaceAction } from "@/app/login/actions";
 
 function readRequired(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -32,10 +33,16 @@ export async function signInAction(formData: FormData) {
     redirect(`/login?${buildSearchParams({ error: "auth_config_missing", next })}`);
   }
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-  if (error) {
+  if (error || !data.user) {
     redirect(`/login?${buildSearchParams({ error: "invalid_login", next })}`);
+  }
+
+  const bootstrapResult = await bootstrapLoggedInWorkspaceAction(supabase, data.user);
+
+  if (!bootstrapResult.ok) {
+    redirect(`/login?${buildSearchParams({ error: bootstrapResult.error, next })}`);
   }
 
   redirect(next);

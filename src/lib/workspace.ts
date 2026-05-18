@@ -4,14 +4,23 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 type AppSupabaseClient = SupabaseClient<Database, "public">;
 type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
+type WorkspaceSummaryRow = Pick<
+  WorkspaceRow,
+  "id" | "name" | "phone" | "address" | "brand_color" | "business_hours"
+>;
 type WorkspaceInsert = Database["public"]["Tables"]["workspaces"]["Insert"];
 type WorkspaceMemberRow = Database["public"]["Tables"]["workspace_members"]["Row"];
+type WorkspaceMembershipSummaryRow = Pick<
+  WorkspaceMemberRow,
+  "id" | "workspace_id" | "role" | "active"
+>;
 type WorkspaceMemberInsert = Database["public"]["Tables"]["workspace_members"]["Insert"];
+type WorkspaceMembershipPointer = Pick<WorkspaceMemberRow, "workspace_id">;
 
 export interface WorkspaceContext {
   user: User;
-  workspace: WorkspaceRow;
-  membership: WorkspaceMemberRow;
+  workspace: Pick<WorkspaceRow, "id">;
+  membership: WorkspaceMembershipSummaryRow;
 }
 
 async function getClient(client?: AppSupabaseClient) {
@@ -42,47 +51,59 @@ export async function createWorkspace(input: WorkspaceInsert, client?: AppSupaba
   const { data, error } = await supabase
     .from("workspaces")
     .insert(input)
-    .select()
+    .select("id, name, phone, address, brand_color, business_hours")
     .single();
 
   if (error) {
     throw error;
   }
 
-  return data as WorkspaceRow;
+  return data as WorkspaceSummaryRow as WorkspaceRow;
 }
 
 export async function createWorkspaceOwner(input: WorkspaceMemberInsert, client?: AppSupabaseClient) {
   const supabase = await getClient(client);
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("workspace_members")
-    .insert(input)
-    .select()
-    .single();
+    .insert(input);
 
   if (error) {
     throw error;
   }
-
-  return data;
 }
 
-async function getFirstActiveMembership(userId: string, client?: AppSupabaseClient): Promise<WorkspaceMemberRow | null> {
+async function getFirstActiveMembership(userId: string, client?: AppSupabaseClient): Promise<WorkspaceMembershipPointer | null> {
   const supabase = await getClient(client);
   const { data, error } = await supabase
     .from("workspace_members")
-    .select("*")
+    .select("workspace_id")
     .eq("user_id", userId)
     .eq("active", true)
     .order("created_at", { ascending: true })
-    .limit(1);
+    .limit(1)
+    .maybeSingle();
 
   if (error) {
     throw error;
   }
 
-  return (data?.[0] as WorkspaceMemberRow | undefined) ?? null;
+  return data as WorkspaceMembershipPointer | null;
+}
+
+export async function hasActiveWorkspaceMembership(userId: string, client?: AppSupabaseClient) {
+  const supabase = await getClient(client);
+  const { count, error } = await supabase
+    .from("workspace_members")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("active", true);
+
+  if (error) {
+    throw error;
+  }
+
+  return (count ?? 0) > 0;
 }
 
 async function bootstrapOwnerWorkspaceWithAuthenticatedInserts(params: {
@@ -91,23 +112,26 @@ async function bootstrapOwnerWorkspaceWithAuthenticatedInserts(params: {
   phone?: string | null;
   displayName?: string | null;
   client?: AppSupabaseClient;
+  skipMembershipCheck?: boolean;
 }) {
-  const existingMembership = await getFirstActiveMembership(params.user.id, params.client);
+  if (!params.skipMembershipCheck) {
+    const existingMembership = await getFirstActiveMembership(params.user.id, params.client);
 
-  if (existingMembership) {
-    const supabase = await getClient(params.client);
-    const { data, error } = await supabase
-      .from("workspaces")
-      .select("*")
-      .eq("id", existingMembership.workspace_id)
-      .maybeSingle();
+    if (existingMembership) {
+      const supabase = await getClient(params.client);
+      const { data, error } = await supabase
+        .from("workspaces")
+        .select("id, name, phone, address, brand_color, business_hours")
+        .eq("id", existingMembership.workspace_id)
+        .maybeSingle();
 
-    if (error) {
-      throw error;
-    }
+      if (error) {
+        throw error;
+      }
 
-    if (data) {
-      return data as WorkspaceRow;
+      if (data) {
+        return data as WorkspaceRow;
+      }
     }
   }
 
@@ -133,6 +157,7 @@ export async function bootstrapOwnerWorkspace(params: {
   phone?: string | null;
   displayName?: string | null;
   client?: AppSupabaseClient;
+  skipMembershipCheck?: boolean;
 }) {
   const supabase = await getClient(params.client);
   const { data, error } = await supabase.rpc("bootstrap_owner_workspace", {
@@ -152,15 +177,40 @@ export async function bootstrapOwnerWorkspace(params: {
   return data as WorkspaceRow;
 }
 
-export async function ensureOwnerWorkspaceForUser(user: User, client?: AppSupabaseClient) {
+export async function ensureOwnerWorkspaceForUser(
+  user: User,
+  client?: AppSupabaseClient,
+  skipMembershipCheck = false
+) {
   const workspaceName = metadataString(user.user_metadata?.workspace_name) ?? defaultWorkspaceName(user);
+  const supabase = await getClient(client);
+  if (!skipMembershipCheck) {
+    const existingMembership = await getFirstActiveMembership(user.id, supabase);
+
+    if (existingMembership) {
+      const { data: workspace, error: workspaceError } = await supabase
+        .from("workspaces")
+        .select("id, name, phone, address, brand_color, business_hours")
+        .eq("id", existingMembership.workspace_id)
+        .maybeSingle();
+
+      if (workspaceError) {
+        throw workspaceError;
+      }
+
+      if (workspace) {
+        return workspace as WorkspaceSummaryRow as WorkspaceRow;
+      }
+    }
+  }
 
   return bootstrapOwnerWorkspace({
     user,
     workspaceName,
     phone: metadataString(user.user_metadata?.phone),
     displayName: metadataString(user.user_metadata?.display_name) ?? user.email ?? "Owner",
-    client
+    client,
+    skipMembershipCheck: true
   });
 }
 
@@ -169,7 +219,7 @@ export async function listWorkspaces() {
 
   const { data, error } = await supabase
     .from("workspaces")
-    .select("*")
+    .select("id, name, phone, address, brand_color, business_hours")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -189,7 +239,7 @@ export async function getCurrentWorkspaceContext(client?: AppSupabaseClient): Pr
 
   const { data: memberships, error: membershipError } = await supabase
     .from("workspace_members")
-    .select("*")
+    .select("id, workspace_id, role, active")
     .eq("user_id", authData.user.id)
     .eq("active", true)
     .order("created_at", { ascending: true })
@@ -207,7 +257,7 @@ export async function getCurrentWorkspaceContext(client?: AppSupabaseClient): Pr
 
   const { data: workspace, error: workspaceError } = await supabase
     .from("workspaces")
-    .select("*")
+    .select("id, name, phone, address, brand_color, business_hours")
     .eq("id", membership.workspace_id)
     .maybeSingle();
 
@@ -221,7 +271,7 @@ export async function getCurrentWorkspaceContext(client?: AppSupabaseClient): Pr
 
   return {
     user: authData.user,
-    workspace: workspace as WorkspaceRow,
-    membership: membership as WorkspaceMemberRow
+    workspace: { id: workspace.id },
+    membership: membership as WorkspaceMembershipSummaryRow
   };
 }
