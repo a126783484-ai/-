@@ -6,6 +6,12 @@ const repo = process.env.GITHUB_REPOSITORY;
 const token = process.env.GITHUB_TOKEN;
 const eventName = process.env.GITHUB_EVENT_NAME || 'manual';
 const eventPath = process.env.GITHUB_EVENT_PATH || '';
+const linearTask = {
+  key: process.env.LINEAR_COMMAND_QUEUE_KEY || 'JOH-8',
+  url: process.env.LINEAR_COMMAND_QUEUE_URL || 'https://linear.app/j26606611hn/issue/JOH-8/ai-command-queue-beauty-os-next-engineering-command',
+  team: process.env.LINEAR_COMMAND_QUEUE_TEAM || 'Johnnie',
+  status: process.env.LINEAR_COMMAND_QUEUE_STATUS || 'Backlog'
+};
 
 if (!repo) {
   throw new Error('GITHUB_REPOSITORY is required.');
@@ -164,6 +170,16 @@ function promptEnvelope(target, command) {
     `Summary: ${command.summary}`,
     ''
   ];
+
+  if (command.linearTask?.key || command.linearTask?.url) {
+    lines.push(
+      `Linear Task: ${command.linearTask.key || 'not configured'}`,
+      `Linear URL: ${command.linearTask.url || 'not configured'}`,
+      `Linear Team: ${command.linearTask.team || 'not configured'}`,
+      `Linear Status: ${command.linearTask.status || 'not configured'}`,
+      ''
+    );
+  }
 
   if (command.kind === 'failed-workflow') {
     lines.push(
@@ -411,6 +427,13 @@ function commandKey(command) {
     command.prNumber || '',
     command.url || ''
   ].join('|');
+}
+
+function attachLinearTask(command, task) {
+  return {
+    ...command,
+    linearTask: task
+  };
 }
 
 function buildCommands({ failedWorkflowRuns, supervisorFindings, openPRs }) {
@@ -691,7 +714,7 @@ async function main() {
   }
 
   const commands = buildCommands({ failedWorkflowRuns, supervisorFindings, openPRs });
-  const highestPriorityNextAction = commands[0] || buildNoopCommand();
+  const highestPriorityNextAction = attachLinearTask(commands[0] || buildNoopCommand(), linearTask);
   const issueLabels = determineIssueLabels({ commands, supervisorFindings, openPRs });
 
   const codexCommand = commandForTarget(highestPriorityNextAction, 'Codex');
@@ -737,6 +760,7 @@ async function main() {
     command.kind,
     command.title,
     command.summary,
+    linearTask.key && linearTask.url ? `[${linearTask.key}](${linearTask.url})` : 'not configured',
     command.url || '-'
   ]);
 
@@ -816,8 +840,20 @@ async function main() {
     '- `P2`: improvement',
     '',
     priorityQueueRows.length > 0
-      ? table(['Priority', 'Type', 'Command', 'Summary', 'Link'], priorityQueueRows)
+      ? table(['Priority', 'Type', 'Command', 'Summary', 'Linear', 'Link'], priorityQueueRows)
       : '_No actionable queue items right now._',
+    '',
+    '### Linear coordination',
+    '',
+    table(
+      ['Field', 'Value'],
+      [
+        ['Linear task', linearTask.key || 'not configured'],
+        ['Linear URL', linearTask.url || 'not configured'],
+        ['Linear team', linearTask.team || 'not configured'],
+        ['Linear status', linearTask.status || 'not configured']
+      ]
+    ),
     '',
     '### Highest-priority next action',
     '',
@@ -871,6 +907,7 @@ async function main() {
     supervisorFindings,
     priorityQueue: commands,
     highestPriorityNextAction,
+    linearTask,
     nextCommands: {
       Codex: codexCommand,
       OpenCode: openCodeCommand,
