@@ -56,7 +56,7 @@ export async function hasPendingStaffInviteForEmail(supabase: AppSupabaseClient,
     .select("id", { count: "exact", head: true })
     .eq("email", normalizedEmail)
     .eq("status", "pending")
-    .limit(1);
+    ;
 
   if (error) {
     throw error;

@@ -203,7 +203,7 @@ async function assertWorkspaceRecord(
     .select("id", { count: "exact", head: true })
     .eq("id", id)
     .eq("workspace_id", workspaceId)
-    .maybeSingle();
+    ;
   if (error) {
     throw new Error(`資料權限檢查失敗：${error.message}`);
   }
@@ -320,7 +320,7 @@ export async function saveCustomer(formData: FormData) {
       .eq("workspace_id", workspaceId)
       .eq("phone", phone)
       .neq("id", id ?? "00000000-0000-0000-0000-000000000000")
-      .maybeSingle();
+      ;
 
     if (duplicateError) throw new Error(`檢查電話是否重複失敗：${duplicateError.message}`);
     if ((duplicateCount ?? 0) > 0) throw new Error("此電話已存在於同一工作區，請改用編輯既有客戶。");
