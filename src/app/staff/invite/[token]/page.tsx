@@ -36,7 +36,7 @@ export default async function StaffInvitePage({ params, searchParams }: StaffInv
   try {
     const result = await supabase
       .from("workspace_member_invites")
-      .select("*")
+      .select("id, workspace_id, email, display_name, phone, role, commission_rate, specialties, token, status, invited_by, created_at, accepted_at")
       .eq("token", token)
       .maybeSingle();
     invite = result.data;
