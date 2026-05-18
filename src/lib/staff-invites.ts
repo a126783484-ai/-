@@ -51,19 +51,18 @@ export async function hasPendingStaffInviteForEmail(supabase: AppSupabaseClient,
     return false;
   }
 
-  const { data, error } = await supabase
+  const { count, error } = await supabase
     .from("workspace_member_invites")
-    .select("id")
+    .select("id", { count: "exact", head: true })
     .eq("email", normalizedEmail)
     .eq("status", "pending")
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
 
   if (error) {
     throw error;
   }
 
-  return Boolean(data);
+  return (count ?? 0) > 0;
 }
 
 export function isMissingStaffInviteTableError(error: { code?: string; message?: string } | null | undefined) {

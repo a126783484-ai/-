@@ -468,6 +468,12 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - `updateCustomerAction()` now uses the update response itself to confirm the target row exists.
 - This removes the pre-read of the customer row from the update path.
 - Verified with `npm run typecheck`.
+
+## Service update and invite existence trim
+
+- `updateServiceAction()` now uses the update response itself to confirm the target row exists.
+- `hasPendingStaffInviteForEmail()` now uses a head/count existence check instead of fetching an invite row.
+- Verified with `npm run typecheck`.
 ## Staff invite payload trim
 
 - The staff invite page and accept action now select only the invite columns they render or persist.
