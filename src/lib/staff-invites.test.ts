@@ -2,18 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import { buildStaffInvitePath, hasPendingStaffInviteForEmail } from "./staff-invites";
 
 function createInviteClientStub(found: boolean) {
-  const query = {
-    select: vi.fn(() => query),
-    eq: vi.fn(() => query),
-    limit: vi.fn(() => query),
-    maybeSingle: vi.fn(async () => ({
-      data: found ? { id: "invite-1" } : null,
-      error: null
-    }))
-  };
-
   return {
-    from: vi.fn(() => query)
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          eq: vi.fn(async () => ({
+            count: found ? 1 : 0,
+            error: null
+          }))
+        }))
+      }))
+    }))
   } as never;
 }
 
