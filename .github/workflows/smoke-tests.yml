@@ -4,13 +4,24 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - 'src/**'
+      - 'tests/smoke/**'
+      - 'playwright.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/smoke-tests.yml'
   workflow_dispatch:
+
+concurrency:
+  group: smoke-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   smoke-test:
     name: Playwright smoke tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -44,7 +55,7 @@ jobs:
         run: npx playwright test
 
       - name: Upload Playwright report
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
