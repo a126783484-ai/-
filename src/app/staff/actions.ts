@@ -207,9 +207,9 @@ export async function createStaffAction(formData: FormData) {
       user = data.user;
     }
 
-    const { data: existing, error: existingError } = await supabase
+    const { count: existingCount, error: existingError } = await supabase
       .from("workspace_members")
-      .select("id")
+      .select("id", { count: "exact", head: true })
       .eq("workspace_id", context.workspace.id)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -218,7 +218,7 @@ export async function createStaffAction(formData: FormData) {
       throw existingError;
     }
 
-    if (existing) {
+    if ((existingCount ?? 0) > 0) {
       fail("staff_duplicate");
     }
 
