@@ -1,28 +1,57 @@
-export const authMessageText: Record<string, string> = {
-  check_email: "帳號已建立，請到信箱完成驗證；驗證後再回來登入，即可進入 Dashboard。",
-  signed_out: "已安全登出。"
+import { useState } from 'react';
+
+const useAuthFeedback = () => {
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const login = async (email: string, password: string) => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        return data;
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError('伺服器錯誤');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/auth/logout', {
+        method: 'POST',
+      });
+      if (response.ok) {
+        return;
+      } else {
+        throw new Error('伺服器錯誤');
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError('伺服器錯誤');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { error, loading, login, logout };
 };
 
-export const authErrorText: Record<string, string> = {
-  auth_bootstrap_failed: "帳號驗證成功，但店鋪 workspace 初始化失敗。請重新登入；若仍失敗請聯絡管理員。",
-  auth_callback_failed: "Email 驗證連結已失效或無法建立登入 session，請重新登入或重新註冊。",
-  auth_config_missing: "系統登入設定尚未完成，請聯絡管理員檢查 Supabase 環境變數。",
-  invalid_login: "Email 或密碼不正確，或帳號尚未完成 email 驗證。",
-  signup_failed: "帳號建立失敗，請確認 email 尚未註冊且密碼符合規則。",
-  supabase_project_mismatch: "Production 後端設定指向錯誤 Supabase 專案。請將 Vercel 環境變數統一到正式 Beauty OS Supabase project 後重新部署。",
-  workspace_bootstrap_failed: "帳號已建立，但店鋪 workspace 初始化失敗。請完成 email 驗證後登入；若仍失敗請聯絡管理員。"
-};
-
-export function readAuthParam(value: string | string[] | undefined) {
-  return typeof value === "string" ? value : undefined;
-}
-
-export function getAuthMessage(code: string | undefined) {
-  if (!code) return undefined;
-  return authMessageText[code] ?? authMessageText.signed_out;
-}
-
-export function getAuthError(code: string | undefined) {
-  if (!code) return undefined;
-  return authErrorText[code] ?? authErrorText.signup_failed;
-}
+export default useAuthFeedback;

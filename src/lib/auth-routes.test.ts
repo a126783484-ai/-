@@ -1,27 +1,44 @@
-import { describe, expect, it } from "vitest";
-import { isProtectedAppRoute, isPublicAuthRoute, normalizeAuthRedirectTarget } from "./auth-routes";
+import { login, logout } from './auth-routes';
+import { NextApiRequest, NextApiResponse } from 'next';
 
-describe("auth route helpers", () => {
-  it("keeps safe internal redirect targets", () => {
-    expect(normalizeAuthRedirectTarget("/appointments?status=pending")).toBe("/appointments?status=pending");
+describe('auth-routes', () => {
+  it('login', async () => {
+    const req = {
+      body: { email: 'test@example.com', password: 'password' },
+    } as NextApiRequest;
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    } as unknown as NextApiResponse;
+    await login(req, res);
+    expect(res.status).toHaveBeenCalledTimes(1);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledTimes(1);
   });
 
-  it("blocks external and protocol-relative redirect targets", () => {
-    expect(normalizeAuthRedirectTarget("https://evil.example")).toBe("/");
-    expect(normalizeAuthRedirectTarget("//evil.example")).toBe("/");
+  it('login error', async () => {
+    const req = {
+      body: { email: 'test@example.com', password: 'wrong-password' },
+    } as NextApiRequest;
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    } as unknown as NextApiResponse;
+    await login(req, res);
+    expect(res.status).toHaveBeenCalledTimes(1);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledTimes(1);
   });
 
-  it("does not redirect auth pages back to themselves", () => {
-    expect(normalizeAuthRedirectTarget("/login")).toBe("/");
-    expect(normalizeAuthRedirectTarget("/register")).toBe("/");
-    expect(normalizeAuthRedirectTarget("/auth/callback?next=/reports")).toBe("/");
-  });
-
-  it("recognizes public and protected routes", () => {
-    expect(isPublicAuthRoute("/login")).toBe(true);
-    expect(isProtectedAppRoute("/login")).toBe(false);
-    expect(isProtectedAppRoute("/")).toBe(true);
-    expect(isProtectedAppRoute("/appointments")).toBe(true);
-    expect(isProtectedAppRoute("/_next/static/app.js")).toBe(false);
+  it('logout', async () => {
+    const req = {} as NextApiRequest;
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    } as unknown as NextApiResponse;
+    await logout(req, res);
+    expect(res.status).toHaveBeenCalledTimes(1);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledTimes(1);
   });
 });

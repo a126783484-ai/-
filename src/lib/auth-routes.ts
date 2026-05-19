@@ -1,26 +1,32 @@
-const publicRoutes = new Set(["/login", "/register", "/auth/callback"]);
+import { NextApiRequest, NextApiResponse } from 'next';
+import { supabase } from '../supabase';
+import { AuthRoutesError } from './auth-routes-error';
 
-export function normalizeAuthRedirectTarget(value: FormDataEntryValue | string | null | undefined): string {
-  if (typeof value !== "string") return "/";
-  const trimmed = value.trim();
-
-  if (!trimmed.startsWith("/")) return "/";
-  if (trimmed.startsWith("//")) return "/";
-  if (trimmed.startsWith("/login") || trimmed.startsWith("/register") || trimmed.startsWith("/auth/callback")) {
-    return "/";
+const login = async (req: NextApiRequest, res: NextApiResponse) => {
+  try {
+    const { email, password } = req.body;
+    const { user, session } = await supabase.auth.signIn({ email, password });
+    if (user && session) {
+      return res.status(200).json({ user, session });
+    } else {
+      throw new AuthRoutesError('登入失敗');
+    }
+  } catch (error) {
+    if (error instanceof AuthRoutesError) {
+      return res.status(401).json({ error: error.message });
+    } else {
+      return res.status(500).json({ error: '伺服器錯誤' });
+    }
   }
+};
 
-  return trimmed;
-}
-
-export function isPublicAuthRoute(pathname: string): boolean {
-  return publicRoutes.has(pathname);
-}
-
-export function isProtectedAppRoute(pathname: string): boolean {
-  if (pathname.startsWith("/_next") || pathname.startsWith("/api") || pathname === "/favicon.ico") {
-    return false;
+const logout = async (req: NextApiRequest, res: NextApiResponse) => {
+  try {
+    await supabase.auth.signOut();
+    return res.status(200).json({ message: '登出成功' });
+  } catch (error) {
+    return res.status(500).json({ error: '伺服器錯誤' });
   }
+};
 
-  return !isPublicAuthRoute(pathname);
-}
+export { login, logout };
