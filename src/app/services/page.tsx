@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { supabaseClient } from 'src/lib/supabase';
-import { Service } from 'src/lib/types';
+import { supabase } from '../lib/supabase';
+import { Service } from '../lib/types';
 
 const ServicesPage = () => {
   const [services, setServices] = useState<Service[]>([]);
@@ -8,13 +8,21 @@ const ServicesPage = () => {
 
   useEffect(() => {
     const fetchServices = async () => {
-      const { data, error } = await supabaseClient.from('services').select('*');
-      if (error) {
+      try {
+        const { data, error } = await supabase
+          .from('services')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error) {
+          console.error(error);
+        } else {
+          setServices(data);
+        }
+      } catch (error) {
         console.error(error);
-      } else {
-        setServices(data);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     fetchServices();
   }, []);
