@@ -4,26 +4,32 @@ import { supabase } from '../lib/supabase';
 import { Service } from '../lib/types';
 
 const ServicesPage = () => {
-  const [services, setServices] = useState<Service[]>([]);
   const { data: session } = useSession();
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const fetchServices = async () => {
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('services')
         .select('*')
-        .eq('created_by', session.user.id);
+        .eq('is_active', true);
       if (error) {
         throw error;
       }
       setServices(data);
     } catch (error) {
       console.error(error);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchServices();
+    if (session) {
+      fetchServices();
+    }
   }, [session]);
 
   return (
