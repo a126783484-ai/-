@@ -52,11 +52,20 @@ const ENV = {
 // ===== Constants =====
 const CONFIG = {
   GROQ_API_URL: 'https://api.groq.com/openai/v1/chat/completions',
-  MODEL: 'llama-3.3-70b-versatile',
-  MAX_RETRIES: 2,
+  // Free tier models — ordered by preference (cheapest first)
+  MODELS: [
+    'llama-3.1-8b-instant',       // Fast, free, good for simple tasks
+    'qwen-2.5-32b',               // Good coding model, free
+    'llama-3.3-70b-versatile',    // Best quality, 12k TPM limit
+    'deepseek-r1-distill-llama-70b', // Reasoning, free
+  ],
+  MAX_RETRIES: 3,
   RETRY_DELAY: 1000,
   COMMAND_QUEUE_ISSUE: 27,
 };
+
+// Model usage tracking per session
+const MODEL_USAGE = {};
 
 // Lane-specific configuration
 const LANE_CONFIG = {
@@ -182,8 +191,21 @@ function safetyCheck() {
   log(`Safety checks passed. Lane: ${ENV.AI_LANE} | Mode: ${ENV.ENGINEER_MODE} | Run: ${ENV.RUN_MODE}`);
 }
 
-// ===== Groq API =====
-async function callGroq(systemPrompt, userPrompt, maxTokens = 2500) {
+// ===== Groq API with Multi-Model Router =====
+let currentModelIndex = 0;
+
+function getNextModel() {
+  const model = CONFIG.MODELS[currentModelIndex % CONFIG.MODELS.length];
+  currentModelIndex++;
+  return model;
+}
+
+async function callGroq(systemPrompt, userPrompt, maxTokens = 2500, modelOverride = null) {
+  const model = modelOverride || getNextModel();
+  const taskType = systemPrompt.includes('writing code') ? 'code' : 'task';
+
+  log(`Calling Groq: ${model} (${taskType})`);
+
   const response = await fetch(CONFIG.GROQ_API_URL, {
     method: 'POST',
     headers: {
@@ -191,7 +213,7 @@ async function callGroq(systemPrompt, userPrompt, maxTokens = 2500) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      model: CONFIG.MODEL,
+      model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
@@ -204,15 +226,23 @@ async function callGroq(systemPrompt, userPrompt, maxTokens = 2500) {
   const data = await response.json();
   if (data.error) {
     const msg = data.error.message || '';
+
     if (msg.includes('Rate limit')) {
-      const retryAfter = msg.match(/try again in ([\d.]+)s/);
-      const waitMs = retryAfter ? (parseFloat(retryAfter[1]) + 2) * 1000 : 30000;
-      log(`Groq rate limited. Waiting ${Math.round(waitMs / 1000)}s...`, 'warn');
-      await sleep(waitMs);
+      log(`Rate limited on ${model}. Trying next model...`, 'warn');
+      // Try next model immediately
       return callGroq(systemPrompt, userPrompt, maxTokens);
     }
-    throw new Error(`Groq API: ${msg}`);
+
+    if (msg.includes('not found') || msg.includes('does not exist')) {
+      log(`Model ${model} not available. Trying next...`, 'warn');
+      return callGroq(systemPrompt, userPrompt, maxTokens);
+    }
+
+    throw new Error(`Groq API (${model}): ${msg}`);
   }
+
+  MODEL_USAGE[model] = (MODEL_USAGE[model] || 0) + 1;
+  log(`Model usage: ${JSON.stringify(MODEL_USAGE)}`);
   return data.choices[0].message.content;
 }
 
@@ -463,7 +493,8 @@ function classifyRisk(files, labels = []) {
 async function selectTask(backlog) {
   log('Selecting task...');
 
-  if (backlog.failedWorkflows.length > 0) {
+  // P0: Failed workflows — engine lane only (product lane should not touch CI/workflow fixes)
+  if (ENV.AI_LANE === 'engine' && backlog.failedWorkflows.length > 0) {
     const wf = backlog.failedWorkflows[0];
     return {
       priority: 'P0',
@@ -474,7 +505,8 @@ async function selectTask(backlog) {
     };
   }
 
-  if (backlog.repairIssues.length > 0) {
+  // P0: Repair issues — engine lane only (repair issues are usually CI/automation related)
+  if (ENV.AI_LANE === 'engine' && backlog.repairIssues.length > 0) {
     const issue = backlog.repairIssues[0];
     return {
       priority: 'P0',
@@ -485,6 +517,7 @@ async function selectTask(backlog) {
     };
   }
 
+  // P2: AI task issues — both lanes can pick these up
   if (backlog.aiTaskIssues.length > 0) {
     const issue = backlog.aiTaskIssues[0];
     return {
@@ -496,6 +529,7 @@ async function selectTask(backlog) {
     };
   }
 
+  // P2: Product improvement — product lane only
   if (ENV.AI_LANE === 'product') {
     return {
       priority: 'P2',
@@ -506,6 +540,7 @@ async function selectTask(backlog) {
     };
   }
 
+  // P2: Engine improvement — engine lane only
   if (ENV.AI_LANE === 'engine') {
     return {
       priority: 'P2',
