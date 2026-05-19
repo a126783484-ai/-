@@ -293,7 +293,19 @@ async function createPR(task, changes, checks) {
   exec(`git checkout -b ${branchName}`);
   await withRetry(() => exec(`git push -u origin ${branchName}`));
   
-  const body = `## AI 自動改進\n\n**任務**: ${task.task}\n**描述**: ${task.description}\n**變更**: ${changes.map(c => c.filePath).join(', ')}\n\n---\n*AI Developer v4.1*`;
+  const body = `## AI 自動改進 (需人工審查)
+
+**任務**: ${task.task}
+**描述**: ${task.description}
+**變更**: ${changes.map(c => c.filePath).join(', ')}
+
+### ⚠️ 審查注意事項
+- 此 PR 由 AI 自動生成，**必須經過人工審查後才能合併**。
+- 請確認程式碼邏輯正確且符合專案規範。
+- 確認無安全風險後，請手動合併。
+
+---
+*AI Developer v4.1*`;
   
   exec(`gh pr create --title "[AI] ${task.task}" --body '${body}' --base main --head ${branchName}`);
   
