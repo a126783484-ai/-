@@ -1,36 +1,43 @@
-import { useState, useEffect } from 'react';
-import { supabaseClient } from 'src/lib/supabase';
-import { Service } from 'src/lib/types';
+import { useState } from 'react';
+import { useSession } from 'next-auth/react';
+import { supabase } from '../lib/supabase';
+import { Service } from '../lib/types';
 
 const ServicesPage = () => {
+  const { data: session } = useSession();
   const [services, setServices] = useState<Service[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const fetchServices = async () => {
-      const { data, error } = await supabaseClient.from('services').select('*');
+  const fetchServices = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .eq('owner_id', session.user.id);
       if (error) {
         console.error(error);
       } else {
         setServices(data);
       }
+    } catch (error) {
+      console.error(error);
+    } finally {
       setLoading(false);
-    };
-    fetchServices();
-  }, []);
-
-  if (loading) {
-    return <div>Loading...</div>;
-  }
+    }
+  };
 
   return (
     <div>
       <h1>Services</h1>
-      <ul>
-        {services.map((service) => (
-          <li key={service.id}>{service.name}</li>
-        ))}
-      </ul>
+      <button onClick={fetchServices}>Fetch Services</button>
+      {loading ? (
+        <p>Loading...</p>
+      ) : (
+        services.map((service) => (
+          <div key={service.id}>{service.name}</div>
+        ))
+      )}
     </div>
   );
 };
