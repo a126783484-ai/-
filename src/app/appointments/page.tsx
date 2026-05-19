@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { getAppointments } from '../actions';
+import { useState, useEffect } from 'react';
+import { fetchAppointments, createAppointment } from '../actions';
 import { Appointment } from '../types';
 
 const AppointmentsPage = () => {
@@ -8,10 +8,10 @@ const AppointmentsPage = () => {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchAppointments = async () => {
+    const fetchAppointmentsData = async () => {
       setLoading(true);
       try {
-        const data = await getAppointments();
+        const data = await fetchAppointments();
         setAppointments(data);
       } catch (error) {
         setError(error);
@@ -19,8 +19,17 @@ const AppointmentsPage = () => {
         setLoading(false);
       }
     };
-    fetchAppointments();
+    fetchAppointmentsData();
   }, []);
+
+  const handleCreateAppointment = async (appointment: Appointment) => {
+    try {
+      const data = await createAppointment(appointment);
+      setAppointments([...appointments, ...data]);
+    } catch (error) {
+      setError(error);
+    }
+  };
 
   if (loading) {
     return <div>Loading...</div>;
@@ -38,6 +47,9 @@ const AppointmentsPage = () => {
           <li key={appointment.id}>{appointment.name}</li>
         ))}
       </ul>
+      <button onClick={() => handleCreateAppointment({ name: 'New Appointment' })}>
+        Create Appointment
+      </button>
     </div>
   );
 };

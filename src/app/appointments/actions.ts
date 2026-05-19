@@ -1,54 +1,28 @@
 import { supabase } from '../supabase';
-import { Action } from '../types';
+import { Appointment } from '../types';
 
-export const getAppointments: Action = async () => {
+export const fetchAppointments = async () => {
   try {
     const { data, error } = await supabase.from('appointments').select('*');
     if (error) {
       throw error;
     }
-    return data;
+    return data as Appointment[];
   } catch (error) {
     console.error(error);
-    return [];
+    throw error;
   }
 };
 
-export const createAppointment: Action = async (data: any) => {
+export const createAppointment = async (appointment: Appointment) => {
   try {
-    const { error } = await supabase.from('appointments').insert([data]);
+    const { data, error } = await supabase.from('appointments').insert([appointment]);
     if (error) {
       throw error;
     }
-    return true;
+    return data as Appointment[];
   } catch (error) {
     console.error(error);
-    return false;
-  }
-};
-
-export const updateAppointment: Action = async (id: number, data: any) => {
-  try {
-    const { error } = await supabase.from('appointments').update({ id, ...data });
-    if (error) {
-      throw error;
-    }
-    return true;
-  } catch (error) {
-    console.error(error);
-    return false;
-  }
-};
-
-export const deleteAppointment: Action = async (id: number) => {
-  try {
-    const { error } = await supabase.from('appointments').delete({ id });
-    if (error) {
-      throw error;
-    }
-    return true;
-  } catch (error) {
-    console.error(error);
-    return false;
+    throw error;
   }
 };

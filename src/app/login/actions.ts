@@ -1,50 +1,23 @@
-"use server";
+import { supabase } from '../supabase';
 
-import type { User } from "@supabase/supabase-js";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { ensureOwnerWorkspaceForUser, hasActiveWorkspaceMembership } from "@/lib/workspace";
-import { hasPendingStaffInviteForEmail, isMissingStaffInviteTableError } from "@/lib/staff-invites";
-
-export type LoginBootstrapResult =
-  | { ok: true }
-  | { ok: false; error: "auth_config_missing" | "auth_bootstrap_failed" };
-
-export async function bootstrapLoggedInWorkspaceAction(
-  supabase?: Awaited<ReturnType<typeof createSupabaseServerClient>> | null,
-  user?: User
-): Promise<LoginBootstrapResult> {
-  const client = supabase ?? (await createSupabaseServerClient().catch(() => null));
-
-  if (!client) {
-    return { ok: false, error: "auth_config_missing" };
-  }
-
-  const dataUser = user ?? (await client.auth.getUser()).data.user;
-
-  if (!dataUser) {
-    return { ok: false, error: "auth_bootstrap_failed" };
-  }
-
+export const login = async (email: string, password: string) => {
   try {
-    if (await hasActiveWorkspaceMembership(dataUser.id, client)) {
-      return { ok: true };
+    const { data, error } = await supabase.auth.signIn({ email, password });
+    if (error) {
+      throw error;
     }
-
-    try {
-      if (await hasPendingStaffInviteForEmail(client, dataUser.email ?? "")) {
-        return { ok: true };
-      }
-    } catch (inviteError) {
-      if (!isMissingStaffInviteTableError(inviteError as { code?: string; message?: string } | null | undefined)) {
-        console.error("pending invite lookup failed", inviteError);
-      }
-    }
-
-    await ensureOwnerWorkspaceForUser(dataUser, client, true);
-  } catch {
-    await client.auth.signOut().catch(() => undefined);
-    return { ok: false, error: "auth_bootstrap_failed" };
+    return data;
+  } catch (error) {
+    console.error(error);
+    throw error;
   }
+};
 
-  return { ok: true };
-}
+export const logout = async () => {
+  try {
+    await supabase.auth.signOut();
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
+};

@@ -1,32 +1,65 @@
-import Link from "next/link";
-import { LoginForm } from "@/components/LoginForm";
-import { getAuthError, getAuthMessage, readAuthParam } from "@/lib/auth-feedback";
+import { useState, useEffect } from 'react';
+import { login, logout } from '../actions';
 
-interface LoginPageProps {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
-}
+const LoginPage = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-export default async function LoginPage({ searchParams }: LoginPageProps) {
-  const params = searchParams ? await searchParams : undefined;
-  const error = getAuthError(readAuthParam(params?.error));
-  const message = getAuthMessage(readAuthParam(params?.message));
-  const next = readAuthParam(params?.next) ?? "/";
+  useEffect(() => {
+    const handleLogin = async () => {
+      setLoading(true);
+      try {
+        const data = await login(email, password);
+        // Handle login success
+      } catch (error) {
+        setError(error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    handleLogin();
+  }, [email, password]);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      // Handle logout success
+    } catch (error) {
+      setError(error);
+    }
+  };
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (error) {
+    return <div>Error: {error.message}</div>;
+  }
 
   return (
-    <main className="grid min-h-screen place-items-center bg-blush p-4">
-      <section className="card w-full max-w-md p-5 sm:p-6">
-        <p className="text-sm font-semibold text-rose">Beauty OS</p>
-        <h1 className="mt-2 text-3xl font-bold text-plum">登入店鋪後台</h1>
-        <p className="mt-2 text-sm text-ink/60">
-          使用 Supabase Auth 驗證 email 與密碼。登入後由後端建立 session，再補齊 workspace。
-        </p>
-
-        <LoginForm initialError={error} initialMessage={message} next={next} />
-
-        <Link className="mt-4 block text-center text-sm font-semibold text-rose" href="/register">
-          建立新店鋪 workspace
-        </Link>
-      </section>
-    </main>
+    <div>
+      <h1>Login</h1>
+      <form>
+        <label>
+          Email:
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </label>
+        <label>
+          Password:
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        </label>
+        <button type="submit" onClick={handleLogin}>
+          Login
+        </button>
+        <button type="button" onClick={handleLogout}>
+          Logout
+        </button>
+      </form>
+    </div>
   );
-}
+};
+
+export default LoginPage;
