@@ -9,20 +9,15 @@ const ServicesPage = () => {
 
   const fetchServices = async () => {
     setLoading(true);
-    try {
-      const { data, error } = await supabaseClient
-        .from('services')
-        .select('*');
-      if (error) {
-        console.error(error);
-      } else {
-        setServices(data);
-      }
-    } catch (error) {
+    const { data, error } = await supabaseClient
+      .from('services')
+      .select('*');
+    if (error) {
       console.error(error);
-    } finally {
-      setLoading(false);
+    } else {
+      setServices(data);
     }
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -31,12 +26,15 @@ const ServicesPage = () => {
 
   return (
     <div>
+      <h1>Services</h1>
       {loading ? (
         <p>Loading...</p>
       ) : (
-        services.map((service) => (
-          <div key={service.id}>{service.name}</div>
-        ))
+        <ul>
+          {services.map((service) => (
+            <li key={service.id}>{service.name}</li>
+          ))}
+        </ul>
       )}
     </div>
   );
