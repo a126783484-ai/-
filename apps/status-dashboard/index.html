@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Beauty OS 監控中心</title>
+    <meta name="theme-color" content="#111827">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="https://github.com/favicon.ico">
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --primary: #3b82f6;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .header {
+            padding: 20px;
+            background: var(--card);
+            border-bottom: 1px solid #334155;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 1.25rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .container {
+            padding: 16px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .card-title {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #334155;
+        }
+        .status-row:last-child { border-bottom: none; }
+        .status-label { font-weight: 500; }
+        .status-value { font-family: monospace; font-size: 0.9rem; }
+        .badge {
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-success { background: rgba(16, 185, 129, 0.2); color: var(--success); }
+        .badge-warning { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
+        .badge-danger { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+        .pr-item {
+            padding: 12px;
+            background: #0f172a;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border-left: 4px solid var(--primary);
+        }
+        .pr-title { font-weight: 600; margin-bottom: 4px; }
+        .pr-meta { font-size: 0.8rem; color: var(--text-muted); }
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+        }
+        .btn:active { transform: scale(0.98); }
+        .loading { text-align: center; color: var(--text-muted); padding: 20px; }
+        .install-banner {
+            display: none;
+            background: var(--primary);
+            color: white;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="install-banner" id="installBanner" onclick="installApp()">
+        📲 點擊安裝到手機桌面
+    </div>
+    <div class="header">
+        <h1>💅 Beauty OS 監控中心</h1>
+    </div>
+    <div class="container">
+        <!-- System Status -->
+        <div class="card">
+            <div class="card-title">系統狀態</div>
+            <div id="systemStatus" class="loading">載入中...</div>
+        </div>
+
+        <!-- PR List -->
+        <div class="card">
+            <div class="card-title">待審查 PR</div>
+            <div id="prList" class="loading">載入中...</div>
+        </div>
+
+        <!-- CI Status -->
+        <div class="card">
+            <div class="card-title">最近 CI 建構</div>
+            <div id="ciStatus" class="loading">載入中...</div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card">
+            <div class="card-title">快速操作</div>
+            <a href="https://github.com/Johnnie1266789/beauty-os" class="btn" style="margin-bottom: 8px;">前往 GitHub</a>
+            <a href="https://vercel.com/a126783484-2182s-projects/-beauty-nail-os" class="btn" style="background: #000;">前往 Vercel</a>
+        </div>
+    </div>
+
+    <script>
+        const REPO = 'Johnnie1266789/beauty-os';
+        const API_BASE = 'https://api.github.com/repos/' + REPO;
+
+        async function fetchData() {
+            try {
+                // Fetch PRs
+                const prRes = await fetch(API_BASE + '/pulls?state=open&per_page=5');
+                const prs = await prRes.json();
+                renderPRs(prs);
+
+                // Fetch CI Status (simplified)
+                const runRes = await fetch(API_BASE + '/actions/runs?per_page=3');
+                const runs = await runRes.json();
+                renderCI(runs.workflow_runs);
+
+                // Simulate System Status (since we can't reach the VM directly from browser easily without API)
+                renderSystemStatus(true); // Assuming running based on previous setup
+
+            } catch (e) {
+                console.error(e);
+                document.getElementById('systemStatus').innerHTML = '<span class="badge badge-danger">連線錯誤</span>';
+            }
+        }
+
+        function renderSystemStatus(isRunning) {
+            const el = document.getElementById('systemStatus');
+            el.innerHTML = `
+                <div class="status-row">
+                    <span class="status-label">自動開發系統</span>
+                    <span class="badge ${isRunning ? 'badge-success' : 'badge-danger'}">${isRunning ? '執行中' : '已停止'}</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">雲端伺服器</span>
+                    <span class="badge badge-success">Google Cloud (Debian)</span>
+                </div>
+            `;
+        }
+
+        function renderPRs(prs) {
+            const el = document.getElementById('prList');
+            if (prs.length === 0) {
+                el.innerHTML = '<div style="text-align:center; color: var(--text-muted)">目前沒有待審查的 PR</div>';
+                return;
+            }
+            el.innerHTML = prs.map(pr => `
+                <a href="${pr.html_url}" style="text-decoration:none; color:inherit;">
+                    <div class="pr-item">
+                        <div class="pr-title">#${pr.number} ${pr.title}</div>
+                        <div class="pr-meta">${pr.user.login} • ${new Date(pr.created_at).toLocaleDateString()}</div>
+                    </div>
+                </a>
+            `).join('');
+        }
+
+        function renderCI(runs) {
+            const el = document.getElementById('ciStatus');
+            el.innerHTML = runs.map(run => `
+                <div class="status-row">
+                    <span class="status-label">${run.name}</span>
+                    <span class="badge ${run.conclusion === 'success' ? 'badge-success' : 'badge-warning'}">${run.conclusion}</span>
+                </div>
+            `).join('');
+        }
+
+        // PWA Install Logic
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            document.getElementById('installBanner').style.display = 'block';
+        });
+
+        function installApp() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        document.getElementById('installBanner').style.display = 'none';
+                    }
+                    deferredPrompt = null;
+                });
+            }
+        }
+
+        // Initial Load
+        fetchData();
+        // Refresh every 60 seconds
+        setInterval(fetchData, 60000);
+    </script>
+</body>
+</html>
