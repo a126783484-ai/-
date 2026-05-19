@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+
+// Skip verification for Vercel preview deployments to avoid build failures due to missing prod env vars
+if (process.env.VERCEL_ENV === 'preview') {
+  console.log('Skipping production env verification for preview deployment.');
+  process.exit(0);
+}
+
 const required = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY"
