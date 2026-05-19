@@ -11,13 +11,10 @@ const ServicesPage = () => {
   const fetchServices = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('services')
         .select('id, name, description')
-        .order('name', { ascending: true });
-      if (error) {
-        throw error;
-      }
+        .eq('owner_id', session.user.id);
       setServices(data);
     } catch (error) {
       console.error(error);
