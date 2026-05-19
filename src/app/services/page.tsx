@@ -1,34 +1,40 @@
 import { useState, useEffect } from 'react';
-import { useSupabaseClient } from 'src/lib/supabase';
-import { Service } from 'src/lib/types';
-import { useDeferredViews } from 'src/components/DeferredViews';
+import { supabase } from '../lib/supabase';
+import { Service } from '../lib/types';
 
 const ServicesPage = () => {
-  const supabaseClient = useSupabaseClient();
   const [services, setServices] = useState<Service[]>([]);
-  const { DeferredView } = useDeferredViews();
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchServices = async () => {
-      const { data, error } = await supabaseClient
-        .from('services')
-        .select('*');
-      if (error) {
-        console.error(error);
-      } else {
-        setServices(data);
+      try {
+        const { data, error } = await supabase
+          .from('services')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error) {
+          setError(error.message);
+        } else {
+          setServices(data);
+        }
+      } catch (error) {
+        setError(error.message);
       }
     };
     fetchServices();
-  }, [supabaseClient]);
+  }, []);
 
   return (
-    <DeferredView isReady={services.length > 0}>
-      {/* Render services list */}
-      {services.map((service) => (
-        <div key={service.id}>{service.name}</div>
-      ))}
-    </DeferredView>
+    <div>
+      <h1>Services</h1>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+      <ul>
+        {services.map((service) => (
+          <li key={service.id}>{service.name}</li>
+        ))}
+      </ul>
+    </div>
   );
 };
 
