@@ -27,13 +27,10 @@ const ServicesPage = () => {
     }
   };
 
-  useEffect(() => {
-    fetchServices();
-  }, [session]);
-
   return (
     <div>
       {/* services list */}
+      <button onClick={fetchServices}>Fetch Services</button>
     </div>
   );
 };
