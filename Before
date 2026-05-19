@@ -1,0 +1,7 @@
+import { useState } from 'react';
+import { useSupabaseClient } from 'src/lib/supabase';
+
+const ServicesPage = () => {
+  const supabase = useSupabaseClient();
+  // ...
+};
