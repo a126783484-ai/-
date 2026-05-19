@@ -1,91 +1,55 @@
-"use server";
+import { Customer } from '../../models/customer';
+import { supabase } from '../../../utils/supabase';
+import { useState, useEffect } from 'react';
 
-import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { can } from "@/lib/permissions";
-import type { Role } from "@/lib/types";
-import { getCurrentWorkspaceContext } from "@/lib/workspace";
-
-function readRequired(formData: FormData, key: string) {
-  const value = formData.get(key);
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(`${key} is required.`);
-  }
-  return value.trim();
-}
-
-function readOptional(formData: FormData, key: string) {
-  const value = formData.get(key);
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
-}
-
-function splitList(value: string | null) {
-  return value
-    ? value
-        .split(/[,\n]/)
-        .map((item) => item.trim())
-        .filter(Boolean)
-    : [];
-}
-
-function buildSearchParams(input: Record<string, string>) {
-  return new URLSearchParams(input).toString();
-}
-
-export async function createCustomerAction(formData: FormData) {
-  const name = readRequired(formData, "name");
-  const phone = readRequired(formData, "phone");
-  const tier = readOptional(formData, "tier") ?? "一般";
-  const birthday = readOptional(formData, "birthday");
-  const lineId = readOptional(formData, "lineId");
-  const note = readOptional(formData, "note");
-  const nextReminder = readOptional(formData, "nextReminder");
-  const preferences = splitList(readOptional(formData, "preferences"));
-  const cautions = splitList(readOptional(formData, "cautions"));
-  const tags = splitList(readOptional(formData, "tags"));
-
-  const supabase = await createSupabaseServerClient().catch(() => null);
-
-  if (!supabase) {
-    redirect(`/customers?${buildSearchParams({ error: "customer_config_missing" })}`);
-  }
-
-  let workspaceId = "";
-  let role: Role = "staff";
-
+export const getCustomers = async () => {
   try {
-    const context = await getCurrentWorkspaceContext(supabase);
-    workspaceId = context.workspace.id;
-    role = context.membership.role;
-  } catch {
-    redirect(`/customers?${buildSearchParams({ error: "customer_create_failed" })}`);
-  }
-
-  if (!can(role, "customers")) {
-    redirect(`/customers?${buildSearchParams({ error: "customer_forbidden" })}`);
-  }
-
-  try {
-    const { error } = await supabase.from("customers").insert({
-      workspace_id: workspaceId,
-      name,
-      phone,
-      birthday,
-      line_id: lineId,
-      note,
-      preferences,
-      cautions,
-      tier,
-      tags,
-      next_reminder: nextReminder
-    });
-
+    const { data, error } = await supabase.from('customers').select('*');
     if (error) {
       throw error;
     }
-  } catch {
-    redirect(`/customers?${buildSearchParams({ error: "customer_create_failed" })}`);
+    return data;
+  } catch (error) {
+    console.error(error);
+    return [];
   }
+};
 
-  redirect(`/customers?${buildSearchParams({ message: "customer_created" })}`);
-}
+export const createCustomer = async (customer: Customer) => {
+  try {
+    const { data, error } = await supabase.from('customers').insert([customer]);
+    if (error) {
+      throw error;
+    }
+    return data[0];
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+};
+
+export const updateCustomer = async (id: number, customer: Customer) => {
+  try {
+    const { data, error } = await supabase.from('customers').update([customer]).eq('id', id);
+    if (error) {
+      throw error;
+    }
+    return data[0];
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+};
+
+export const deleteCustomer = async (id: number) => {
+  try {
+    const { data, error } = await supabase.from('customers').delete().eq('id', id);
+    if (error) {
+      throw error;
+    }
+    return data[0];
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+};
