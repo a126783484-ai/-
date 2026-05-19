@@ -1,34 +1,47 @@
-import { useState } from 'react';
-import { useSession } from 'next-auth/react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Service } from '../lib/types';
 
 const ServicesPage = () => {
-  const { data: session } = useSession();
-  const [services, setServices] = useState<Service[]>([]);
+  const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const fetchServices = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('services')
-        .select('*')
-        .eq('owner_id', session.user.id);
-      if (error) {
-        throw error;
+  useEffect(() => {
+    const fetchServices = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('services')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error) {
+          setError(error.message);
+        } else {
+          setServices(data);
+        }
+      } catch (error) {
+        setError(error.message);
+      } finally {
+        setLoading(false);
       }
-      setServices(data);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+    fetchServices();
+  }, []);
 
   return (
     <div>
-      {/* existing JSX code */}
+      <h1>Services</h1>
+      {loading ? (
+        <p>Loading...</p>
+      ) : (
+        services.map((service) => (
+          <div key={service.id}>
+            <h2>{service.name}</h2>
+            <p>{service.description}</p>
+          </div>
+        ))
+      )}
+      {error && <p style={{ color: 'red' }}>{error}</p>}
     </div>
   );
 };
