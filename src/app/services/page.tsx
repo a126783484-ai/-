@@ -1,26 +1,35 @@
-import type { NextPage } from 'next';
-import { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { useState, useEffect } from 'react';
+import { useSupabaseClient } from 'src/lib/supabase';
+import { Service } from 'src/lib/types';
 
-const ServicesPage: NextPage = () => {
-  const [services, setServices] = useState([]);
+const ServicesPage = () => {
+  const supabase = useSupabaseClient();
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const fetchServices = async () => {
-    try {
+  useEffect(() => {
+    const fetchServices = async () => {
+      setLoading(true);
       const { data, error } = await supabase
         .from('services')
-        .select('id, name, description');
-      if (error) throw error;
-      setServices(data);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+        .select('*');
+      if (error) {
+        console.error(error);
+      } else {
+        setServices(data);
+      }
+      setLoading(false);
+    };
+    fetchServices();
+  }, [supabase]);
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div>
       <h1>Services</h1>
-      <button onClick={fetchServices}>Fetch Services</button>
       <ul>
         {services.map((service) => (
           <li key={service.id}>{service.name}</li>
