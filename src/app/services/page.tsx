@@ -1,23 +1,32 @@
 import { useState, useEffect } from 'react';
-import { supabaseClient } from 'src/lib/supabase';
-import { Service } from 'src/lib/types';
+import { useSession } from 'next-auth/react';
+import { supabase } from '../lib/supabase';
+import { Service } from '../lib/types';
 
 const ServicesPage = () => {
+  const { data: session } = useSession();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchServices = async () => {
-      const { data, error } = await supabaseClient.from('services').select('*');
-      if (error) {
-        console.error(error);
-      } else {
+      try {
+        const { data, error } = await supabase
+          .from('services')
+          .select('*')
+          .eq('owner_id', session.user.id);
+        if (error) {
+          throw error;
+        }
         setServices(data);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     fetchServices();
-  }, []);
+  }, [session]);
 
   if (loading) {
     return <div>Loading...</div>;
