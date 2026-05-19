@@ -1,26 +1,24 @@
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { supabase } from '../lib/supabase';
+import { Service } from '../lib/types';
 
 const ServicesPage = () => {
+  const [services, setServices] = useState<Service[]>([]);
   const { data: session } = useSession();
-  const [services, setServices] = useState([]);
-  const [error, setError] = useState(null);
 
   const fetchServices = async () => {
     try {
-      const { data, error: supabaseError } = await supabase
+      const { data, error } = await supabase
         .from('services')
-        .select('id, name, description')
+        .select('*')
         .eq('is_active', true);
-
-      if (supabaseError) {
-        setError(supabaseError.message);
-      } else {
-        setServices(data);
+      if (error) {
+        throw error;
       }
+      setServices(data);
     } catch (error) {
-      setError(error.message);
+      console.error(error);
     }
   };
 
@@ -36,7 +34,6 @@ const ServicesPage = () => {
           <li key={service.id}>{service.name}</li>
         ))}
       </ul>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
     </div>
   );
 };
