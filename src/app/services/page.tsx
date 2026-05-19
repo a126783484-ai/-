@@ -1,40 +1,40 @@
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { supabase } from '../lib/supabase';
-import { Service } from '../lib/types';
 
 const ServicesPage = () => {
   const { data: session } = useSession();
-  const [services, setServices] = useState<Service[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [services, setServices] = useState([]);
 
   const fetchServices = async () => {
-    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('services')
-        .select('*')
-        .eq('is_active', true);
+        .select('id, name, description')
+        .order('id', { ascending: true });
+
       if (error) {
-        throw error;
+        console.error(error);
+      } else {
+        setServices(data);
       }
-      setServices(data);
     } catch (error) {
       console.error(error);
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (session) {
-      fetchServices();
-    }
-  }, [session]);
+    fetchServices();
+  }, []);
 
   return (
     <div>
-      {/* services list */}
+      <h1>Services</h1>
+      <ul>
+        {services.map((service) => (
+          <li key={service.id}>{service.name}</li>
+        ))}
+      </ul>
     </div>
   );
 };
