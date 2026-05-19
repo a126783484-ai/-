@@ -1,40 +1,35 @@
 import { useState, useEffect } from 'react';
-import { useSupabaseClient } from 'src/lib/supabase';
-import { Service } from 'src/lib/types';
+import { useSession } from 'next-auth/react';
+import { supabase } from '../lib/supabase';
 
 const ServicesPage = () => {
-  const supabase = useSupabaseClient();
-  const [services, setServices] = useState<Service[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { data: session } = useSession();
+  const [services, setServices] = useState([]);
 
   useEffect(() => {
-    const fetchServices = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('services')
-        .select('*');
-      if (error) {
-        console.error(error);
-      } else {
-        setServices(data);
-      }
-      setLoading(false);
-    };
-    fetchServices();
-  }, [supabase]);
-
-  if (loading) {
-    return <div>Loading...</div>;
-  }
+    if (session) {
+      const fetchServices = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('services')
+            .select('*')
+            .eq('user_id', session.user.id);
+          if (error) {
+            console.error(error);
+          } else {
+            setServices(data);
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      };
+      fetchServices();
+    }
+  }, [session]);
 
   return (
     <div>
-      <h1>Services</h1>
-      <ul>
-        {services.map((service) => (
-          <li key={service.id}>{service.name}</li>
-        ))}
-      </ul>
+      {/* services list */}
     </div>
   );
 };
