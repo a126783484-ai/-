@@ -1,41 +1,19 @@
-import { useState, useEffect } from 'react';
-import { useSupabaseClient } from 'src/lib/supabase';
-import { Service } from 'src/lib/types';
+import type { NextPage } from 'next';
+import type { Product } from '../lib/types';
+import { useSession } from 'next-auth/react';
+import { useSupabaseClient } from '../lib/supabase';
 
-const ServicesPage = () => {
+const ServicesPage: NextPage = () => {
   const supabaseClient = useSupabaseClient();
-  const [services, setServices] = useState<Service[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { data: session } = useSession();
 
-  const fetchServices = async () => {
-    setLoading(true);
-    const { data, error } = await supabaseClient
-      .from('services')
-      .select('*');
-    if (error) {
-      console.error(error);
-    } else {
-      setServices(data);
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchServices();
-  }, []);
+  const products: Product[] = [
+    // Add products here
+  ];
 
   return (
     <div>
-      <h1>Services</h1>
-      {loading ? (
-        <p>Loading...</p>
-      ) : (
-        <ul>
-          {services.map((service) => (
-            <li key={service.id}>{service.name}</li>
-          ))}
-        </ul>
-      )}
+      {/* Render products here */}
     </div>
   );
 };
