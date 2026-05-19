@@ -1,55 +1,91 @@
 import { useState, useEffect } from 'react';
-import { fetchAppointments, createAppointment } from '../actions';
-import { Appointment } from '../types';
+import { useSupabaseClient } from '@supabase/auth-helpers-react';
+import { useToast } from '@chakra-ui/react';
+import { useRouter } from 'next/router';
 
-const AppointmentsPage = () => {
+interface Appointment {
+  id: number;
+  customer_id: number;
+  service_id: number;
+  date: string;
+  time: string;
+}
+
+const AppointmentsPage: React.FC = () => {
+  const supabaseClient = useSupabaseClient();
+  const toast = useToast();
+  const router = useRouter();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchAppointmentsData = async () => {
-      setLoading(true);
+    const fetchAppointments = async () => {
       try {
-        const data = await fetchAppointments();
+        setLoading(true);
+        const { data, error } = await supabaseClient
+          .from('appointments')
+          .select('*');
+        if (error) {
+          throw error;
+        }
         setAppointments(data);
       } catch (error) {
-        setError(error);
+        console.error(error);
+        toast({
+          title: 'Error',
+          description: error.message,
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
       } finally {
         setLoading(false);
       }
     };
-    fetchAppointmentsData();
-  }, []);
+    fetchAppointments();
+  }, [supabaseClient, toast]);
 
-  const handleCreateAppointment = async (appointment: Appointment) => {
+  const handleDelete = async (id: number) => {
     try {
-      const data = await createAppointment(appointment);
-      setAppointments([...appointments, ...data]);
+      await supabaseClient.from('appointments').delete({ id });
+      setAppointments(appointments.filter((appointment) => appointment.id !== id));
     } catch (error) {
-      setError(error);
+      console.error(error);
+      toast({
+        title: 'Error',
+        description: error.message,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
     }
   };
 
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
-  if (error) {
-    return <div>Error: {error.message}</div>;
-  }
-
   return (
-    <div>
-      <h1>Appointments</h1>
-      <ul>
-        {appointments.map((appointment) => (
-          <li key={appointment.id}>{appointment.name}</li>
-        ))}
-      </ul>
-      <button onClick={() => handleCreateAppointment({ name: 'New Appointment' })}>
-        Create Appointment
-      </button>
+    <div className="flex justify-center items-center h-screen">
+      <div className="text-center">
+        <h1 className="text-3xl font-bold mb-4">Appointments</h1>
+        {loading ? (
+          <p>Loading...</p>
+        ) : (
+          <ul>
+            {appointments.map((appointment) => (
+              <li key={appointment.id}>
+                <p>
+                  {appointment.customer_id} - {appointment.service_id} -{' '}
+                  {appointment.date} - {appointment.time}
+                </p>
+                <button
+                  className="bg-red-500 text-white py-2 px-4 rounded"
+                  onClick={() => handleDelete(appointment.id)}
+                >
+                  Delete
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 };
