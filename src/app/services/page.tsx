@@ -12,7 +12,7 @@ const ServicesPage = () => {
       const { data, error } = await supabase
         .from('services')
         .select('*')
-        .eq('is_active', true);
+        .eq('created_by', session.user.id);
       if (error) {
         throw error;
       }
@@ -24,7 +24,7 @@ const ServicesPage = () => {
 
   useEffect(() => {
     fetchServices();
-  }, []);
+  }, [session]);
 
   return (
     <div>
