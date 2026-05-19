@@ -1,37 +1,34 @@
-import { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import type { NextPage } from 'next';
+import type { Product } from '../lib/types';
 
-const ServicesPage = () => {
-  const [services, setServices] = useState([]);
+const ServicesPage: NextPage = () => {
+  // existing code...
 
-  const fetchServices = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('services')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) {
-        console.error(error);
-      } else {
-        setServices(data);
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  useEffect(() => {
-    fetchServices();
-  }, []);
+  const products = [
+    {
+      id: 1,
+      name: 'Product 1',
+      description: 'This is product 1',
+      price: 19.99,
+    },
+    {
+      id: 2,
+      name: 'Product 2',
+      description: 'This is product 2',
+      price: 9.99,
+    },
+  ];
 
   return (
+    // existing code...
     <div>
-      <h1>Services</h1>
-      <ul>
-        {services.map((service) => (
-          <li key={service.id}>{service.name}</li>
-        ))}
-      </ul>
+      {products.map((product) => (
+        <div key={product.id}>
+          <h2>{product.name}</h2>
+          <p>{product.description}</p>
+          <p>Price: ${product.price}</p>
+        </div>
+      ))}
     </div>
   );
 };
