@@ -1,20 +1,62 @@
-export const dynamic = "force-dynamic";
+import { useState } from 'react';
+import { useSupabaseClient } from 'src/lib/supabase';
+import { Service } from 'src/lib/types';
+import { Button } from 'src/components';
 
-import { ServicesView } from "@/components/ModuleViews";
-import { loadAppData } from "@/lib/app-data";
-import { getServiceError, getServiceMessage, readServiceParam } from "@/lib/service-feedback";
-import { getServiceUpdateError, getServiceUpdateMessage, readServiceUpdateParam } from "@/lib/service-update-feedback";
+const ServicesPage = () => {
+  const supabaseClient = useSupabaseClient();
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(false);
 
-interface ServicesPageProps {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
-}
+  const handleAddService = async () => {
+    // Add a new service
+  };
 
-export default async function ServicesPage({ searchParams }: ServicesPageProps) {
-  const data = await loadAppData();
-  const params = searchParams ? await searchParams : undefined;
-  const message = getServiceMessage(readServiceParam(params?.message)) ?? getServiceUpdateMessage(readServiceUpdateParam(params?.message));
-  const error = getServiceError(readServiceParam(params?.error)) ?? getServiceUpdateError(readServiceUpdateParam(params?.error));
-  const notice = error ? { kind: "error" as const, message: error } : message ? { kind: "success" as const, message } : undefined;
+  const handleLoadServices = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabaseClient.from('services').select('*');
+      if (error) {
+        console.error(error);
+      } else {
+        setServices(data);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  return <ServicesView data={data} notice={notice} />;
-}
+  useEffect(() => {
+    handleLoadServices();
+  }, []);
+
+  return (
+    <div className="flex flex-col items-center justify-center p-4">
+      {services.length === 0 && (
+        <div className="bg-gray-100 rounded-lg p-4 text-center">
+          <h2 className="text-lg font-bold mb-2">No services added yet</h2>
+          <p className="text-gray-600 mb-4">
+            Click the button below to add a new service.
+          </p>
+          <Button onClick={handleAddService} className="bg-blue-500 hover:bg-blue-700">
+            Add Service
+          </Button>
+        </div>
+      )}
+      {services.length > 0 && (
+        <div className="flex flex-col items-center justify-center p-4">
+          <h2 className="text-lg font-bold mb-2">Services</h2>
+          <ul className="list-none p-0 m-0">
+            {services.map((service) => (
+              <li key={service.id} className="mb-4">
+                <p className="text-gray-600">{service.name}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ServicesPage;
