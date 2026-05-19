@@ -1,28 +1,39 @@
-export const authMessageText: Record<string, string> = {
-  check_email: "帳號已建立，請到信箱完成驗證；驗證後再回來登入，即可進入 Dashboard。",
-  signed_out: "已安全登出。"
+import { useState } from 'react';
+
+interface AuthFeedbackProps {
+  error?: string;
+  loading: boolean;
+}
+
+const AuthFeedback: React.FC<AuthFeedbackProps> = ({ error, loading }) => {
+  const [visible, setVisible] = useState(true);
+
+  if (!visible) return null;
+
+  const handleClose = () => {
+    setVisible(false);
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded relative">
+        <span className="block sm:inline">登入中...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative">
+        <span className="block sm:inline">{error}</span>
+        <span className="absolute right-0 top-0 px-4 py-3" onClick={handleClose}>
+          ×
+        </span>
+      </div>
+    );
+  }
+
+  return null;
 };
 
-export const authErrorText: Record<string, string> = {
-  auth_bootstrap_failed: "帳號驗證成功，但店鋪 workspace 初始化失敗。請重新登入；若仍失敗請聯絡管理員。",
-  auth_callback_failed: "Email 驗證連結已失效或無法建立登入 session，請重新登入或重新註冊。",
-  auth_config_missing: "系統登入設定尚未完成，請聯絡管理員檢查 Supabase 環境變數。",
-  invalid_login: "Email 或密碼不正確，或帳號尚未完成 email 驗證。",
-  signup_failed: "帳號建立失敗，請確認 email 尚未註冊且密碼符合規則。",
-  supabase_project_mismatch: "Production 後端設定指向錯誤 Supabase 專案。請將 Vercel 環境變數統一到正式 Beauty OS Supabase project 後重新部署。",
-  workspace_bootstrap_failed: "帳號已建立，但店鋪 workspace 初始化失敗。請完成 email 驗證後登入；若仍失敗請聯絡管理員。"
-};
-
-export function readAuthParam(value: string | string[] | undefined) {
-  return typeof value === "string" ? value : undefined;
-}
-
-export function getAuthMessage(code: string | undefined) {
-  if (!code) return undefined;
-  return authMessageText[code] ?? authMessageText.signed_out;
-}
-
-export function getAuthError(code: string | undefined) {
-  if (!code) return undefined;
-  return authErrorText[code] ?? authErrorText.signup_failed;
-}
+export default AuthFeedback;

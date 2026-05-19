@@ -1,26 +1,34 @@
-const publicRoutes = new Set(["/login", "/register", "/auth/callback"]);
+import { NextApiRequest, NextApiResponse } from 'next';
+import { supabaseClient } from '../supabase';
+import { AuthRouteError } from './auth-errors';
 
-export function normalizeAuthRedirectTarget(value: FormDataEntryValue | string | null | undefined): string {
-  if (typeof value !== "string") return "/";
-  const trimmed = value.trim();
+const authRoutes = async (req: NextApiRequest, res: NextApiResponse) => {
+  try {
+    const { method } = req;
 
-  if (!trimmed.startsWith("/")) return "/";
-  if (trimmed.startsWith("//")) return "/";
-  if (trimmed.startsWith("/login") || trimmed.startsWith("/register") || trimmed.startsWith("/auth/callback")) {
-    return "/";
+    switch (method) {
+      case 'POST':
+        const { email, password } = req.body;
+        const { user, session } = await supabaseClient.auth.signIn({
+          email,
+          password,
+        });
+
+        if (!user || !session) {
+          throw new AuthRouteError('登入失敗', 401);
+        }
+
+        return res.status(200).json({ user, session });
+      default:
+        throw new AuthRouteError('不支援的請求方法', 405);
+    }
+  } catch (error) {
+    if (error instanceof AuthRouteError) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
+
+    return res.status(500).json({ message: '伺服器錯誤' });
   }
+};
 
-  return trimmed;
-}
-
-export function isPublicAuthRoute(pathname: string): boolean {
-  return publicRoutes.has(pathname);
-}
-
-export function isProtectedAppRoute(pathname: string): boolean {
-  if (pathname.startsWith("/_next") || pathname.startsWith("/api") || pathname === "/favicon.ico") {
-    return false;
-  }
-
-  return !isPublicAuthRoute(pathname);
-}
+export default authRoutes;
