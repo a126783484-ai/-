@@ -1,16 +1,8 @@
-name: AI Developer Automation (Legacy - Manual Only)
+name: AI Engine Developer
 
 on:
   workflow_dispatch:
     inputs:
-      lane:
-        description: 'AI lane'
-        required: false
-        default: 'product'
-        type: choice
-        options:
-          - engine
-          - product
       run_mode:
         description: 'Run mode'
         required: false
@@ -25,8 +17,12 @@ permissions:
   issues: write
 
 jobs:
-  ai-develop:
+  ai-engine-develop:
     runs-on: ubuntu-latest
+    if: >-
+      vars.AI_ENGINE_LANE_ENABLED == 'true' &&
+      vars.SUPERVISION_ENABLED == 'true' &&
+      vars.AI_DEVELOPMENT_ALLOWED == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -44,10 +40,10 @@ jobs:
 
       - name: Configure Git
         run: |
-          git config --global user.name "BeautyOS-AI"
-          git config --global user.email "ai@beauty-os.com"
+          git config --global user.name "BeautyOS-AI-Engine"
+          git config --global user.email "ai-engine@beauty-os.com"
 
-      - name: Run AI Developer
+      - name: Run AI Engine Developer
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -72,7 +68,7 @@ jobs:
           AI_MAX_FILES_AUTO: ${{ vars.AI_MAX_FILES_AUTO }}
 
           # Lane & Mode
-          AI_LANE: ${{ github.event.inputs.lane || 'product' }}
+          AI_LANE: engine
           AI_ENGINEER_MODE: auto
           AI_RUN_MODE: ${{ github.event.inputs.run_mode || 'draft_pr' }}
         run: node scripts/ai-developer.mjs
