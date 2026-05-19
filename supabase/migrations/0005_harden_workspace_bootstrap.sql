@@ -1,7 +1,7 @@
 -- Harden owner workspace bootstrap for production auth repair.
 -- The RPC is intentionally idempotent: every authenticated call returns the
--- user's oldest active workspace if one exists, otherwise it creates a real
--- workspace plus active owner membership in the same transaction.
+-- user's canonical owner workspace if one exists, otherwise the oldest active
+-- workspace membership, and only then creates a real workspace plus owner membership.
 create or replace function public.bootstrap_owner_workspace(
   workspace_name text,
   owner_display_name text default null,
@@ -32,7 +32,20 @@ begin
   join public.workspace_members wm on wm.workspace_id = w.id
   where wm.user_id = current_user_id
     and wm.active = true
-  order by w.created_at asc
+    and wm.role = 'owner'
+  order by wm.created_at asc
+  limit 1;
+
+  if found then
+    return existing_workspace;
+  end if;
+
+  select w.* into existing_workspace
+  from public.workspaces w
+  join public.workspace_members wm on wm.workspace_id = w.id
+  where wm.user_id = current_user_id
+    and wm.active = true
+  order by wm.created_at asc
   limit 1;
 
   if found then

@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { can } from "@/lib/permissions";
 import { buildMissingOrderLineServiceMessage } from "@/lib/order-line-errors";
+import { getCurrentWorkspaceContext } from "@/lib/workspace";
 import type { Database, Json } from "@/lib/database.types";
 import type {
   AppointmentStatus,
@@ -161,34 +162,13 @@ function settingsErrorCode(error: unknown) {
 
 async function getActiveWorkspace(): Promise<ActiveWorkspace> {
   const supabase = await createSupabaseServerClient();
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-
-  if (authError || !authData.user) {
-    throw new Error("請先登入後再操作。");
-  }
-
-  const { data: membership, error: membershipError } = await supabase
-    .from("workspace_members")
-    .select("workspace_id,role")
-    .eq("user_id", authData.user.id)
-    .eq("active", true)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (membershipError) {
-    throw new Error(`讀取工作區權限失敗：${membershipError.message}`);
-  }
-
-  if (!membership) {
-    throw new Error("找不到可操作的工作區，請重新登入或聯絡管理員。");
-  }
+  const context = await getCurrentWorkspaceContext(supabase);
 
   return {
     supabase,
-    userId: authData.user.id,
-    role: membership.role as ActiveWorkspace["role"],
-    workspaceId: membership.workspace_id,
+    userId: context.user.id,
+    role: context.membership.role as ActiveWorkspace["role"],
+    workspaceId: context.workspace.id,
   };
 }
 

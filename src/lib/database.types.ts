@@ -473,6 +473,12 @@ export type Database = {
         };
         Returns: Database['public']['Tables']['workspaces']['Row'];
       };
+      accept_workspace_member_invite: {
+        Args: {
+          invite_token: string;
+        };
+        Returns: string;
+      };
     };
     Enums: {
       workspace_role: 'owner' | 'admin' | 'technician' | 'front_desk' | 'staff';

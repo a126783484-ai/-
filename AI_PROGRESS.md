@@ -544,3 +544,10 @@ Long-term autonomous improvement of the `beauty-os` beauty SaaS system.
 - The `loadAppData()` mapper parameter types now match the reduced select lists.
 - This keeps the dashboard payload trim type-safe after removing the remaining `*` queries.
 - Verified with `npm run typecheck`.
+
+## Staff invite acceptance hardening
+
+- Replaced the browser-side accept flow with a `accept_workspace_member_invite` RPC so invite acceptance is handled atomically in PostgreSQL.
+- Dropped the direct invitee `update` policy path and tightened the acceptance surface to the stored procedure.
+- Added the new RPC to `database.types` so the action stays typed.
+- Verified with `npm run typecheck` and targeted Vitest runs for the staff invite helpers.

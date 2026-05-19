@@ -23,6 +23,7 @@ jobs:
       TARGET_SUPABASE_URL: https://odzxyhaoehvhfximnwjh.supabase.co
       TARGET_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9kenh5aGFvZWh2aGZ4aW1ud2poIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MTEzMzcsImV4cCI6MjA5NDA4NzMzN30.MoUPUR1Fsjh3LqScqHqtGs008fH26orpekYQji5D--o
       TARGET_SUPABASE_PUBLISHABLE_KEY: sb_publishable_dAql5aMJG_C2fqSBC-wdLA_vC5Z4jZg
+      TARGET_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -97,6 +98,7 @@ jobs:
           create_env SUPABASE_PUBLISHABLE_KEY "$TARGET_SUPABASE_PUBLISHABLE_KEY"
           create_env NEXT_PUBLIC_SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
           create_env SUPABASE_PROJECT_REF "$TARGET_SUPABASE_PROJECT_REF"
+          create_env SUPABASE_SERVICE_ROLE_KEY "$TARGET_SUPABASE_SERVICE_ROLE_KEY"
 
       - name: Audit production env after recreate
         shell: bash
@@ -119,6 +121,10 @@ jobs:
             test "$count" = "1"
             test "$value" = "$TARGET_SUPABASE_URL"
           done
+
+          service_role_count=$(jq -r '[.envs[] | select(.key=="SUPABASE_SERVICE_ROLE_KEY" and ((.target|tostring)|contains("production")))] | length' vercel-env-after.json)
+          echo "SUPABASE_SERVICE_ROLE_KEY count=$service_role_count"
+          test "$service_role_count" = "1"
 
       - name: Wait for Vercel env propagation
         run: sleep 90
