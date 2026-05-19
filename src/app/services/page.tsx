@@ -1,47 +1,37 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 const ServicesPage = () => {
   const [services, setServices] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+
+  const fetchServices = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('services')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.error(error);
+      } else {
+        setServices(data);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   useEffect(() => {
-    const fetchServices = async () => {
-      setLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('services')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (error) {
-          setError(error.message);
-        } else {
-          setServices(data);
-        }
-      } catch (error) {
-        setError(error.message);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchServices();
   }, []);
 
   return (
     <div>
       <h1>Services</h1>
-      {loading ? (
-        <p>Loading...</p>
-      ) : (
-        services.map((service) => (
-          <div key={service.id}>
-            <h2>{service.name}</h2>
-            <p>{service.description}</p>
-          </div>
-        ))
-      )}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      <ul>
+        {services.map((service) => (
+          <li key={service.id}>{service.name}</li>
+        ))}
+      </ul>
     </div>
   );
 };
