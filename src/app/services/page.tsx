@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { supabase } from '../lib/supabase';
+import { Service } from '../lib/types';
 
 const ServicesPage = () => {
+  const [services, setServices] = useState<Service[]>([]);
   const { data: session } = useSession();
-  const [services, setServices] = useState([]);
 
   const fetchServices = async () => {
     try {
       const { data, error } = await supabase
         .from('services')
         .select('*')
-        .eq('user_id', session.user.id);
+        .eq('owner_id', session.user.id);
       if (error) {
         console.error(error);
       } else {
@@ -22,13 +23,10 @@ const ServicesPage = () => {
     }
   };
 
-  useEffect(() => {
-    fetchServices();
-  }, []);
-
   return (
     <div>
       <h1>Services</h1>
+      <button onClick={fetchServices}>Fetch Services</button>
       <ul>
         {services.map((service) => (
           <li key={service.id}>{service.name}</li>
