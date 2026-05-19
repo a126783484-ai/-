@@ -55,9 +55,9 @@ const CONFIG = {
   // Free tier models — ordered by preference (cheapest first)
   MODELS: [
     'llama-3.1-8b-instant',       // Fast, free, good for simple tasks
-    'qwen-2.5-32b',               // Good coding model, free
     'llama-3.3-70b-versatile',    // Best quality, 12k TPM limit
-    'deepseek-r1-distill-llama-70b', // Reasoning, free
+    'llama-guard-4-12b',          // Safety model, free
+    'llama-3.2-3b-preview',       // Lightweight, free
   ],
   MAX_RETRIES: 3,
   RETRY_DELAY: 1000,
