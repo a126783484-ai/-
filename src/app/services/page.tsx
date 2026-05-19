@@ -1,20 +1,50 @@
-export const dynamic = "force-dynamic";
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import { Service } from '../lib/types';
 
-import { ServicesView } from "@/components/ModuleViews";
-import { loadAppData } from "@/lib/app-data";
-import { getServiceError, getServiceMessage, readServiceParam } from "@/lib/service-feedback";
-import { getServiceUpdateError, getServiceUpdateMessage, readServiceUpdateParam } from "@/lib/service-update-feedback";
+const ServicesPage = () => {
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-interface ServicesPageProps {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
-}
+  useEffect(() => {
+    const fetchServices = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('services')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error) {
+          setError(error.message);
+        } else {
+          setServices(data);
+        }
+      } catch (error) {
+        setError(error.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchServices();
+  }, []);
 
-export default async function ServicesPage({ searchParams }: ServicesPageProps) {
-  const data = await loadAppData();
-  const params = searchParams ? await searchParams : undefined;
-  const message = getServiceMessage(readServiceParam(params?.message)) ?? getServiceUpdateMessage(readServiceUpdateParam(params?.message));
-  const error = getServiceError(readServiceParam(params?.error)) ?? getServiceUpdateError(readServiceUpdateParam(params?.error));
-  const notice = error ? { kind: "error" as const, message: error } : message ? { kind: "success" as const, message } : undefined;
+  return (
+    <div>
+      <h1>Services</h1>
+      {loading ? (
+        <p>Loading...</p>
+      ) : (
+        services.map((service) => (
+          <div key={service.id}>
+            <h2>{service.name}</h2>
+            <p>{service.description}</p>
+          </div>
+        ))
+      )}
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+    </div>
+  );
+};
 
-  return <ServicesView data={data} notice={notice} />;
-}
+export default ServicesPage;
