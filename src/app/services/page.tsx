@@ -23,7 +23,8 @@ const ServicesPage = () => {
   }, [supabaseClient]);
 
   return (
-    <DeferredView>
+    <DeferredView isReady={services.length > 0}>
+      {/* Render services list */}
       {services.map((service) => (
         <div key={service.id}>{service.name}</div>
       ))}
