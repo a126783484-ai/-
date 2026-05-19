@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { supabase } from '../lib/supabase';
 import { Service } from '../lib/types';
@@ -6,38 +6,32 @@ import { Service } from '../lib/types';
 const ServicesPage = () => {
   const { data: session } = useSession();
   const [services, setServices] = useState<Service[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const fetchServices = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('services')
-        .select('id, name, description')
-        .eq('owner_id', session.user.id);
-      if (error) {
+  useEffect(() => {
+    const fetchServices = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('services')
+          .select('*')
+          .eq('owner_id', session.user.id);
+        if (error) {
+          console.error(error);
+        } else {
+          setServices(data);
+        }
+      } catch (error) {
         console.error(error);
-      } else {
-        setServices(data);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+    fetchServices();
+  }, [session]);
 
   return (
     <div>
-      <h1>Services</h1>
-      <button onClick={fetchServices} disabled={loading}>
-        {loading ? 'Loading...' : 'Fetch Services'}
-      </button>
-      <ul>
-        {services.map((service) => (
-          <li key={service.id}>{service.name}</li>
-        ))}
-      </ul>
+      {/* services list */}
     </div>
   );
 };
