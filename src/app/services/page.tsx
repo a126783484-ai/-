@@ -1,38 +1,31 @@
-import { useState, useEffect } from 'react';
-import { useSupabaseClient } from 'src/lib/supabase';
-import { Service } from 'src/lib/types';
+import type { NextPage } from 'next';
+import { useState } from 'react';
+import { supabase } from '../lib/supabase';
 
-const ServicesPage = () => {
-  const supabaseClient = useSupabaseClient();
-  const [services, setServices] = useState<Service[]>([]);
-  const [loading, setLoading] = useState(true);
+const ServicesPage: NextPage = () => {
+  const [services, setServices] = useState([]);
 
-  useEffect(() => {
-    const fetchServices = async () => {
-      const { data, error } = await supabaseClient
+  const fetchServices = async () => {
+    try {
+      const { data, error } = await supabase
         .from('services')
-        .select('*');
-      if (error) {
-        console.error(error);
-      } else {
-        setServices(data);
-      }
-      setLoading(false);
-    };
-    fetchServices();
-  }, [supabaseClient]);
+        .select('id, name, description');
+      if (error) throw error;
+      setServices(data);
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   return (
     <div>
-      {loading ? (
-        <p>Loading...</p>
-      ) : (
-        <ul>
-          {services.map((service) => (
-            <li key={service.id}>{service.name}</li>
-          ))}
-        </ul>
-      )}
+      <h1>Services</h1>
+      <button onClick={fetchServices}>Fetch Services</button>
+      <ul>
+        {services.map((service) => (
+          <li key={service.id}>{service.name}</li>
+        ))}
+      </ul>
     </div>
   );
 };
