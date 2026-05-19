@@ -1,19 +1,45 @@
-export const dynamic = "force-dynamic";
+import React, { useState, useEffect } from 'react';
+import { getAppointments } from '../actions';
+import { Appointment } from '../types';
 
-import { AppointmentsDeferredView } from "@/components/DeferredViews";
-import { loadAppData } from "@/lib/app-data";
-import { getAppointmentError, getAppointmentMessage, readAppointmentParam } from "@/lib/appointment-feedback";
+const AppointmentsPage = () => {
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-interface AppointmentsPageProps {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
-}
+  useEffect(() => {
+    const fetchAppointments = async () => {
+      setLoading(true);
+      try {
+        const data = await getAppointments();
+        setAppointments(data);
+      } catch (error) {
+        setError(error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAppointments();
+  }, []);
 
-export default async function AppointmentsPage({ searchParams }: AppointmentsPageProps) {
-  const data = await loadAppData();
-  const params = searchParams ? await searchParams : undefined;
-  const message = getAppointmentMessage(readAppointmentParam(params?.message));
-  const error = getAppointmentError(readAppointmentParam(params?.error));
-  const notice = error ? { kind: "error" as const, message: error } : message ? { kind: "success" as const, message } : undefined;
+  if (loading) {
+    return <div>Loading...</div>;
+  }
 
-  return <AppointmentsDeferredView data={data} notice={notice} />;
-}
+  if (error) {
+    return <div>Error: {error.message}</div>;
+  }
+
+  return (
+    <div>
+      <h1>Appointments</h1>
+      <ul>
+        {appointments.map((appointment) => (
+          <li key={appointment.id}>{appointment.name}</li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+export default AppointmentsPage;
