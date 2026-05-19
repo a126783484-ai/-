@@ -1,33 +1,31 @@
 #!/usr/bin/env bash
-# Beauty OS Cloud VM Setup Script
-# 在 Google Cloud VM 上執行此腳本以設定自動開發系統
+# Beauty OS Cloud VM Setup Script (Updated with Webhook Server)
 set -euo pipefail
 
 echo "=== Beauty OS 雲端自動化設定開始 ==="
 
 # 1. 安裝必要工具
-echo "[1/5] 安裝必要工具 (Git, GitHub CLI, Curl)..."
+echo "[1/6] 安裝必要工具..."
 sudo apt update
 sudo apt install -y git curl gh
 
-# 2. 安裝 Node.js (使用 NVM 安裝 LTS 版本)
-echo "[2/5] 安裝 Node.js..."
+# 2. 安裝 Node.js
+echo "[2/6] 安裝 Node.js..."
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 nvm install 20
 nvm use 20
 
-# 3. 登入 GitHub (需要互動)
-echo "[3/5] 請登入 GitHub..."
-echo "請按照螢幕指示完成 gh auth login (選擇 HTTPS, 登入瀏覽器)"
+# 3. 登入 GitHub
+echo "[3/6] 請登入 GitHub..."
+echo "請執行 'gh auth login' 並按照指示完成登入"
 gh auth login --web
 
 # 4. 克隆專案
-echo "[4/5] 克隆專案..."
+echo "[4/6] 克隆專案..."
 cd ~
 if [ -d "beauty-os" ]; then
-  echo "專案已存在，更新中..."
   cd beauty-os
   git pull
 else
@@ -36,13 +34,13 @@ else
 fi
 
 # 5. 設定環境變數
-echo "[5/5] 設定環境變數..."
+echo "[5/6] 設定環境變數..."
 cat > .env.auto << 'EOF'
-# Beauty OS Auto Dev Environment Variables
 GITHUB_TOKEN=$(gh auth token)
 MAX_PR_PER_DAY=3
 TASK_INTERVAL=3600
 NODE_OPTIONS="--max-old-space-size=4096"
+WEBHOOK_SECRET="beauty-os-secret-key-2026"
 EOF
 
 # 6. 建立控制腳本
@@ -70,7 +68,6 @@ start_service() {
   local pid=$!
   echo "$pid" > "$PID_FILE"
   
-  # 設定開機啟動
   (crontab -l 2>/dev/null || true; echo "@reboot cd $REPO_DIR && bash auto-control.sh start >> $LOG_FILE 2>&1") | crontab -
   
   echo "服務已啟動 (PID: $pid)"
@@ -111,7 +108,16 @@ esac
 SCRIPT_EOF
 chmod +x auto-control.sh
 
-# 7. 啟動服務
+# 7. 設定 Webhook Server
+echo "[6/6] 設定 Webhook 伺服器..."
+cd ~/beauty-os
+nohup node apps/webhook-server/index.js > webhook-server.log 2>&1 &
+echo "Webhook Server started on port 3000"
+
+# 設定開機啟動 Webhook
+(crontab -l 2>/dev/null || true; echo "@reboot cd ~/beauty-os && node apps/webhook-server/index.js > webhook-server.log 2>&1") | crontab -
+
+# 8. 啟動主服務
 echo "=== 設定完成！正在啟動服務... ==="
 bash auto-control.sh start
 

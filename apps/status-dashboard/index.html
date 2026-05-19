@@ -35,6 +35,9 @@
             position: sticky;
             top: 0;
             z-index: 100;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         .header h1 {
             margin: 0;
@@ -42,6 +45,13 @@
             display: flex;
             align-items: center;
             gap: 8px;
+        }
+        .settings-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            cursor: pointer;
         }
         .container {
             padding: 16px;
@@ -93,9 +103,7 @@
         .btn {
             display: block;
             width: 100%;
-            padding: 12px;
-            background: var(--primary);
-            color: white;
+            padding: 14px;
             border: none;
             border-radius: 8px;
             font-size: 1rem;
@@ -103,8 +111,13 @@
             cursor: pointer;
             text-align: center;
             text-decoration: none;
+            margin-bottom: 8px;
         }
         .btn:active { transform: scale(0.98); }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-outline { background: transparent; border: 1px solid var(--text-muted); color: var(--text-muted); }
         .loading { text-align: center; color: var(--text-muted); padding: 20px; }
         .install-banner {
             display: none;
@@ -114,6 +127,33 @@
             text-align: center;
             cursor: pointer;
         }
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 200;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: var(--card);
+            padding: 20px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 400px;
+        }
+        .modal input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: white;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
     </style>
 </head>
 <body>
@@ -121,13 +161,19 @@
         📲 點擊安裝到手機桌面
     </div>
     <div class="header">
-        <h1>💅 Beauty OS 監控中心</h1>
+        <h1>💅 Beauty OS</h1>
+        <button class="settings-btn" onclick="openSettings()">️</button>
     </div>
     <div class="container">
-        <!-- System Status -->
+        <!-- Control Panel -->
         <div class="card">
-            <div class="card-title">系統狀態</div>
-            <div id="systemStatus" class="loading">載入中...</div>
+            <div class="card-title">自動化控制</div>
+            <div id="controlStatus" class="loading">載入中...</div>
+            <div style="display: flex; gap: 8px; margin-top: 12px;">
+                <button class="btn btn-success" style="flex:1" onclick="controlAction('start')">▶ 啟動</button>
+                <button class="btn btn-danger" style="flex:1" onclick="controlAction('stop')">⏹ 停止</button>
+            </div>
+            <button class="btn btn-outline" style="margin-top: 8px;" onclick="controlAction('status')">🔄 刷新狀態</button>
         </div>
 
         <!-- PR List -->
@@ -144,15 +190,29 @@
 
         <!-- Quick Actions -->
         <div class="card">
-            <div class="card-title">快速操作</div>
-            <a href="https://github.com/Johnnie1266789/beauty-os" class="btn" style="margin-bottom: 8px;">前往 GitHub</a>
-            <a href="https://vercel.com/a126783484-2182s-projects/-beauty-nail-os" class="btn" style="background: #000;">前往 Vercel</a>
+            <div class="card-title">快速連結</div>
+            <a href="https://github.com/Johnnie1266789/beauty-os" class="btn btn-primary" style="margin-bottom: 8px;">前往 GitHub</a>
+            <a href="https://vercel.com/a126783484-2182s-projects/-beauty-nail-os" class="btn btn-outline" style="margin-bottom: 8px; color: white; border-color: white;">前往 Vercel</a>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-content">
+            <h3>設定</h3>
+            <label>雲端 VM IP 位址</label>
+            <input type="text" id="vmIpInput" placeholder="例如: 34.123.45.67">
+            <button class="btn btn-primary" onclick="saveSettings()">儲存</button>
+            <button class="btn btn-outline" onclick="closeSettings()">取消</button>
         </div>
     </div>
 
     <script>
         const REPO = 'Johnnie1266789/beauty-os';
         const API_BASE = 'https://api.github.com/repos/' + REPO;
+        const WEBHOOK_SECRET = 'beauty-os-secret-key-2026';
+
+        let vmIp = localStorage.getItem('beauty_os_vm_ip') || '';
 
         async function fetchData() {
             try {
@@ -161,32 +221,79 @@
                 const prs = await prRes.json();
                 renderPRs(prs);
 
-                // Fetch CI Status (simplified)
+                // Fetch CI Status
                 const runRes = await fetch(API_BASE + '/actions/runs?per_page=3');
                 const runs = await runRes.json();
                 renderCI(runs.workflow_runs);
 
-                // Simulate System Status (since we can't reach the VM directly from browser easily without API)
-                renderSystemStatus(true); // Assuming running based on previous setup
+                // Fetch System Status via Webhook
+                await fetchSystemStatus();
 
             } catch (e) {
                 console.error(e);
-                document.getElementById('systemStatus').innerHTML = '<span class="badge badge-danger">連線錯誤</span>';
             }
         }
 
-        function renderSystemStatus(isRunning) {
-            const el = document.getElementById('systemStatus');
-            el.innerHTML = `
-                <div class="status-row">
-                    <span class="status-label">自動開發系統</span>
-                    <span class="badge ${isRunning ? 'badge-success' : 'badge-danger'}">${isRunning ? '執行中' : '已停止'}</span>
-                </div>
-                <div class="status-row">
-                    <span class="status-label">雲端伺服器</span>
-                    <span class="badge badge-success">Google Cloud (Debian)</span>
-                </div>
-            `;
+        async function fetchSystemStatus() {
+            const el = document.getElementById('controlStatus');
+            if (!vmIp) {
+                el.innerHTML = '<span class="badge badge-warning">請在設定中輸入 VM IP</span>';
+                return;
+            }
+
+            try {
+                const res = await fetch(`http://${vmIp}:3000`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ secret: WEBHOOK_SECRET, action: 'status' })
+                });
+                const data = await res.json();
+                
+                // Simple parsing of output to determine status
+                const isRunning = data.output && data.output.includes('執行中');
+                
+                el.innerHTML = `
+                    <div class="status-row">
+                        <span class="status-label">自動化系統</span>
+                        <span class="badge ${isRunning ? 'badge-success' : 'badge-danger'}">${isRunning ? '執行中' : '已停止'}</span>
+                    </div>
+                    <div class="status-row">
+                        <span class="status-label">伺服器</span>
+                        <span class="badge badge-success">Google Cloud</span>
+                    </div>
+                `;
+            } catch (e) {
+                el.innerHTML = '<span class="badge badge-danger">連線失敗</span>';
+            }
+        }
+
+        async function controlAction(action) {
+            if (!vmIp) {
+                alert('請先在設定中輸入 VM IP 位址');
+                openSettings();
+                return;
+            }
+
+            const btn = event.target;
+            const originalText = btn.innerText;
+            btn.innerText = '執行中...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`http://${vmIp}:3000`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ secret: WEBHOOK_SECRET, action: action })
+                });
+                const data = await res.json();
+                alert(data.message || '操作完成');
+                fetchSystemStatus();
+            } catch (e) {
+                alert('操作失敗: ' + e.message);
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
         }
 
         function renderPRs(prs) {
@@ -215,6 +322,21 @@
             `).join('');
         }
 
+        // Settings
+        function openSettings() {
+            document.getElementById('vmIpInput').value = vmIp;
+            document.getElementById('settingsModal').style.display = 'flex';
+        }
+        function closeSettings() {
+            document.getElementById('settingsModal').style.display = 'none';
+        }
+        function saveSettings() {
+            vmIp = document.getElementById('vmIpInput').value.trim();
+            localStorage.setItem('beauty_os_vm_ip', vmIp);
+            closeSettings();
+            fetchSystemStatus();
+        }
+
         // PWA Install Logic
         let deferredPrompt;
         window.addEventListener('beforeinstallprompt', (e) => {
@@ -237,7 +359,6 @@
 
         // Initial Load
         fetchData();
-        // Refresh every 60 seconds
         setInterval(fetchData, 60000);
     </script>
 </body>
