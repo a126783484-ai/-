@@ -1,34 +1,46 @@
 import type { NextPage } from 'next';
-import type { Product } from '../lib/types';
+import { useState } from 'react';
+import { useSession } from 'next-auth/react';
+import { supabase } from '../lib/supabase';
+import { Service } from '../lib/types';
 
 const ServicesPage: NextPage = () => {
-  // existing code...
+  const { data: session } = useSession();
+  const [services, setServices] = useState<Service[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  const products = [
-    {
-      id: 1,
-      name: 'Product 1',
-      description: 'This is product 1',
-      price: 19.99,
-    },
-    {
-      id: 2,
-      name: 'Product 2',
-      description: 'This is product 2',
-      price: 9.99,
-    },
-  ];
+  const fetchServices = async () => {
+    try {
+      const { data, error: supabaseError } = await supabase
+        .from('services')
+        .select('*')
+        .eq('is_active', true);
+
+      if (supabaseError) {
+        setError(supabaseError.message);
+      } else {
+        setServices(data);
+      }
+    } catch (error) {
+      setError(error.message);
+    }
+  };
+
+  useEffect(() => {
+    if (session) {
+      fetchServices();
+    }
+  }, [session]);
 
   return (
-    // existing code...
     <div>
-      {products.map((product) => (
-        <div key={product.id}>
-          <h2>{product.name}</h2>
-          <p>{product.description}</p>
-          <p>Price: ${product.price}</p>
-        </div>
-      ))}
+      <h1>Services</h1>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+      <ul>
+        {services.map((service) => (
+          <li key={service.id}>{service.name}</li>
+        ))}
+      </ul>
     </div>
   );
 };
