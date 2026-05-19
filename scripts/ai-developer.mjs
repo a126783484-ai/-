@@ -202,7 +202,17 @@ async function callGroq(systemPrompt, userPrompt, maxTokens = 2500) {
   });
 
   const data = await response.json();
-  if (data.error) throw new Error(`Groq API: ${data.error.message}`);
+  if (data.error) {
+    const msg = data.error.message || '';
+    if (msg.includes('Rate limit')) {
+      const retryAfter = msg.match(/try again in ([\d.]+)s/);
+      const waitMs = retryAfter ? (parseFloat(retryAfter[1]) + 2) * 1000 : 30000;
+      log(`Groq rate limited. Waiting ${Math.round(waitMs / 1000)}s...`, 'warn');
+      await sleep(waitMs);
+      return callGroq(systemPrompt, userPrompt, maxTokens);
+    }
+    throw new Error(`Groq API: ${msg}`);
+  }
   return data.choices[0].message.content;
 }
 
@@ -840,8 +850,8 @@ async function main() {
           if (fixed) continue;
         }
 
-        log('PR not ready yet. Retrying...', 'warn');
-        await sleep(60000);
+        log('PR not ready yet. Waiting 120s before retry...', 'warn');
+        await sleep(120000);
         continue;
       }
 
@@ -850,8 +860,8 @@ async function main() {
       log(`Selected task: ${task.title} (${task.priority})`);
 
       if (task.type === 'checkpoint') {
-        log('No actionable task found. Waiting...', 'warn');
-        await sleep(60000);
+        log('No actionable task found. Waiting 120s...', 'warn');
+        await sleep(120000);
         continue;
       }
 
@@ -860,7 +870,8 @@ async function main() {
       const changes = applyChanges(code, laneConfig);
 
       if (!changes.length) {
-        log('No valid changes. Skipping task.', 'warn');
+        log('No valid changes. Waiting 120s before next task.', 'warn');
+        await sleep(120000);
         continue;
       }
 
@@ -875,6 +886,10 @@ async function main() {
       const pr = await createPR(task, changes, checks, branchName);
       log(`PR created: ${pr.url}`);
       await writeCheckpoint(backlog, task, `PR created: ${pr.url}`);
+
+      // Wait before next cycle to avoid rate limits
+      log('Waiting 60s before next cycle...');
+      await sleep(60000);
     }
 
     log('=== 6-hour session complete. Exiting. ===');
