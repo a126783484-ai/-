@@ -5,21 +5,22 @@ import { supabase } from '../lib/supabase';
 const ServicesPage = () => {
   const { data: session } = useSession();
   const [services, setServices] = useState([]);
+  const [error, setError] = useState(null);
 
   const fetchServices = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error: supabaseError } = await supabase
         .from('services')
-        .select('*')
+        .select('id, name, description')
         .eq('is_active', true);
 
-      if (error) {
-        console.error(error);
+      if (supabaseError) {
+        setError(supabaseError.message);
       } else {
         setServices(data);
       }
     } catch (error) {
-      console.error(error);
+      setError(error.message);
     }
   };
 
@@ -35,6 +36,7 @@ const ServicesPage = () => {
           <li key={service.id}>{service.name}</li>
         ))}
       </ul>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
     </div>
   );
 };
