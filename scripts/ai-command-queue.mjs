@@ -154,6 +154,12 @@ function targetRules(target) {
     Claude: [
       'Explain the root cause first, then the smallest safe fix.',
       'Keep the output actionable for a human reviewer.'
+    ],
+    'BeautyOS-AI': [
+      'You are the autonomous AI Developer running on GitHub Actions.',
+      'Focus on proactive improvements and CI repairs.',
+      'Ensure all code changes pass typecheck and lint before committing.',
+      'Do not create duplicate PRs; check open PRs first.'
     ]
   };
 
@@ -719,11 +725,13 @@ async function main() {
   const codexCommand = commandForTarget(highestPriorityNextAction, 'Codex');
   const openCodeCommand = commandForTarget(highestPriorityNextAction, 'OpenCode');
   const claudeCommand = commandForTarget(highestPriorityNextAction, 'Claude');
+  const beautyOsAiCommand = commandForTarget(highestPriorityNextAction, 'BeautyOS-AI');
 
   const promptContexts = {
     Codex: promptEnvelope('Codex', codexCommand),
     OpenCode: promptEnvelope('OpenCode', openCodeCommand),
-    Claude: promptEnvelope('Claude', claudeCommand)
+    Claude: promptEnvelope('Claude', claudeCommand),
+    'BeautyOS-AI': promptEnvelope('BeautyOS-AI', beautyOsAiCommand)
   };
 
   const openPrRows = openPRs.slice(0, 10).map((pr) => [
@@ -872,6 +880,10 @@ async function main() {
     '',
     promptBlock('Claude', claudeCommand),
     '',
+    '### Next command for BeautyOS-AI (Groq)',
+    '',
+    promptBlock('BeautyOS-AI', beautyOsAiCommand),
+    '',
     '### Human approval required',
     '',
     ...humanApprovalLines.map((line) => `- ${line}`),
@@ -910,7 +922,8 @@ async function main() {
     nextCommands: {
       Codex: codexCommand,
       OpenCode: openCodeCommand,
-      Claude: claudeCommand
+      Claude: claudeCommand,
+      'BeautyOS-AI': beautyOsAiCommand
     },
     issueLabels,
     issueBody
