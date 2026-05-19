@@ -10,9 +10,8 @@ const ServicesPage = () => {
     try {
       const { data, error } = await supabase
         .from('services')
-        .select('id, name, description')
-        .eq('is_active', true);
-
+        .select('*, technicians(*)')
+        .order('created_at', { ascending: false });
       if (error) {
         console.error(error);
       } else {
@@ -32,7 +31,10 @@ const ServicesPage = () => {
       <h1>Services</h1>
       <ul>
         {services.map((service) => (
-          <li key={service.id}>{service.name}</li>
+          <li key={service.id}>
+            <h2>{service.name}</h2>
+            <p>Technicians: {service.technicians.length}</p>
+          </li>
         ))}
       </ul>
     </div>
