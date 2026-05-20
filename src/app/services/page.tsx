@@ -1,9 +1,11 @@
+'use client';
+
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { Service } from '@/lib/types';
+import { getSupabaseBrowserClient } from '@/lib/supabase';
+import type { ServiceItem } from '@/lib/types';
 
 const ServicesPage = () => {
-  const [services, setServices] = useState<Service[]>([]);
+  const [services, setServices] = useState<ServiceItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -11,14 +13,15 @@ const ServicesPage = () => {
     const fetchServices = async () => {
       setLoading(true);
       try {
+        const supabase = getSupabaseBrowserClient();
         const { data, error } = await supabase
-          .from('services')
+          .from('service_items')
           .select('*')
           .order('created_at', { ascending: false });
         if (error) {
           setError(error.message);
         } else {
-          setServices(data);
+          setServices(data || []);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error');
@@ -30,19 +33,24 @@ const ServicesPage = () => {
   }, []);
 
   return (
-    <div>
-      <h1>Services</h1>
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">Services</h1>
       {loading ? (
         <p>Loading...</p>
+      ) : error ? (
+        <p className="text-red-500">{error}</p>
+      ) : services.length === 0 ? (
+        <p>No services found.</p>
       ) : (
-        services.map((service) => (
-          <div key={service.id}>
-            <h2>{service.name}</h2>
-            <p>{service.description}</p>
-          </div>
-        ))
+        <div className="grid gap-4">
+          {services.map((service) => (
+            <div key={service.id} className="p-4 border rounded">
+              <h2 className="text-xl font-semibold">{service.name}</h2>
+              <p className="text-gray-600">{service.description || ''}</p>
+            </div>
+          ))}
+        </div>
       )}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
     </div>
   );
 };
