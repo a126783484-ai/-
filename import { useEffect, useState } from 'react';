@@ -1,24 +1,26 @@
 import { useRouter } from 'next/router';
-import { supabaseClient } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 const Layout = ({ children }) => {
   const router = useRouter();
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    const getUser = async () => {
-      try {
-        const { data, error } = await supabaseClient.auth.getUser();
-        if (error) {
-          throw error;
+    const handleRouteChange = (url) => {
+      supabase.auth.user().then((user) => {
+        if (user) {
+          setUser(user);
+        } else {
+          setUser(null);
         }
-        setUser(data.user);
-      } catch (error) {
-        console.error('Error getting user:', error);
-      }
+      });
     };
-    getUser();
-  }, []);
+
+    router.events.on('routeChangeStart', handleRouteChange);
+    return () => {
+      router.events.off('routeChangeStart', handleRouteChange);
+    };
+  }, [router.events]);
 
   return (
     <div>
