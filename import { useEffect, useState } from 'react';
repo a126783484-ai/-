@@ -6,23 +6,21 @@ const Layout = ({ children }) => {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const handleRouteChange = (url: string) => {
+    const handleRouteChange = async (url: string) => {
       setLoading(true);
-      supabase
-        .from('routes')
-        .update({ loading: true })
-        .eq('route', url)
-        .then(() => {
-          setLoading(false);
-        });
+      try {
+        await supabase.from('routes').insert({ url });
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
     };
 
     router.events.on('routeChangeStart', handleRouteChange);
-    router.events.on('routeChangeComplete', handleRouteChange);
 
     return () => {
       router.events.off('routeChangeStart', handleRouteChange);
-      router.events.off('routeChangeComplete', handleRouteChange);
     };
   }, [router.events]);
 
