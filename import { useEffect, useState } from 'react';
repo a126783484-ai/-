@@ -1,35 +1,35 @@
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
 
-const OperationsPage = () => {
+const Layout = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const handleRouteChange = async () => {
-      setLoading(true);
+    const handleRouteChange = async (url: string) => {
       try {
-        const { data, error } = await supabase
-          .from('operations')
-          .select('id, name')
-          .eq('id', router.query.id);
-        if (error) {
-          console.error(error);
-        }
+        await supabase.from('routes').insert({ url });
       } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading(false);
+        setError(error);
       }
     };
-    handleRouteChange();
-  }, [router.query.id]);
+
+    router.events.on('routeChangeStart', handleRouteChange);
+
+    return () => {
+      router.events.off('routeChangeStart', handleRouteChange);
+    };
+  }, [router.events]);
+
+  if (error) {
+    return <div>Error: {error.message}</div>;
+  }
 
   return (
     <div>
-      {/* page content */}
+      {children}
     </div>
   );
 };
 
-export default OperationsPage;
+export default Layout;
