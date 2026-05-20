@@ -3,23 +3,23 @@ import { supabase } from '../lib/supabase';
 
 const OperationsPage = () => {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchOperations = async () => {
-      setLoading(true);
       try {
         const { data, error } = await supabase
           .from('operations')
-          .select('id, name, description');
+          .select('id, name, description')
+          .order('id', { ascending: false });
         if (error) {
-          console.error(error);
+          setError(error);
+        } else {
+          setData(data);
         }
-        // TO DO: handle data
       } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading(false);
+        setError(error);
       }
     };
     fetchOperations();
@@ -28,10 +28,16 @@ const OperationsPage = () => {
   return (
     <div>
       <h1>Operations Page</h1>
-      {loading ? (
-        <p>Loading...</p>
+      {error ? (
+        <p>Error: {error.message}</p>
       ) : (
-        <p>No operations found.</p>
+        <ul>
+          {data?.map((operation) => (
+            <li key={operation.id}>
+              <a href={`/operations/${operation.id}`}>{operation.name}</a>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
