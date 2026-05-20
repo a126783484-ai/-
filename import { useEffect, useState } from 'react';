@@ -1,38 +1,37 @@
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
 
-const Layout = ({ children }: { children: React.ReactNode }) => {
+const OperationsPage = () => {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const handleRouteChange = (url: string) => {
+    const fetchOperation = async () => {
       setLoading(true);
-      supabase
-        .from('routes')
-        .update({ loading: true })
-        .eq('route', url)
-        .then(() => {
-          setLoading(false);
-        });
+      try {
+        const { data, error } = await supabase
+          .from('operations')
+          .select('id, name')
+          .eq('id', router.query.id);
+        if (error) {
+          console.error(error);
+        } else {
+          // Process the data
+        }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
     };
-
-    router.events.on('routeChangeStart', handleRouteChange);
-
-    return () => {
-      router.events.off('routeChangeStart', handleRouteChange);
-    };
-  }, [router.events]);
+    fetchOperation();
+  }, [router.query.id]);
 
   return (
     <div>
-      {loading ? (
-        <div>Loading...</div>
-      ) : (
-        <main>{children}</main>
-      )}
+      {/* Page content */}
     </div>
   );
 };
 
-export default Layout;
+export default OperationsPage;
