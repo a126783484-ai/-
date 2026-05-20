@@ -1,5 +1,10 @@
 name: AI Product Developer
 
+# PAUSED: AI automation is temporarily disabled to prevent unsafe self-repair,
+# invalid file generation, automatic PR creation, or automatic merge on main.
+# Re-enable only after scripts/ai-developer.mjs has validated path safety,
+# risk gates, and human review requirements.
+
 on:
   workflow_dispatch:
     inputs:
@@ -12,63 +17,12 @@ on:
           - draft_pr
 
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write
+  contents: read
 
 jobs:
   ai-product-develop:
     runs-on: ubuntu-latest
-    if: >-
-      vars.AI_PRODUCT_LANE_ENABLED == 'true' &&
-      vars.SUPERVISION_ENABLED == 'true' &&
-      vars.AI_DEVELOPMENT_ALLOWED == 'true'
+    if: ${{ false }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Configure Git
-        run: |
-          git config --global user.name "BeautyOS-AI-Product"
-          git config --global user.email "ai-product@beauty-os.com"
-
-      - name: Run AI Product Developer
-        env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BEAUTY_OS_REPO: ${{ github.workspace }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-
-          # Core Controls
-          SUPERVISION_ENABLED: ${{ vars.SUPERVISION_ENABLED }}
-          AI_DEVELOPMENT_ALLOWED: ${{ vars.AI_DEVELOPMENT_ALLOWED }}
-          AI_AUTO_ENABLED: ${{ vars.AI_AUTO_ENABLED }}
-          AI_ENGINE_LANE_ENABLED: ${{ vars.AI_ENGINE_LANE_ENABLED }}
-          AI_PRODUCT_LANE_ENABLED: ${{ vars.AI_PRODUCT_LANE_ENABLED }}
-          AI_LOW_RISK_AUTOMERGE_ENABLED: ${{ vars.AI_LOW_RISK_AUTOMERGE_ENABLED }}
-
-          # Session Limits
-          MAX_OPEN_ENGINE_PRS: ${{ vars.MAX_OPEN_ENGINE_PRS }}
-          MAX_OPEN_PRODUCT_PRS: ${{ vars.MAX_OPEN_PRODUCT_PRS }}
-          MAX_OPEN_LOW_RISK_AUTOMERGE_PRS: ${{ vars.MAX_OPEN_LOW_RISK_AUTOMERGE_PRS }}
-
-          # Routing
-          AI_MODEL_ROUTER: ${{ vars.AI_MODEL_ROUTER }}
-          AI_MAX_FILES_AUTO: ${{ vars.AI_MAX_FILES_AUTO }}
-
-          # Lane & Mode
-          AI_LANE: product
-          AI_ENGINEER_MODE: auto
-          AI_RUN_MODE: ${{ github.event.inputs.run_mode || 'draft_pr' }}
-        run: node scripts/ai-developer.mjs
+      - name: Automation paused
+        run: echo "AI Product Developer workflow is paused for safety."
