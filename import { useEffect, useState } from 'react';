@@ -1,26 +1,32 @@
 import { useRouter } from 'next/router';
+import { useSession } from 'next-auth/react';
 import { supabase } from '../lib/supabase';
 
-const Layout = ({ children }) => {
+const Layout = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
+  const { data: session } = useSession();
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    const handleRouteChange = (url) => {
-      supabase.auth.user().then((user) => {
-        if (user) {
-          setUser(user);
-        } else {
-          setUser(null);
+    if (session) {
+      const fetchUser = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('id, email, name')
+            .eq('id', session.user.id);
+          if (error) {
+            console.error(error);
+          } else {
+            setUser(data[0]);
+          }
+        } catch (error) {
+          console.error(error);
         }
-      });
-    };
-
-    router.events.on('routeChangeStart', handleRouteChange);
-    return () => {
-      router.events.off('routeChangeStart', handleRouteChange);
-    };
-  }, [router.events]);
+      };
+      fetchUser();
+    }
+  }, [session]);
 
   return (
     <div>
