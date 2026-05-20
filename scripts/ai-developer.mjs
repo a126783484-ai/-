@@ -74,14 +74,12 @@ const LANE_CONFIG = {
     prTitlePrefix: '[AI Engine]',
     labels: ['ai-engine', 'automation'],
     allowedPaths: [
-      /\.github\/workflows\/ai-/,
-      /\.github\/workflows\/.*supervisor/,
       /scripts\/ai-/,
       /scripts\/.*supervisor/,
       /scripts\/.*repair/,
       /scripts\/.*governance/,
     ],
-    blockedPaths: [/src\//],
+    blockedPaths: [/src\//, /\.github\/workflows\//],
     maxOpenPRs: ENV.MAX_OPEN_ENGINE_PRS,
   },
   product: {
