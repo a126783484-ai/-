@@ -1,0 +1,36 @@
+import { useSession } from '@supabase/auth-helpers-react';
+import { supabaseClient } from '../lib/supabase';
+
+const OperationsPage = () => {
+  const session = useSession();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleOperation = async () => {
+    try {
+      setLoading(true);
+      const { data, error: supabaseError } = await supabaseClient
+        .from('operations')
+        .insert([{ name: 'example operation', status: 'pending' }]);
+      if (supabaseError) {
+        throw supabaseError;
+      }
+      console.log(data);
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <button onClick={handleOperation} disabled={loading}>
+        {loading ? 'Loading...' : 'Run Operation'}
+      </button>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+    </div>
+  );
+};
+
+export default OperationsPage;
