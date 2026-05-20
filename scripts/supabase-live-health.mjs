@@ -157,9 +157,9 @@ async function main() {
   const actualRef = projectRefFromUrl(publicUrl);
 
   if (!publicUrl) {
-    add('warn', 'SUPABASE_PROJECT_REF_SKIPPED', 'Public Supabase URL is missing; project ref check was skipped.');
+    add('warn', 'SUPABASE_PROJECT_URL_MISSING', 'Supabase URL is not configured; project-ref validation was skipped.');
   } else if (!actualRef) {
-    add(enforceRef ? 'error' : 'warn', 'SUPABASE_PROJECT_REF_UNREADABLE', 'Could not derive Supabase project ref from configured URL.');
+    add('error', 'SUPABASE_PROJECT_REF_UNREADABLE', 'Could not derive Supabase project ref from configured URL.');
   } else if (expectedRef && expectedRef !== actualRef) {
     add(enforceRef ? 'error' : 'warn', 'SUPABASE_PROJECT_REF_MISMATCH', `Expected Supabase project ${expectedRef}, got ${actualRef}.`);
   } else {

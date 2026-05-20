@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { CalendarDays, ChartNoAxesCombined, CreditCard, Gauge, LogOut, Package, Scissors, Settings, Sparkles, UsersRound, UserRoundCog } from "lucide-react";
 import { signOutAction } from "@/app/account/actions";
 import type { Role, Workspace } from "@/lib/types";
@@ -32,6 +35,8 @@ export function AppShell({
   role?: Role;
   notice?: string;
 }) {
+  const pathname = usePathname();
+
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,#fff_0,#fff7f8_38%,#f7e7d7_100%)] pb-24 lg:pb-10">
       <div className="mx-auto flex max-w-7xl gap-6 px-4 py-4 lg:px-8">
@@ -41,7 +46,20 @@ export function AppShell({
             <span><strong className="block text-lg">{workspace.name}</strong><small className="text-ink/55">Beauty / Nail Salon OS</small></span>
           </Link>
           <nav className="space-y-1">
-            {nav.map((item) => <Link key={item.href} href={item.href} className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium text-ink/70 hover:bg-champagne/70 hover:text-plum"><item.icon size={18} />{item.label}</Link>)}
+            {nav.map((item) => {
+              const isActive = item.href === "/" ? pathname === "/" : pathname?.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={isActive ? "page" : undefined}
+                  className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition ${isActive ? "bg-plum text-white shadow-soft" : "text-ink/70 hover:bg-champagne/70 hover:text-plum"}`}
+                >
+                  <item.icon size={18} />
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
           <div className="mt-auto rounded-3xl bg-plum p-4 text-white">
             <p className="text-sm opacity-80">目前角色</p><p className="font-semibold">{roleLabel(role)}</p>
@@ -67,16 +85,20 @@ export function AppShell({
       </div>
       <nav className="fixed inset-x-3 bottom-3 z-20 rounded-[1.5rem] bg-white/90 p-2 shadow-soft backdrop-blur lg:hidden">
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="grid min-w-[4.75rem] shrink-0 place-items-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-semibold text-ink/60"
-            >
-              <item.icon size={18} />
-              {item.label}
-            </Link>
-          ))}
+          {nav.map((item) => {
+            const isActive = item.href === "/" ? pathname === "/" : pathname?.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={isActive ? "page" : undefined}
+                className={`grid min-w-[4.75rem] shrink-0 place-items-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-semibold transition ${isActive ? "bg-plum text-white shadow-soft" : "text-ink/60"}`}
+              >
+                <item.icon size={18} />
+                {item.label}
+              </Link>
+            );
+          })}
           <form action={signOutAction} className="grid min-w-[4.75rem] shrink-0 place-items-center">
             <button type="submit" className="grid place-items-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-semibold text-ink/60">
               <LogOut size={18} />
