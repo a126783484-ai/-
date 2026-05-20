@@ -203,7 +203,7 @@ const ServicesPage = () => {
 
                 <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
                   <span className="text-lg font-bold text-slate-900">
-                    {service.price ? `$${service.price.toLocaleString()}` : '免費'}
+                    {service.price ? \`$\${service.price.toLocaleString()}\` : '免費'}
                   </span>
                   {service.durationMin && (
                     <span className="text-sm text-slate-500">
