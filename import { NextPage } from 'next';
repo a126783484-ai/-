@@ -1,0 +1,13 @@
+import { SupabaseClient } from '../lib/supabase';
+
+const Page: NextPage = () => {
+  // ...
+
+  const supabase = new SupabaseClient();
+
+  // ...
+
+  return (
+    // ...
+  );
+};
