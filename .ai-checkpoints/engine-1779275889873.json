@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "name": "AI Engine",
+  "steps": [
+    {
+      "name": "Step 1: Import required modules",
+      "code": "import { useEffect, useState } from 'react';"
+    },
+    {
+      "name": "Step 2: Define a function to fix the repair issue",
+      "code": "function fixRepairIssue() {"
+    },
+    {
+      "name": "Step 3: Use the useEffect hook to fix the repair issue",
+      "code": "  useEffect(() => {"
+    },
+    {
+      "name": "Step 4: Use the useState hook to store the repair issue status",
+      "code": "    const [repairIssueFixed, setRepairIssueFixed] = useState(false);"
+    },
+    {
+      "name": "Step 5: Check if the repair issue is fixed",
+      "code": "    if (repairIssueFixed) {"
+    },
+    {
+      "name": "Step 6: If the repair issue is fixed, return a success message",
+      "code": "      return 'Repair issue fixed successfully';"
+    },
+    {
+      "name": "Step 7: If the repair issue is not fixed, return an error message",
+      "code": "    } else {"
+    },
+    {
+      "name": "Step 8: Return an error message",
+      "code": "      return 'Repair issue not fixed';"
+    }
+  ]
+}
+
+// .ai-checkpoints/engine-1779275984955.json
+{
+  "version": 1,
+  "name": "AI Engine",
+  "steps": [
+    {
+      "name": "Step 1: Import required modules",
+      "code": "import { useEffect, useState } from 'react';"
+    },
+    {
+      "name": "Step 2: Define a function to fix the repair issue",
+      "code": "function fixRepairIssue() {"
+    },
+    {
+      "name": "Step 3: Use the useEffect hook to fix the repair issue",
+      "code": "  useEffect(() => {"
+    },
+    {
+      "name": "Step 4: Use the useState hook to store the repair issue status",
+      "code": "    const [repairIssueFixed, setRepairIssueFixed] = useState(false);"
+    },
+    {
+      "name": "Step 5: Check if the repair issue is fixed",
+      "code": "    if (repairIssueFixed) {"
+    },
+    {
+      "name": "Step 6: If the repair issue is fixed, return a success message",
+      "code": "      return 'Repair issue fixed successfully';"
+    },
+    {
+      "name": "Step 7: If the repair issue is not fixed, return an error message",
+      "code": "    } else {"
+    },
+    {
+      "name": "Step 8: Return an error message",
+      "code": "      return 'Repair issue not fixed';"
+    }
+  ]
+}
