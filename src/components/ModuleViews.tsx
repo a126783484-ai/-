@@ -49,6 +49,13 @@ const paymentMethods = [
   "line_pay",
   "other",
 ] as const;
+const paymentMethodLabels: Record<(typeof paymentMethods)[number], string> = {
+  cash: "現金",
+  card: "信用卡",
+  transfer: "轉帳",
+  line_pay: "LINE Pay",
+  other: "其他",
+};
 const orderStatuses = ["unpaid", "partial", "paid", "refunded"] as const;
 const tiers = ["新客", "一般", "VIP", "VVIP"];
 const staffRoles = ["owner", "admin", "technician", "front_desk", "staff"] as const;
@@ -527,7 +534,7 @@ function OrderForm({ data }: { data: AppData }) {
           >
             {paymentMethods.map((method) => (
               <option key={method} value={method}>
-                {method}
+                {paymentMethodLabels[method]}
               </option>
             ))}
           </select>
