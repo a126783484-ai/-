@@ -22,7 +22,4 @@ permissions:
 jobs:
   ai-product-develop:
     runs-on: ubuntu-latest
-    if: ${{ false }}
     steps:
-      - name: Automation paused
-        run: echo "AI Product Developer workflow is paused for safety."
