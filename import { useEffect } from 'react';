@@ -1,0 +1,22 @@
+import { useRouter } from 'next/router';
+import { useSession } from 'next-auth/react';
+import { supabase } from '../lib/supabase';
+
+const Layout = ({ children }: { children: React.ReactNode }) => {
+  const router = useRouter();
+  const { data: session } = useSession();
+
+  useEffect(() => {
+    if (!session && router.pathname !== '/login') {
+      router.push('/login');
+    }
+  }, [session, router]);
+
+  return (
+    <div className="flex flex-col h-screen">
+      {children}
+    </div>
+  );
+};
+
+export default Layout;
