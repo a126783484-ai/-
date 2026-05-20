@@ -1,17 +1,29 @@
 {
-  "version": "1.0",
+  "version": 1,
   "steps": [
     {
-      "name": "Import React",
-      "action": "import { useEffect, useState } from 'react';"
+      "name": "Check if component is being used correctly",
+      "description": "Check if the component is being used correctly",
+      "type": "check",
+      "params": {
+        "component": "OperationsPage"
+      }
     },
     {
-      "name": "Render OperationsPage",
-      "action": "import React from 'react'; import { render, fireEvent, waitFor } from '@testing-library/react'; import { OperationsPage } from './page';"
+      "name": "Check if component is being rendered correctly",
+      "description": "Check if the component is being rendered correctly",
+      "type": "check",
+      "params": {
+        "component": "OperationsPage"
+      }
     },
     {
-      "name": "Test OperationsPage",
-      "action": "describe('OperationsPage', () => { it('renders data', async () => { const { getByText } = render(<OperationsPage />); await waitFor(() => getByText('Data:')); }); });"
+      "name": "Check if component is handling errors correctly",
+      "description": "Check if the component is handling errors correctly",
+      "type": "check",
+      "params": {
+        "component": "OperationsPage"
+      }
     }
   ]
 }
