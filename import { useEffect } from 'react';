@@ -1,19 +1,22 @@
 import { useRouter } from 'next/router';
-import { useSupabaseClient } from 'src/lib/supabase';
+import { useSession } from 'next-auth/react';
+import { supabase } from '../lib/supabase';
 
-const OperationsPage = () => {
+const Layout = ({ children }: { children: React.ReactNode }) => {
   const router = useRouter();
-  const supabase = useSupabaseClient();
+  const { data: session, status } = useSession();
 
   useEffect(() => {
-    // Removed the problematic code that caused the CI failure
-  }, []);
+    if (status === 'unauthenticated' && router.pathname !== '/login') {
+      router.push('/login');
+    }
+  }, [status, router]);
 
   return (
     <div>
-      {/* Page content */}
+      {children}
     </div>
   );
 };
 
-export default OperationsPage;
+export default Layout;
