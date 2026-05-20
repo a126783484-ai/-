@@ -1,25 +1,35 @@
-import { useRouter } from 'next/router';
+import { useSession } from 'next-auth/react';
 import { supabase } from '../lib/supabase';
 
-const Layout = ({ children }) => {
-  const router = useRouter();
+const Layout = ({ children }: { children: React.ReactNode }) => {
+  const { data: session, status } = useSession();
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    const handleUserChange = async () => {
-      const { data, error } = await supabase.auth.getUser();
-      if (error) {
-        console.error(error);
-      } else if (data.user) {
-        setUser(data.user);
-      }
-    };
-    handleUserChange();
-  }, []);
+    if (session) {
+      const fetchUser = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('id, name, email')
+            .eq('id', session.user.id);
+          if (error) {
+            console.error(error);
+          } else {
+            setUser(data[0]);
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      };
+      fetchUser();
+    }
+  }, [session]);
 
   return (
     <div>
       {children}
+      {user && <p>Welcome, {user.name}!</p>}
     </div>
   );
 };
