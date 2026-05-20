@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { Service } from '../lib/types';
+import { supabase } from '@/lib/supabase';
+import { Service } from '@/lib/types';
 
 const ServicesPage = () => {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchServices = async () => {
@@ -20,8 +20,8 @@ const ServicesPage = () => {
         } else {
           setServices(data);
         }
-      } catch (error) {
-        setError(error.message);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unknown error');
       } finally {
         setLoading(false);
       }
