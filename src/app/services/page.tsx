@@ -49,7 +49,7 @@ const ServicesPage = () => {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-sm font-medium text-rose-600">Beauty OS · Services · Beauty OS P1 Product UX Agent active</p>
+              <p className="text-sm font-medium text-rose-600">Beauty OS · Services · 服務管理中心</p>
               <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
                 服務項目管理
               </h1>
