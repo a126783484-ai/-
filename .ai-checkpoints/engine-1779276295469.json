@@ -1,12 +1,17 @@
 {
-  "timestamp": "2026-05-20T11:24:55.469Z",
-  "lane": "engine",
-  "mode": "draft_pr",
-  "task": "[AI Engine] Address repair issue: [AI Repair] CI failed on main",
-  "reason": "Auto-merged PR #78",
-  "backlog_summary": {
-    "open_prs": 1,
-    "draft_prs": 0,
-    "failed_workflows": 0
-  }
+  "version": "1.0",
+  "steps": [
+    {
+      "name": "Import React",
+      "action": "import { useEffect, useState } from 'react';"
+    },
+    {
+      "name": "Render OperationsPage",
+      "action": "import React from 'react'; import { render, fireEvent, waitFor } from '@testing-library/react'; import { OperationsPage } from './page';"
+    },
+    {
+      "name": "Test OperationsPage",
+      "action": "describe('OperationsPage', () => { it('renders data', async () => { const { getByText } = render(<OperationsPage />); await waitFor(() => getByText('Data:')); }); });"
+    }
+  ]
 }
