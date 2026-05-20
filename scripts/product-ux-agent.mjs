@@ -299,7 +299,7 @@ function main() {
   }
 
   if (result) {
-    console.log(\`[Product UX Agent] Updated \${result} with real P1 UX improvements.\`);
+    console.log(`[Product UX Agent] Updated ${result} with real P1 UX improvements.`);
   } else {
     console.log('[Product UX Agent] No safe P1 UX change needed.');
   }
