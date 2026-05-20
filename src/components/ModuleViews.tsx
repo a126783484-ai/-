@@ -851,7 +851,7 @@ export function DashboardView({ data }: { data: AppData }) {
   return (
     <AppShell
       title="營運總覽"
-      subtitle="今日預約、營收、技師業績、熱門服務與風險提醒集中管理。"
+      subtitle="給美業老闆看的今日重點：預約轉換、現金流、技師產能與需要處理的風險。"
       {...shellProps(data)}
     >
       {data.needsWorkspace ? (
@@ -908,7 +908,7 @@ export function DashboardView({ data }: { data: AppData }) {
       <section className="mt-5 grid gap-5 xl:grid-cols-[1.25fr_.75fr]">
         <div className="card p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-plum">即將到店客人</h2>
+            <h2 className="text-lg font-bold text-plum">今日重點：即將到店客人</h2>
             <StatusPill tone="amber">
               取消率 {(metrics.cancellationRate * 100).toFixed(0)}% / 未到率{" "}
               {(metrics.noShowRate * 100).toFixed(0)}%
@@ -945,7 +945,7 @@ export function DashboardView({ data }: { data: AppData }) {
             ) : (
               <EmptyState
                 title="目前沒有即將到店預約"
-                action="新增第一筆預約後，這裡會顯示今日與近期排程。"
+                action="下一步行動：新增第一筆預約後，這裡會顯示今日與近期排程。"
               />
             )}
           </div>
@@ -1020,7 +1020,7 @@ export function AppointmentsView({
   return (
     <AppShell
       title="預約系統"
-      subtitle="新增、修改、取消預約；日曆 / 列表檢視與技師衝突檢查。"
+      subtitle="把電話、LINE 與現場預約整理成清楚流程，協助櫃台確認時段、技師與服務內容。"
       {...shellProps(data)}
     >
       <NoticeBanner notice={notice} />
@@ -1233,7 +1233,7 @@ export function CustomersView({
   return (
     <AppShell
       title="客戶 CRM"
-      subtitle="電話、生日、LINE、偏好、過敏禁忌、會員等級與回訪提醒。"
+      subtitle="沉澱客戶偏好、禁忌與回訪提醒，讓美甲沙龍更容易做熟客經營。"
       {...shellProps(data)}
     >
       <NoticeBanner notice={notice} />
