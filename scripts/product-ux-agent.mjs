@@ -55,7 +55,7 @@ function taskOrder(targetFile) {
 
 function replaceAll(text, replacements) {
   return replacements.reduce(
-    (next, [before, after]) => next.replace(before, after),
+    (next, [before, after]) => next.includes(before) ? next.replace(before, after) : next,
     text,
   );
 }
@@ -69,12 +69,8 @@ function improveServicesPage() {
     return null;
   }
 
-  const next = replaceAll(current, [
-    ['Unable to load services right now.', '無法載入服務項目，請稍後再試。'],
-    ['Services', 'Beauty OS · 服務項目管理'],
-    ['No services yet', '尚未建立任何服務'],
-  ]);
-  return writeIfChanged(filePath, next);
+  console.log('[Product UX Agent] Services page requires a scoped component edit; skipping broad replacements.');
+  return null;
 }
 
 function improveHomePage() {
