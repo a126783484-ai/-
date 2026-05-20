@@ -1,33 +1,42 @@
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
 
-const Layout = ({ children }: { children: React.ReactNode }) => {
+const Layout = ({ children }) => {
   const router = useRouter();
-  const [isMounted, setIsMounted] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    setIsMounted(true);
-  }, []);
+    const handleRouteChange = (url: string) => {
+      setLoading(true);
+      supabase
+        .from('routes')
+        .update({ visited: true })
+        .eq('route', url)
+        .then(() => {
+          setLoading(false);
+        });
+    };
 
-  useEffect(() => {
-    if (isMounted) {
-      const handleRouteChange = (url: string) => {
-        // You can fire off a Supabase event here
-        supabase
-          .from('events')
-          .insert({ route: url })
-          .then((response) => console.log(response));
-      };
-      router.events.on('routeChangeStart', handleRouteChange);
-      return () => {
-        router.events.off('routeChangeStart', handleRouteChange);
-      };
-    }
-  }, [isMounted, router.events]);
+    router.events.on('routeChangeStart', handleRouteChange);
+    return () => {
+      router.events.off('routeChangeStart', handleRouteChange);
+    };
+  }, [router.events]);
 
   return (
-    <div>
-      {children}
+    <div className="min-h-screen flex flex-col">
+      <header className="bg-gray-800 py-4">
+        {/* Header content */}
+      </header>
+      <main className="flex-1 p-4">{children}</main>
+      <footer className="bg-gray-800 py-4">
+        {/* Footer content */}
+      </footer>
+      {loading && (
+        <div className="fixed top-0 left-0 w-full h-full bg-gray-800 opacity-50 flex justify-center items-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gray-800"></div>
+        </div>
+      )}
     </div>
   );
 };
