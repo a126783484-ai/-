@@ -1,0 +1,38 @@
+import { supabase } from '../lib/supabase';
+
+const OperationsPage = () => {
+  const [data, setData] = useState([]);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const { data: operations } = await supabase
+          .from('operations')
+          .select('*')
+          .order('created_at', { ascending: false });
+        setData(operations);
+      } catch (error) {
+        setError(error.message);
+      }
+    };
+    fetchData();
+  }, []);
+
+  return (
+    <div>
+      <h1>Operations</h1>
+      {error ? (
+        <p style={{ color: 'red' }}>{error}</p>
+      ) : (
+        <ul>
+          {data.map((operation) => (
+            <li key={operation.id}>{operation.name}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
+export default OperationsPage;
