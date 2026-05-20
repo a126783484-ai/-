@@ -8,6 +8,10 @@ Keep Beauty OS AI automation paused, low-cost, reviewable, and unable to pollute
 - Every AI output starts as a **draft PR**.
 - `AI_MERGE_ALLOWED` defaults to `false`.
 - `AI_SELF_REPAIR_ALLOWED` defaults to `false`.
+- `AI_AUTO_ENABLED` must stay `false`.
+- `AI_GOVERNANCE_ANALYZE_ONLY` is the default mode.
+- `DRY_RUN=true` and `AI_GOVERNANCE_ANALYZE_ONLY=true` mean analyze and report only.
+- `AI_WRITE_ALLOWED=true` is required before any file write is allowed.
 - Engine lane is always high risk.
 - High-risk work never auto-merges.
 - Product work can only be low risk when it stays in `src/app`, `src/components`, `src/lib`, or `src/styles`, touches 1–3 files, and passes build/lint/typecheck/test.
@@ -27,3 +31,6 @@ Keep Beauty OS AI automation paused, low-cost, reviewable, and unable to pollute
 - Block writes when repo-path validation fails.
 - Record every blocked path with a reason instead of writing to disk.
 - Validate repo paths before every write.
+- Checkpoint to console or local temporary storage only; never write checkpoints into the repository.
+- If a quality script is missing, mark that check as `skipped` instead of `failed`.
+- Cap Groq rate-limit fallback retries to prevent infinite recursion.

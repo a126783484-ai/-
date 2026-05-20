@@ -11,7 +11,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 
 const ENV = {
@@ -27,9 +27,12 @@ const ENV = {
   SUPERVISION_ENABLED: process.env.SUPERVISION_ENABLED === 'true',
   AI_ENGINE_LANE_ENABLED: process.env.AI_ENGINE_LANE_ENABLED === 'true',
   AI_PRODUCT_LANE_ENABLED: process.env.AI_PRODUCT_LANE_ENABLED === 'true',
-  AI_AUTO_ENABLED: process.env.AI_AUTO_ENABLED === 'true',
-  AI_MAX_FILES_AUTO: Number.parseInt(process.env.AI_MAX_FILES_AUTO || '3', 10),
+  AI_GOVERNANCE_ANALYZE_ONLY: process.env.AI_GOVERNANCE_ANALYZE_ONLY !== 'false',
+  DRY_RUN: process.env.DRY_RUN === 'true',
+  AI_WRITE_ALLOWED: process.env.AI_WRITE_ALLOWED === 'true',
   AI_RUN_MODE: process.env.AI_RUN_MODE || 'draft_pr',
+  AI_AUTO_ENABLED: false,
+  AI_MAX_FALLBACKS: Number.parseInt(process.env.AI_MAX_FALLBACKS || '3', 10),
 };
 
 const MODEL_POOLS = {
@@ -246,7 +249,7 @@ function classifyRisk(files, labels = [], lane = ENV.AI_LANE, checks = []) {
 
   const withinProductSurface = normalizedFiles.every((file) => laneConfig.allowedPaths.some((pattern) => pattern.test(file)));
   const lowRiskFileCount = normalizedFiles.length > 0 && normalizedFiles.length <= LOW_RISK_PRODUCT_FILE_LIMIT;
-  const checksPassed = checks.every((check) => check.passed);
+  const checksPassed = checks.every((check) => check.status === 'passed' || check.status === 'skipped');
   const contentClean = !checks.some((check) => check.blockedContent);
 
   if (withinProductSurface && lowRiskFileCount && checksPassed && contentClean) {
@@ -303,7 +306,7 @@ function nextModel(tier) {
   return pool[index];
 }
 
-async function callGroq(systemPrompt, userPrompt, { maxTokens = 900, tier = 'cheap' } = {}) {
+async function callGroq(systemPrompt, userPrompt, { maxTokens = 900, tier = 'cheap', fallbackCount = 0, maxFallbacks = ENV.AI_MAX_FALLBACKS } = {}) {
   const model = nextModel(tier);
   const tokenBudget = TOKEN_BUDGETS[tier] || TOKEN_BUDGETS.cheap;
   const cappedTokens = Math.min(maxTokens, tokenBudget);
@@ -330,8 +333,19 @@ async function callGroq(systemPrompt, userPrompt, { maxTokens = 900, tier = 'che
   const data = await response.json();
   if (data.error) {
     const message = data.error.message || '';
-    if ((message.includes('Rate limit') || message.includes('not found') || message.includes('does not exist')) && tier !== 'hard') {
-      return callGroq(systemPrompt, userPrompt, { maxTokens, tier });
+    const shouldFallback = (message.includes('Rate limit') || message.includes('not found') || message.includes('does not exist')) && fallbackCount < maxFallbacks;
+    if (shouldFallback) {
+      const nextTier = tier === 'cheap' ? 'medium' : tier === 'medium' ? 'hard' : tier;
+      log(`Groq fallback ${fallbackCount + 1}/${maxFallbacks} for ${model}: ${message}`, 'warn');
+      return callGroq(systemPrompt, userPrompt, {
+        maxTokens,
+        tier: nextTier,
+        fallbackCount: fallbackCount + 1,
+        maxFallbacks,
+      });
+    }
+    if (fallbackCount >= maxFallbacks) {
+      throw new Error(`Groq API (${model}) fallback limit reached after ${maxFallbacks} attempts: ${message}`);
     }
     throw new Error(`Groq API (${model}): ${message}`);
   }
@@ -494,6 +508,7 @@ function applyChanges(code, laneConfig) {
   const changes = [];
   const blocked = [];
   const seen = new Set();
+  const canWrite = ENV.AI_WRITE_ALLOWED && !ENV.DRY_RUN && !ENV.AI_GOVERNANCE_ANALYZE_ONLY;
 
   let match;
   while ((match = regex.exec(code)) !== null) {
@@ -516,7 +531,7 @@ function applyChanges(code, laneConfig) {
     changes.push({ filePath: validation.path, content });
   }
 
-  const limited = ENV.AI_LANE === 'product' ? changes.slice(0, LOW_RISK_PRODUCT_FILE_LIMIT) : changes.slice(0, Math.max(1, ENV.AI_MAX_FILES_AUTO));
+  const limited = ENV.AI_LANE === 'product' ? changes.slice(0, LOW_RISK_PRODUCT_FILE_LIMIT) : changes.slice(0, Math.max(1, LOW_RISK_PRODUCT_FILE_LIMIT));
   const selected = [];
 
   for (const change of limited) {
@@ -524,6 +539,12 @@ function applyChanges(code, laneConfig) {
     if (BLOCKED_CONTENT_PATTERNS.some((pattern) => pattern.test(normalizedContent))) {
       blocked.push({ filePath: change.filePath, reasons: ['blocked placeholder/mock content'] });
       log(`Blocked content for ${change.filePath}`, 'warn');
+      continue;
+    }
+
+    if (!canWrite) {
+      log(`Analyze-only: skipped write for ${change.filePath}`);
+      selected.push(change);
       continue;
     }
 
@@ -539,6 +560,8 @@ function applyChanges(code, laneConfig) {
 
 async function runQualityChecks() {
   const checks = [];
+  const packageJson = JSON.parse(readFileSync(join(ENV.REPO_DIR, 'package.json'), 'utf8'));
+  const scripts = packageJson.scripts || {};
 
   for (const command of [
     { name: 'build', cmd: 'npm run build' },
@@ -546,14 +569,17 @@ async function runQualityChecks() {
     { name: 'typecheck', cmd: 'npm run typecheck' },
     { name: 'test', cmd: 'npm run test' },
   ]) {
+    if (!scripts[command.name]) {
+      log(`${command.name} script skipped`, 'warn');
+      checks.push({ name: command.name, status: 'skipped' });
+      continue;
+    }
+
     try {
       exec(command.cmd);
-      checks.push({ name: command.name, passed: true });
+      checks.push({ name: command.name, status: 'passed' });
     } catch (error) {
-      if (/missing script/i.test(error.message) || /missing script: /i.test(error.stdout || '')) {
-        log(`${command.name} script not found`, 'warn');
-      }
-      checks.push({ name: command.name, passed: false, error: error.message });
+      checks.push({ name: command.name, status: 'failed', error: error.message });
     }
   }
 
@@ -579,7 +605,7 @@ ${changes.map((change) => `- \`${change.filePath}\``).join('\n') || '- none'}
 - **Draft PR**: yes
 
 ### Checks Run
-${checks.map((check) => `- ${check.name}: ${check.passed ? 'passed' : 'failed'}`).join('\n')}
+${checks.map((check) => `- ${check.name}: ${check.status}`).join('\n')}
 
 ### Governance Rules
 - AI_MERGE_ALLOWED = ${ENV.AI_MERGE_ALLOWED ? 'true' : 'false'}
@@ -640,11 +666,7 @@ function writeCheckpoint(backlog, task, reason) {
     },
   };
 
-  const checkpointDir = join(ENV.REPO_DIR, '.ai-checkpoints');
-  mkdirSync(checkpointDir, { recursive: true });
-  const checkpointFile = join(checkpointDir, `${ENV.AI_LANE}-${Date.now()}.json`);
-  writeFileSync(checkpointFile, JSON.stringify(checkpoint, null, 2));
-  log(`Checkpoint written: ${checkpointFile}`);
+  console.log(`[AI Gov CHECKPOINT] ${JSON.stringify(checkpoint)}`);
 }
 
 async function main() {
@@ -653,6 +675,11 @@ async function main() {
 
   const backlog = await scanBacklog();
   const existingLanePR = backlog.openPRs.find((pr) => pr.lane === ENV.AI_LANE) || backlog.draftPRs.find((pr) => pr.lane === ENV.AI_LANE);
+  const canWrite = ENV.AI_WRITE_ALLOWED && !ENV.DRY_RUN && !ENV.AI_GOVERNANCE_ANALYZE_ONLY;
+
+  if (!canWrite) {
+    log('Analyze-only mode enabled; skipping write, commit, and push steps.', 'warn');
+  }
 
   if (existingLanePR) {
     log(`Existing ${ENV.AI_LANE} PR detected: #${existingLanePR.number}`, 'warn');
@@ -676,8 +703,13 @@ async function main() {
   const checks = await runQualityChecks();
   const branchName = `${laneConfig.branchPrefix}${task.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 50)}-${Date.now()}`;
 
+  if (!canWrite) {
+    writeCheckpoint(backlog, task, `Analyze-only report ready for ${changes.length} file(s)`);
+    return;
+  }
+
   exec(`git checkout -b ${branchName}`);
-  exec('git add -A');
+  exec('git add scripts/ai-developer.mjs docs/AI_AUTOMATION_GOVERNANCE.md docs/AI_MODEL_ROUTING.md');
   exec(`git commit -m "${laneConfig.prTitlePrefix} ${task.title}"`);
   await withRetry(() => exec(`git push -u origin ${branchName}`));
 

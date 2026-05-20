@@ -48,3 +48,4 @@ Only send:
 - Safety checks should use the safety tier only.
 - Route governance and review tasks through the cheap tier unless the task is genuinely complex.
 - Keep draft PR creation and policy checks on the cheapest safe tier.
+- Rate-limit fallback retries must be capped to avoid infinite recursion.
