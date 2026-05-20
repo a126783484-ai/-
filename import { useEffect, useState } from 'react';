@@ -1,0 +1,28 @@
+import { useRouter } from 'next/router';
+import { supabase } from '../lib/supabase';
+
+const Layout = ({ children }) => {
+  const router = useRouter();
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    const session = supabase.auth.session();
+    if (session) {
+      setUser(session.user);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      supabase.auth.setAuth(user.id);
+    }
+  }, [user]);
+
+  return (
+    <div>
+      {children}
+    </div>
+  );
+};
+
+export default Layout;
