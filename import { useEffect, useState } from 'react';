@@ -1,23 +1,29 @@
 import { useRouter } from 'next/router';
 import { supabase } from '../lib/supabase';
 
-const Layout = ({ children }) => {
+const Page = () => {
   const router = useRouter();
-  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const handleRouteChange = (url) => {
-      supabase.auth.user().then((user) => {
-        if (user) {
-          setUser(user);
-        } else {
-          setUser(null);
+    const handleRouteChange = async () => {
+      setLoading(true);
+      try {
+        // Add your logic here to handle route changes
+        // For example, you can fetch data from Supabase
+        const { data, error } = await supabase
+          .from('your_table_name')
+          .select('your_columns');
+        if (error) {
+          console.error(error);
         }
-      });
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
     };
-
     router.events.on('routeChangeStart', handleRouteChange);
-
     return () => {
       router.events.off('routeChangeStart', handleRouteChange);
     };
@@ -25,10 +31,9 @@ const Layout = ({ children }) => {
 
   return (
     <div>
-      {children}
-      {/* Removed the problematic code */}
+      {/* Your page content here */}
     </div>
   );
 };
 
-export default Layout;
+export default Page;
