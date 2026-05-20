@@ -16,6 +16,8 @@ on:
           - src/app/services/page.tsx
           - src/app/page.tsx
           - src/components/ModuleViews.tsx
+  schedule:
+    - cron: '20 2 * * *'
 
 permissions:
   contents: write
@@ -29,7 +31,7 @@ jobs:
   ai-product-develop:
     runs-on: ubuntu-latest
     env:
-      PRODUCT_AGENT_TARGET_FILE: ${{ inputs.target_file }}
+      PRODUCT_AGENT_TARGET_FILE: ${{ github.event.inputs.target_file || 'src/app/services/page.tsx' }}
     steps:
       - name: Checkout product UX branch
         uses: actions/checkout@v4
