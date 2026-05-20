@@ -1,0 +1,40 @@
+import { useRouter } from 'next/router';
+import { supabase } from '../lib/supabase';
+
+const Layout = ({ children }) => {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const handleRouteChange = (url: string) => {
+      setLoading(true);
+      supabase
+        .from('routes')
+        .update({ loading: true })
+        .eq('route', url)
+        .then(() => {
+          setLoading(false);
+        });
+    };
+
+    router.events.on('routeChangeStart', handleRouteChange);
+    router.events.on('routeChangeComplete', handleRouteChange);
+
+    return () => {
+      router.events.off('routeChangeStart', handleRouteChange);
+      router.events.off('routeChangeComplete', handleRouteChange);
+    };
+  }, [router.events]);
+
+  return (
+    <div>
+      {loading ? (
+        <div>Loading...</div>
+      ) : (
+        <div>{children}</div>
+      )}
+    </div>
+  );
+};
+
+export default Layout;
