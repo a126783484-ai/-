@@ -1,29 +1,30 @@
 {
-  "version": 1,
+  "name": "AI Engine",
+  "version": "1.0",
   "steps": [
     {
-      "name": "Check if component is being used correctly",
-      "description": "Check if the component is being used correctly",
-      "type": "check",
-      "params": {
-        "component": "OperationsPage"
-      }
+      "name": "Import dependencies",
+      "code": "import { useEffect, useState } from 'react';"
     },
     {
-      "name": "Check if component is being rendered correctly",
-      "description": "Check if the component is being rendered correctly",
-      "type": "check",
-      "params": {
-        "component": "OperationsPage"
-      }
+      "name": "Fix failing checks",
+      "code": "import { useEffect, useState } from 'react';\nimport { supabaseClient } from '../lib/supabase';\n\nconst App = () => {\n  const [data, setData] = useState([]);\n  useEffect(() => {\n    async function fetchData() {\n      const { data: users, error } = await supabaseClient\n        .from('users')\n        .select('*');\n      if (error) {\n        console.error(error);\n      } else {\n        setData(users);\n      }\n    }\n    fetchData();\n  }, []);\n  return (\n    <div>\n      {data.map((user) => (\n        <div key={user.id}>{user.name}</div>\n      ))}\n    </div>\n  );\n};\nexport default App;"
+    }
+  ]
+}
+
+// .ai-checkpoints/engine-1779276314500.json
+{
+  "name": "AI Engine",
+  "version": "1.0",
+  "steps": [
+    {
+      "name": "Import dependencies",
+      "code": "import { useEffect, useState } from 'react';"
     },
     {
-      "name": "Check if component is handling errors correctly",
-      "description": "Check if the component is handling errors correctly",
-      "type": "check",
-      "params": {
-        "component": "OperationsPage"
-      }
+      "name": "Fix failing checks",
+      "code": "import { useEffect, useState } from 'react';\nimport { supabaseClient } from '../lib/supabase';\n\nconst App = () => {\n  const [data, setData] = useState([]);\n  useEffect(() => {\n    async function fetchData() {\n      const { data: users, error } = await supabaseClient\n        .from('users')\n        .select('*');\n      if (error) {\n        console.error(error);\n      } else {\n        setData(users);\n      }\n    }\n    fetchData();\n  }, []);\n  return (\n    <div>\n      {data.map((user) => (\n        <div key={user.id}>{user.name}</div>\n      ))}\n    </div>\n  );\n};\nexport default App;"
     }
   ]
 }
