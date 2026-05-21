@@ -1861,6 +1861,7 @@ export function ReportsView({ data }: { data: AppData }) {
   const lowStockCount = data.inventory.filter(
     (item) => item.quantity <= item.lowStockThreshold,
   ).length;
+  const topService = metrics.serviceRanking[0];
   const inventoryNet = data.inventoryMovements.reduce(
     (sum, movement) => sum + movement.quantity,
     0,
@@ -1895,6 +1896,29 @@ export function ReportsView({ data }: { data: AppData }) {
           value={`${lowStockCount}`}
           hint="目前低於警戒值的品項"
         />
+      </section>
+      <section className="mt-5 card p-5">
+        <h2 className="font-bold text-plum">本月跟進焦點</h2>
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <div className="rounded-2xl bg-white p-4">
+            <div className="text-sm text-ink/60">待收款</div>
+            <div className="mt-1 text-lg font-bold text-plum">
+              {currency.format(metrics.pendingPayment)}
+            </div>
+          </div>
+          <div className="rounded-2xl bg-white p-4">
+            <div className="text-sm text-ink/60">今日待處理</div>
+            <div className="mt-1 text-lg font-bold text-plum">
+              {metrics.upcoming.length} 筆預約
+            </div>
+          </div>
+          <div className="rounded-2xl bg-white p-4">
+            <div className="text-sm text-ink/60">熱門服務</div>
+            <div className="mt-1 text-lg font-bold text-plum">
+              {topService ? `${topService.name} × ${topService.count}` : "暫無資料"}
+            </div>
+          </div>
+        </div>
       </section>
       <section className="mt-5 grid gap-5 lg:grid-cols-2">
         <div className="card p-5">
