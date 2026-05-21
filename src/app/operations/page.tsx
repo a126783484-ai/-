@@ -68,7 +68,9 @@ export default async function OperationsCommandCenterPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-plum">今日處理清單</h2>
-              <p className="mt-1 text-sm text-ink/60">優先處理會影響營收與客戶體驗的項目。</p>
+              <p className="mt-1 text-sm text-ink/60">
+                優先處理會影響營收與客戶體驗的項目。共 {pendingAppointments.length} 筆，僅顯示前 5 筆。
+              </p>
             </div>
             <Link href="/appointments" className="mobile-tap rounded-2xl bg-plum px-4 py-2 font-semibold text-white">
               去預約系統
