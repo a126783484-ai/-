@@ -1,5 +1,6 @@
 export const settingsMessageText: Record<string, string> = {
-  workspace_saved: "店鋪設定已儲存。"
+  workspace_saved: "店鋪設定已儲存。",
+  settings_setup_hint: "先完成店鋪設定，再建立服務、員工與客戶，就能開始看到營運指標。"
 };
 
 export const settingsErrorText: Record<string, string> = {

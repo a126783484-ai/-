@@ -26,6 +26,7 @@ import { dashboardMetrics } from "@/lib/analytics";
 import { orderPaymentState, orderStatusLabel, orderStatusTone, orderSubtotal, orderTotal, outstandingAmount } from "@/lib/orders";
 import { can, roleLabel } from "@/lib/permissions";
 import type { AppData } from "@/lib/app-data";
+import { isWorkspaceEmpty } from "@/lib/app-data";
 import type { Appointment, Customer, InventoryItem, Order, ServiceItem, Shift, StaffMember } from "@/lib/types";
 import { buildStaffInvitePath } from "@/lib/staff-invites";
 import { currency, formatDate, formatTime } from "@/lib/utils";
@@ -63,6 +64,7 @@ const staffRoleHelpText =
   "技師可被排班與指派服務，櫃台負責接待與提醒，一般員工適合支援與行政，管理員 / 店主可管理設定。";
 const inventoryMovementTypes = ["purchase", "consume", "adjust"] as const;
 type Notice = { kind: "error" | "success"; message: string };
+type LinkAction = { href: string; label: string };
 
 function appointmentStatusTone(status: (typeof appointmentStatuses)[number]) {
   if (status === "confirmed") return "sage" as const;
@@ -1261,8 +1263,38 @@ function shellProps(data: AppData) {
     role: data.currentMember?.role ?? "owner",
     notice: data.needsWorkspace
       ? "尚未完成 workspace 初始化，請重新登入或聯絡管理員。"
-      : liveNotice,
+      : data.demoMode
+        ? "預覽資料模式：目前顯示的是範例 seed 資料，Supabase 實際資料仍會優先顯示。"
+        : liveNotice,
   };
+}
+
+function SetupGuide({
+  title,
+  action,
+  links,
+}: {
+  title: string;
+  action: string;
+  links: LinkAction[];
+}) {
+  return (
+    <div className="card p-5">
+      <h2 className="text-lg font-bold text-plum">{title}</h2>
+      <p className="mt-1 text-sm text-ink/60">{action}</p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {links.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
+          >
+            {link.label}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function DashboardView({ data }: { data: AppData }) {
@@ -1274,6 +1306,7 @@ export function DashboardView({ data }: { data: AppData }) {
     data.services,
     data.staff,
   );
+  const workspaceEmpty = isWorkspaceEmpty(data);
 
   return (
     <AppShell
@@ -1309,6 +1342,17 @@ export function DashboardView({ data }: { data: AppData }) {
             ))}
           </div>
         </div>
+      ) : null}
+      {workspaceEmpty ? (
+        <SetupGuide
+          title="先建立第一組營運資料"
+          action="完成店鋪設定後，依序新增服務、員工與客戶，今日重點與 KPI 才會開始有意義。"
+          links={[
+            { href: "/settings?message=settings_setup_hint", label: "先去設定" },
+            { href: "/services", label: "建立服務" },
+            { href: "/staff", label: "建立員工" },
+          ]}
+        />
       ) : null}
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
@@ -2443,12 +2487,24 @@ export function ReportsView({ data }: { data: AppData }) {
   const inventoryOutflow = data.inventoryMovements
     .filter((movement) => movement.quantity < 0)
     .reduce((sum, movement) => sum + Math.abs(movement.quantity), 0);
+  const workspaceEmpty = isWorkspaceEmpty(data);
   return (
     <AppShell
       title="報表分析"
       subtitle="日 / 月營收、服務排行、技師排行、回訪率、客單價、來源與庫存消耗分析。"
       {...shellProps(data)}
     >
+      {workspaceEmpty ? (
+        <SetupGuide
+          title="報表會在第一筆營運資料後開始有內容"
+          action="先建立服務、客戶與第一筆預約或訂單，這裡就會開始出現營收、排行與來源分析。"
+          links={[
+            { href: "/settings?message=settings_setup_hint", label: "先去設定" },
+            { href: "/appointments", label: "建立預約" },
+            { href: "/customers", label: "建立客戶" },
+          ]}
+        />
+      ) : null}
       <section className="grid gap-4 md:grid-cols-4">
         <MetricCard
           label="月營收"
@@ -2497,33 +2553,47 @@ export function ReportsView({ data }: { data: AppData }) {
       <section className="mt-5 grid gap-5 lg:grid-cols-2">
         <div className="card p-5">
           <h2 className="font-bold text-plum">預約來源</h2>
-          {sources.map((source) => (
-            <div
-              key={source}
-              className="mt-3 flex justify-between rounded-2xl bg-white p-4"
-            >
-              <span>{source}</span>
-              <StatusPill>
-                {
-                  data.appointments.filter((item) => item.source === source)
-                    .length
-                }{" "}
-                筆
-              </StatusPill>
-            </div>
-          ))}
+          {data.appointments.length ? (
+            sources.map((source) => (
+              <div
+                key={source}
+                className="mt-3 flex justify-between rounded-2xl bg-white p-4"
+              >
+                <span>{source}</span>
+                <StatusPill>
+                  {
+                    data.appointments.filter((item) => item.source === source)
+                      .length
+                  }{" "}
+                  筆
+                </StatusPill>
+              </div>
+            ))
+          ) : (
+            <EmptyState
+              title="目前還沒有可分析的預約來源"
+              action="先建立第一筆預約，來源分析與到店轉換就會自動出現在這裡。"
+            />
+          )}
         </div>
         <div className="card p-5">
           <h2 className="font-bold text-plum">服務銷售排行</h2>
-          {metrics.serviceRanking.map((item, index) => (
-            <div
-              key={`${item.name}-${index}`}
-              className="mt-3 flex justify-between rounded-2xl bg-white p-4"
-            >
-              <span>{item.name}</span>
-              <strong>{item.count}</strong>
-            </div>
-          ))}
+          {metrics.serviceRanking.length ? (
+            metrics.serviceRanking.map((item, index) => (
+              <div
+                key={`${item.name}-${index}`}
+                className="mt-3 flex justify-between rounded-2xl bg-white p-4"
+              >
+                <span>{item.name}</span>
+                <strong>{item.count}</strong>
+              </div>
+            ))
+          ) : (
+            <EmptyState
+              title="目前還沒有服務排行"
+              action="建立服務與預約後，這裡會自動整理出最常被選擇的項目。"
+            />
+          )}
         </div>
       </section>
       <section className="mt-5 grid gap-4 md:grid-cols-3">
@@ -2573,6 +2643,19 @@ export function SettingsView({
       {...shellProps(data)}
     >
       <NoticeBanner notice={notice} />
+      {isWorkspaceEmpty(data) ? (
+        <div className="mb-5">
+          <SetupGuide
+            title="先把店鋪骨架補齊"
+            action="設定店名與營業資訊後，下一步請建立服務分類、員工與客戶，後續頁面才不會是空的。"
+            links={[
+              { href: "/services", label: "建立服務" },
+              { href: "/staff", label: "建立員工" },
+              { href: "/customers", label: "建立客戶" },
+            ]}
+          />
+        </div>
+      ) : null}
       <form action={updateWorkspaceSettings} className="card p-5">
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block text-sm font-semibold text-plum">
@@ -2622,14 +2705,21 @@ export function SettingsView({
           </label>
         </div>
         <div className="mt-6 grid gap-3 md:grid-cols-2">
-          {data.categories.map((category) => (
-            <div
-              key={category.id}
-              className="rounded-2xl bg-blush p-4 font-medium"
-            >
-              服務分類：{category.name}
-            </div>
-          ))}
+          {data.categories.length ? (
+            data.categories.map((category) => (
+              <div
+                key={category.id}
+                className="rounded-2xl bg-blush p-4 font-medium"
+              >
+                服務分類：{category.name}
+              </div>
+            ))
+          ) : (
+            <EmptyState
+              title="尚未建立服務分類"
+              action="先到服務頁建立第一個服務，系統會依分類自動整理後續的報表與排程。"
+            />
+          )}
           <div className="rounded-2xl bg-blush p-4 font-medium">
             設定會直接更新目前 workspace，並受 Supabase RLS 與 owner/admin
             policy 保護。

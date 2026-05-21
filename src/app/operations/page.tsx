@@ -2,12 +2,47 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, MetricCard, StatusPill } from "@/components/ui";
 import { dashboardMetrics } from "@/lib/analytics";
-import { loadAppData } from "@/lib/app-data";
+import { isWorkspaceEmpty, loadAppData } from "@/lib/app-data";
 import { statusLabel } from "@/lib/appointments";
 import { orderTotal, outstandingAmount } from "@/lib/orders";
 import { currency, formatDate, formatTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+
+function SetupGuide({
+  title,
+  action,
+}: {
+  title: string;
+  action: string;
+}) {
+  return (
+    <div className="card p-5">
+      <h2 className="text-lg font-bold text-plum">{title}</h2>
+      <p className="mt-1 text-sm text-ink/60">{action}</p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Link
+          href="/settings?message=settings_setup_hint"
+          className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
+        >
+          先去設定
+        </Link>
+        <Link
+          href="/services"
+          className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
+        >
+          建立服務
+        </Link>
+        <Link
+          href="/staff"
+          className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
+        >
+          建立員工
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 export default async function OperationsCommandCenterPage() {
   const data = await loadAppData();
@@ -40,8 +75,11 @@ export default async function OperationsCommandCenterPage() {
     role: data.currentMember?.role ?? "owner",
     notice: data.needsWorkspace
       ? "尚未完成 workspace 初始化，請重新登入或聯絡管理員。"
-      : "營運指揮中心：集中查看今日重點、風險與下一步。",
+      : data.demoMode
+        ? "預覽資料模式：目前顯示的是範例 seed 資料，Supabase 實際資料仍會優先顯示。"
+        : "營運指揮中心：集中查看今日重點、風險與下一步。",
   } as const;
+  const workspaceEmpty = isWorkspaceEmpty(data);
 
   return (
     <AppShell
@@ -54,6 +92,14 @@ export default async function OperationsCommandCenterPage() {
           title="尚未完成 workspace 初始化"
           action="完成 workspace 後，這裡會顯示正式營運指標。"
         />
+      ) : null}
+      {workspaceEmpty ? (
+        <div className="mt-4">
+          <SetupGuide
+            title="這個工作區還沒有足夠的營運資料"
+            action="先把店鋪設定、服務、員工與第一位客戶補齊，營運指揮中心才會開始反映真實狀態。"
+          />
+        </div>
       ) : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

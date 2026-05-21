@@ -22,6 +22,7 @@ import {
   toStaffInvite,
 } from "@/lib/staff-invites";
 import { ensureOwnerWorkspaceForUser } from "@/lib/workspace";
+import { buildSeedAppData } from "@/lib/seed";
 
 type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
 type WorkspaceSummaryRow = Pick<
@@ -89,6 +90,7 @@ export interface AppData {
   inventoryMovements: InventoryMovement[];
   shifts: Shift[];
   needsWorkspace: boolean;
+  demoMode: boolean;
 }
 
 function emptyWorkspace(): Workspace {
@@ -119,7 +121,22 @@ function emptyAppData(user: { id: string; email: string | null }): AppData {
     inventoryMovements: [],
     shifts: [],
     needsWorkspace: true,
+    demoMode: false,
   };
+}
+
+export function isWorkspaceEmpty(data: Pick<AppData, "staff" | "categories" | "services" | "customers" | "appointments" | "orders" | "inventory" | "inventoryMovements" | "shifts">) {
+  return (
+    data.staff.length === 0 &&
+    data.categories.length === 0 &&
+    data.services.length === 0 &&
+    data.customers.length === 0 &&
+    data.appointments.length === 0 &&
+    data.orders.length === 0 &&
+    data.inventory.length === 0 &&
+    data.inventoryMovements.length === 0 &&
+    data.shifts.length === 0
+  );
 }
 
 function toWorkspace(row: WorkspaceSummaryRow): Workspace {
@@ -295,6 +312,7 @@ async function getUser() {
 }
 
 export async function loadAppData(): Promise<AppData> {
+  const config = getSupabaseConfig();
   const { supabase, user } = await getUser();
   const userSummary = { id: user.id, email: user.email ?? null };
 
@@ -328,6 +346,7 @@ export async function loadAppData(): Promise<AppData> {
         ...emptyAppData(userSummary),
         staffInvites: pendingInvites,
         staffInviteFeatureEnabled: true,
+        demoMode: config.demoMode,
       };
     }
 
@@ -500,6 +519,38 @@ export async function loadAppData(): Promise<AppData> {
   );
   const orderIds = new Set((ordersResult.data ?? []).map((order) => order.id));
 
+  if (config.demoMode && isWorkspaceEmpty({
+    staff: (staffResult.data ?? []).map(toStaff),
+    categories: (categoriesResult.data ?? []).map(toCategory),
+    services: (servicesResult.data ?? []).map((service) =>
+      toService(service, categoriesResult.data ?? []),
+    ),
+    customers: (customersResult.data ?? []).map(toCustomer),
+    appointments: (appointmentsResult.data ?? []).map((appointment) =>
+      toAppointment(
+        appointment,
+        (appointmentServicesResult.data ?? []).filter((item) =>
+          appointmentIds.has(item.appointment_id),
+        ),
+      ),
+    ),
+    orders: (ordersResult.data ?? []).map((order) =>
+      toOrder(
+        order,
+        (orderLinesResult.data ?? []).filter((line) =>
+          orderIds.has(line.order_id),
+        ),
+      ),
+    ),
+    inventory: (inventoryResult.data ?? []).map(toInventory),
+    inventoryMovements: (inventoryMovementsResult.data ?? []).map(
+      toInventoryMovement,
+    ),
+    shifts: (shiftsResult.data ?? []).map(toShift),
+  })) {
+    return buildSeedAppData(userSummary);
+  }
+
   return {
     user: userSummary,
     workspace: toWorkspace(workspaceResult.data),
@@ -534,5 +585,6 @@ export async function loadAppData(): Promise<AppData> {
     ),
     shifts: (shiftsResult.data ?? []).map(toShift),
     needsWorkspace: false,
+    demoMode: config.demoMode,
   };
 }
