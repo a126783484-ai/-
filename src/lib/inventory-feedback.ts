@@ -1,9 +1,13 @@
 export const inventoryMessageText: Record<string, string> = {
+  inventory_item_saved: "庫存品項已儲存。",
   inventory_movement_recorded: "庫存異動已記錄。"
 };
 
 export const inventoryErrorText: Record<string, string> = {
   inventory_config_missing: "系統登入設定尚未完成，無法處理庫存異動。",
+  inventory_item_failed: "庫存品項儲存失敗，請稍後再試。",
+  inventory_item_forbidden: "你沒有權限建立或編輯庫存品項。",
+  inventory_item_invalid_input: "庫存品項資料格式不正確，請檢查品名、分類與數量。",
   inventory_forbidden: "你沒有權限調整庫存。",
   inventory_invalid_input: "庫存異動資料格式不正確，請檢查品項、類型與數量。",
   inventory_insufficient_stock: "庫存不足，無法完成出庫。",

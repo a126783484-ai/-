@@ -15,8 +15,8 @@ import {
   updateAppointmentStatus,
   updateWorkspaceSettings,
 } from "@/app/crud-actions";
+import { recordInventoryMovementAction, saveInventoryItemAction } from "@/app/inventory/actions";
 import { createStaffAction, createStaffInviteAction, updateStaffAction } from "@/app/staff/actions";
-import { recordInventoryMovementAction } from "@/app/inventory/actions";
 import { AppShell } from "@/components/AppShell";
 import { FormNotice } from "@/components/FormNotice";
 import { ModuleTable } from "@/components/ModuleTable";
@@ -26,7 +26,7 @@ import { dashboardMetrics } from "@/lib/analytics";
 import { orderTotal, outstandingAmount } from "@/lib/orders";
 import { can, roleLabel } from "@/lib/permissions";
 import type { AppData } from "@/lib/app-data";
-import type { Appointment, Customer, Order, ServiceItem, StaffMember } from "@/lib/types";
+import type { Appointment, Customer, InventoryItem, Order, ServiceItem, StaffMember } from "@/lib/types";
 import { buildStaffInvitePath } from "@/lib/staff-invites";
 import { currency, formatDate, formatTime } from "@/lib/utils";
 
@@ -773,6 +773,121 @@ function InventoryMovementForm({ data }: { data: AppData }) {
   );
 }
 
+function InventoryItemForm({
+  item,
+  onCancel,
+}: {
+  item?: InventoryItem;
+  onCancel?: () => void;
+}) {
+  return (
+    <form action={saveInventoryItemAction} className="card p-5">
+      <input type="hidden" name="id" value={item?.id ?? ""} />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-plum">
+            {item ? "編輯庫存品項" : "建立庫存品項"}
+          </h2>
+          <p className="mt-1 text-sm text-ink/65">
+            建立第一筆品項後，就能在右側記錄入庫、出庫與調整。
+          </p>
+        </div>
+        {item && onCancel ? (
+          <button
+            type="button"
+            className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
+            onClick={onCancel}
+          >
+            取消編輯
+          </button>
+        ) : null}
+      </div>
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <label className="text-sm font-semibold text-plum">
+          品牌
+          <input
+            name="brand"
+            className={fieldClass()}
+            defaultValue={item?.brand ?? ""}
+            placeholder="Leafgel"
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          分類
+          <input
+            required
+            name="category"
+            className={fieldClass()}
+            defaultValue={item?.category ?? ""}
+            placeholder="美甲膠 / 保養品 / 耗材"
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum md:col-span-2">
+          品項名稱
+          <input
+            required
+            name="name"
+            className={fieldClass()}
+            defaultValue={item?.name ?? ""}
+            placeholder="裸玫瑰凝膠 #R12"
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          成本
+          <input
+            required
+            type="number"
+            min="0"
+            step="0.01"
+            name="cost"
+            className={fieldClass()}
+            defaultValue={item?.cost ?? 0}
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          售價
+          <input
+            required
+            type="number"
+            min="0"
+            step="0.01"
+            name="retail_price"
+            className={fieldClass()}
+            defaultValue={item?.retailPrice ?? 0}
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          現有數量
+          <input
+            required
+            type="number"
+            min="0"
+            step="0.01"
+            name="quantity"
+            className={fieldClass()}
+            defaultValue={item?.quantity ?? 0}
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          低庫存警戒
+          <input
+            required
+            type="number"
+            min="0"
+            step="0.01"
+            name="low_stock_threshold"
+            className={fieldClass()}
+            defaultValue={item?.lowStockThreshold ?? 0}
+          />
+        </label>
+      </div>
+      <div className="mt-4">
+        <SubmitButton>{item ? "更新品項" : "建立品項"}</SubmitButton>
+      </div>
+    </form>
+  );
+}
+
 function StaffForm({ staff }: { staff?: StaffMember }) {
   const action = staff ? updateStaffAction : createStaffAction;
 
@@ -1373,7 +1488,10 @@ export function InventoryView({
   data: AppData;
   notice?: Notice;
 }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
   const canManageInventory = can(data.currentMember?.role ?? "staff", "inventory");
+  const editingItem = data.inventory.find((item) => item.id === editingId);
+  const hasInventory = data.inventory.length > 0;
   const inventoryRows = [...data.inventory].sort((a, b) => {
     const aLow = a.quantity <= a.lowStockThreshold;
     const bLow = b.quantity <= b.lowStockThreshold;
@@ -1409,14 +1527,26 @@ export function InventoryView({
         <MetricCard label="庫存成本" value={currency.format(totalValue)} hint="依成本估值" />
         <MetricCard label="淨異動" value={netMovement.toFixed(2)} hint={`出庫累計 ${movementOutflow.toFixed(2)}`} />
       </section>
-      <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)]">
-        {canManageInventory ? <InventoryMovementForm data={data} /> : null}
-        <div className="card p-5">
-          <h2 className="text-lg font-bold text-plum">庫存運作</h2>
-          <div className="mt-4 space-y-3 text-sm text-ink/70">
-            <p>入庫、出庫、調整都會寫入 `inventory_movements`，並同步更新品項數量。</p>
-            <p>出庫前會檢查餘量，不允許扣成負數。</p>
-            <p>這裡是後續結算、報表與耗材成本的共同來源。</p>
+      <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+        {canManageInventory ? (
+          <InventoryItemForm item={editingItem} onCancel={editingItem ? () => setEditingId(null) : undefined} />
+        ) : null}
+        <div className="space-y-5">
+          {canManageInventory && hasInventory ? (
+            <InventoryMovementForm data={data} />
+          ) : canManageInventory ? (
+            <EmptyState
+              title="先建立第一筆庫存品項"
+              action="建立品項後，就能直接記錄入庫、出庫與調整。"
+            />
+          ) : null}
+          <div className="card p-5">
+            <h2 className="text-lg font-bold text-plum">庫存運作</h2>
+            <div className="mt-4 space-y-3 text-sm text-ink/70">
+              <p>入庫、出庫、調整都會寫入 `inventory_movements`，並同步更新品項數量。</p>
+              <p>出庫前會檢查餘量，不允許扣成負數。</p>
+              <p>這裡是後續結算、報表與耗材成本的共同來源。</p>
+            </div>
           </div>
         </div>
       </div>
@@ -1461,6 +1591,23 @@ export function InventoryView({
               sortValue: (row) => row.retailPrice,
               render: (row) => currency.format(row.retailPrice),
             },
+            ...(canManageInventory
+              ? [
+                  {
+                    key: "actions",
+                    label: "操作",
+                    render: (row: InventoryItem) => (
+                      <button
+                        type="button"
+                        className="mobile-tap rounded-xl bg-white px-3 py-2 text-sm font-semibold text-plum"
+                        onClick={() => setEditingId(row.id)}
+                      >
+                        編輯
+                      </button>
+                    ),
+                  },
+                ]
+              : []),
           ]}
         />
       </div>
