@@ -62,6 +62,14 @@ const staffRoles = ["owner", "admin", "technician", "front_desk", "staff"] as co
 const inventoryMovementTypes = ["purchase", "consume", "adjust"] as const;
 type Notice = { kind: "error" | "success"; message: string };
 
+function appointmentStatusTone(status: (typeof appointmentStatuses)[number]) {
+  if (status === "confirmed") return "sage" as const;
+  if (status === "in_service") return "plum" as const;
+  if (status === "completed") return "sage" as const;
+  if (status === "cancelled" || status === "no_show") return "rose" as const;
+  return "amber" as const;
+}
+
 function NoticeBanner({ notice }: { notice?: Notice }) {
   if (!notice) return null;
   return <FormNotice kind={notice.kind}>{notice.message}</FormNotice>;
@@ -940,7 +948,9 @@ export function DashboardView({ data }: { data: AppData }) {
                         {formatTime(appointment.startAt)}{" "}
                         {customer?.name ?? "未命名客戶"}
                       </strong>
-                      <StatusPill>{statusLabel(appointment.status)}</StatusPill>
+                      <StatusPill tone={appointmentStatusTone(appointment.status)}>
+                        {statusLabel(appointment.status)}
+                      </StatusPill>
                     </div>
                     <p className="mt-1 text-sm text-ink/60">
                       技師 {technician?.name ?? "未指派"}｜
@@ -1090,7 +1100,11 @@ export function AppointmentsView({
           {
             key: "status",
             label: "狀態",
-            render: (row) => <StatusPill>{statusLabel(row.status)}</StatusPill>,
+            render: (row) => (
+              <StatusPill tone={appointmentStatusTone(row.status)}>
+                {statusLabel(row.status)}
+              </StatusPill>
+            ),
           },
           {
             key: "actions",
