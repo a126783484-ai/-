@@ -1,5 +1,5 @@
 import { addMinutes, areIntervalsOverlapping, parseISO } from "date-fns";
-import type { AppointmentStatus, ServiceItem } from "./types";
+import type { AppointmentStatus, ServiceItem, StaffMember } from "./types";
 
 type AppointmentService = Pick<ServiceItem, "id" | "durationMin">;
 type ConflictAppointment = {
@@ -8,6 +8,24 @@ type ConflictAppointment = {
   startAt: string;
   endAt: string;
   status: AppointmentStatus;
+};
+
+type AppointmentDependencyInput = {
+  customers: Array<{ id: string }>;
+  services: Array<Pick<ServiceItem, "id" | "enabled">>;
+  staff: Array<Pick<StaffMember, "id" | "active">>;
+};
+
+export type AppointmentDependencySummary = {
+  customerCount: number;
+  serviceCount: number;
+  activeServiceCount: number;
+  staffCount: number;
+  activeStaffCount: number;
+  missingCustomers: boolean;
+  missingServices: boolean;
+  missingStaff: boolean;
+  ready: boolean;
 };
 
 export function appointmentDuration(serviceIds: string[], services: AppointmentService[]) {
@@ -28,6 +46,23 @@ export function hasTechnicianConflict(candidate: Pick<ConflictAppointment, "tech
       { inclusive: false }
     );
   });
+}
+
+export function summarizeAppointmentDependencies(data: AppointmentDependencyInput): AppointmentDependencySummary {
+  const activeServiceCount = data.services.filter((service) => service.enabled).length;
+  const activeStaffCount = data.staff.filter((member) => member.active).length;
+
+  return {
+    customerCount: data.customers.length,
+    serviceCount: data.services.length,
+    activeServiceCount,
+    staffCount: data.staff.length,
+    activeStaffCount,
+    missingCustomers: data.customers.length === 0,
+    missingServices: activeServiceCount === 0,
+    missingStaff: activeStaffCount === 0,
+    ready: data.customers.length > 0 && activeServiceCount > 0 && activeStaffCount > 0,
+  };
 }
 
 export function statusLabel(status: AppointmentStatus) {

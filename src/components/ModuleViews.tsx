@@ -21,7 +21,7 @@ import { AppShell } from "@/components/AppShell";
 import { FormNotice } from "@/components/FormNotice";
 import { ModuleTable } from "@/components/ModuleTable";
 import { MetricCard, StatusPill, EmptyState } from "@/components/ui";
-import { statusLabel } from "@/lib/appointments";
+import { statusLabel, summarizeAppointmentDependencies } from "@/lib/appointments";
 import { dashboardMetrics } from "@/lib/analytics";
 import { orderTotal, outstandingAmount } from "@/lib/orders";
 import { can, roleLabel } from "@/lib/permissions";
@@ -80,9 +80,11 @@ function NoticeBanner({ notice }: { notice?: Notice }) {
 function SubmitButton({
   children,
   tone = "plum",
+  disabled = false,
 }: {
   children: React.ReactNode;
   tone?: "plum" | "white" | "danger";
+  disabled?: boolean;
 }) {
   const { pending } = useFormStatus();
   const className =
@@ -90,9 +92,9 @@ function SubmitButton({
       ? "mobile-tap rounded-2xl bg-rose px-4 py-3 font-semibold text-white disabled:opacity-60"
       : tone === "white"
         ? "mobile-tap rounded-2xl bg-white px-4 py-3 font-semibold text-plum disabled:opacity-60"
-        : "mobile-tap rounded-2xl bg-plum px-4 py-3 font-semibold text-white disabled:opacity-60";
+      : "mobile-tap rounded-2xl bg-plum px-4 py-3 font-semibold text-white disabled:opacity-60";
   return (
-    <button type="submit" disabled={pending} className={className}>
+    <button type="submit" disabled={pending || disabled} className={className}>
       {pending ? "儲存中…" : children}
     </button>
   );
@@ -354,13 +356,60 @@ function AppointmentForm({
   appointment?: Appointment;
 }) {
   const fallbackStart = compactDateTime(new Date().toISOString());
+  const dependencySummary = summarizeAppointmentDependencies({
+    customers: data.customers,
+    services: data.services,
+    staff: data.staff,
+  });
+  const activeStaff = data.staff.filter((member) => member.active);
   const selectedServiceIds = new Set(appointment?.serviceIds ?? []);
+  const missingDependencyLabels = [
+    dependencySummary.missingCustomers ? "客戶" : null,
+    dependencySummary.missingServices ? "可用服務" : null,
+    dependencySummary.missingStaff ? "可指派員工" : null,
+  ].filter(Boolean);
   return (
     <form action={saveAppointment} className="card p-5">
       <input type="hidden" name="id" value={appointment?.id ?? ""} />
       <h2 className="text-lg font-bold text-plum">
         {appointment ? "編輯預約" : "新增預約"}
       </h2>
+      {!dependencySummary.ready ? (
+        <div className="mt-4 rounded-3xl border border-amber bg-amber/10 p-4">
+          <p className="font-semibold text-plum">先補齊預約基礎資料</p>
+          <p className="mt-1 text-sm text-ink/70">
+            目前缺少：{missingDependencyLabels.join("、")}。先建立這些資料後，才能建立或更新預約。
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2 text-sm font-semibold">
+            <Link className="rounded-xl bg-white px-3 py-2 text-plum" href="/customers">
+              前往客戶
+            </Link>
+            <Link className="rounded-xl bg-white px-3 py-2 text-plum" href="/services">
+              前往服務
+            </Link>
+            <Link className="rounded-xl bg-white px-3 py-2 text-plum" href="/staff">
+              前往員工
+            </Link>
+          </div>
+          <div className="mt-3 grid gap-2 text-sm text-ink/70 sm:grid-cols-3">
+            {dependencySummary.missingCustomers ? (
+              <p>客戶：先建立 1 位常用客戶，例如「王小美」。</p>
+            ) : (
+              <p>客戶：已有 {dependencySummary.customerCount} 筆。</p>
+            )}
+            {dependencySummary.missingServices ? (
+              <p>服務：先建立 1 個可用服務，例如「單色凝膠美甲」。</p>
+            ) : (
+              <p>服務：已有 {dependencySummary.activeServiceCount} 個可用服務。</p>
+            )}
+            {dependencySummary.missingStaff ? (
+              <p>員工：先建立 1 位可排班員工，才能指派預約。</p>
+            ) : (
+              <p>員工：已有 {dependencySummary.activeStaffCount} 位啟用員工。</p>
+            )}
+          </div>
+        </div>
+      ) : null}
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="text-sm font-semibold text-plum">
           客戶
@@ -369,9 +418,10 @@ function AppointmentForm({
             name="customer_id"
             className={fieldClass()}
             defaultValue={appointment?.customerId ?? ""}
+            disabled={data.customers.length === 0}
           >
             <option value="" disabled>
-              請選擇
+              {data.customers.length === 0 ? "請先建立客戶" : "請選擇"}
             </option>
             {data.customers.map((customer) => (
               <option key={customer.id} value={customer.id}>
@@ -388,18 +438,19 @@ function AppointmentForm({
             className={fieldClass()}
             defaultValue={
               appointment?.technicianId ??
-              data.staff.find((member) => member.role === "technician")?.id ??
-              data.staff[0]?.id ??
+              activeStaff[0]?.id ??
               ""
             }
+            disabled={activeStaff.length === 0}
           >
-            {data.staff
-              .filter((member) => member.active)
-              .map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.name}｜{roleLabel(member.role)}
-                </option>
-              ))}
+            <option value="" disabled>
+              {activeStaff.length === 0 ? "請先建立員工" : "請選擇"}
+            </option>
+            {activeStaff.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}｜{roleLabel(member.role)}
+              </option>
+            ))}
           </select>
         </label>
         <label className="text-sm font-semibold text-plum">
@@ -454,32 +505,36 @@ function AppointmentForm({
           <legend className="px-2 text-sm font-bold text-plum">
             服務（可複選）
           </legend>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {data.services
-              .filter((service) => service.enabled || selectedServiceIds.has(service.id))
-              .map((service) => (
-                <label
-                  key={service.id}
-                  className="flex items-center gap-3 rounded-2xl bg-blush p-3"
-                >
-                  <input
-                    type="checkbox"
-                    name="service_ids"
-                    value={service.id}
-                    defaultChecked={appointment?.serviceIds.includes(
-                      service.id,
-                    )}
-                  />{" "}
-                  <span>
-                    {service.name}
-                    <small className="ml-2 text-ink/50">
-                      {currency.format(service.price)}
-                    </small>
-                    {!service.enabled ? <small className="ml-2 text-rose">(已停用)</small> : null}
-                  </span>
-                </label>
-              ))}
-          </div>
+          {data.services.some((service) => service.enabled || selectedServiceIds.has(service.id)) ? (
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {data.services
+                .filter((service) => service.enabled || selectedServiceIds.has(service.id))
+                .map((service) => (
+                  <label
+                    key={service.id}
+                    className="flex items-center gap-3 rounded-2xl bg-blush p-3"
+                  >
+                    <input
+                      type="checkbox"
+                      name="service_ids"
+                      value={service.id}
+                      defaultChecked={appointment?.serviceIds.includes(
+                        service.id,
+                      )}
+                    />{" "}
+                    <span>
+                      {service.name}
+                      <small className="ml-2 text-ink/50">
+                        {currency.format(service.price)}
+                      </small>
+                      {!service.enabled ? <small className="ml-2 text-rose">(已停用)</small> : null}
+                    </span>
+                  </label>
+                ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-ink/60">目前沒有可用服務，請先新增至少一項服務。</p>
+          )}
         </fieldset>
         <label className="text-sm font-semibold text-plum md:col-span-2">
           備註
@@ -491,7 +546,7 @@ function AppointmentForm({
         </label>
       </div>
       <div className="mt-4">
-        <SubmitButton>{appointment ? "更新預約" : "建立預約"}</SubmitButton>
+        <SubmitButton disabled={!dependencySummary.ready}>{appointment ? "更新預約" : "建立預約"}</SubmitButton>
       </div>
     </form>
   );
@@ -1288,6 +1343,16 @@ export function AppointmentsView({
             新增或編輯預約會寫入 Supabase，並同步
             appointment_services。系統會阻擋同一技師重疊時段。
           </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {appointmentStatuses.map((status) => {
+              const count = data.appointments.filter((appointment) => appointment.status === status).length;
+              return (
+                <StatusPill key={status} tone={appointmentStatusTone(status)}>
+                  {statusLabel(status)} {count}
+                </StatusPill>
+              );
+            })}
+          </div>
           {editing ? (
             <button
               className="mobile-tap mt-4 rounded-2xl bg-white font-semibold text-plum"

@@ -60,6 +60,11 @@ type AppointmentDbRow = {
   status: AppointmentStatus;
 };
 
+type CountResult = {
+  count: number | null;
+  error: { message?: string } | null;
+};
+
 async function loadContext(client: Awaited<ReturnType<typeof createSupabaseServerClient>>) {
   const context = await getCurrentWorkspaceContext(client);
   return {
@@ -71,16 +76,12 @@ async function loadContext(client: Awaited<ReturnType<typeof createSupabaseServe
 
 export async function updateAppointmentAction(formData: FormData) {
   const appointmentId = readRequired(formData, "appointmentId");
-  const customerId = readRequired(formData, "customerId");
-  const technicianId = readRequired(formData, "technicianId");
-  const startAtRaw = readRequired(formData, "startAt");
-  const source = readRequired(formData, "source");
+  const customerId = readOptional(formData, "customerId");
+  const technicianId = readOptional(formData, "technicianId");
+  const startAtRaw = readOptional(formData, "startAt");
+  const source = readOptional(formData, "source");
   const note = readOptional(formData, "note");
   const serviceIds = readCheckedValues(formData, "serviceIds");
-
-  if (serviceIds.length === 0) {
-    fail("appointment_update_invalid_input");
-  }
 
   const supabase = await createSupabaseServerClient().catch(() => null);
   if (!supabase) {
@@ -100,6 +101,50 @@ export async function updateAppointmentAction(formData: FormData) {
 
   if (!can(role, "appointments")) {
     fail("appointment_forbidden");
+  }
+
+  let customersCount: CountResult | null = null;
+  let servicesCount: CountResult | null = null;
+  let staffCount: CountResult | null = null;
+  try {
+    [customersCount, servicesCount, staffCount] = await Promise.all([
+      supabase.from("customers").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId),
+      supabase.from("services").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId),
+      supabase
+        .from("workspace_members")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId)
+        .eq("active", true),
+    ]);
+  } catch (error) {
+    console.error("appointment update dependency count failed", error);
+    fail("appointment_update_failed");
+  }
+
+  const dependencyError = [customersCount, servicesCount, staffCount].find((result) => result?.error)?.error;
+  if (dependencyError) {
+    console.error("appointment update dependency count failed", dependencyError);
+    fail("appointment_update_failed");
+  }
+
+  if ((customersCount?.count ?? 0) === 0) {
+    fail("appointment_missing_customers");
+  }
+
+  if ((servicesCount?.count ?? 0) === 0) {
+    fail("appointment_missing_services");
+  }
+
+  if ((staffCount?.count ?? 0) === 0) {
+    fail("appointment_missing_staff");
+  }
+
+  if (!customerId || !technicianId || !startAtRaw || !source) {
+    fail("appointment_update_invalid_input");
+  }
+
+  if (serviceIds.length === 0) {
+    fail("appointment_update_invalid_input");
   }
 
   const startAt = parseDateTimeLocal(startAtRaw);

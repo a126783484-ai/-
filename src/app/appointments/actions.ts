@@ -35,13 +35,11 @@ type AppointmentDbRow = {
   status: AppointmentStatus;
 };
 
-function readRequired(formData: FormData, key: string) {
-  const value = formData.get(key);
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(`${key} is required.`);
-  }
-  return value.trim();
-}
+type CountResult = {
+  count: number | null;
+  error: { message?: string } | null;
+};
+
 
 function readOptional(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -69,17 +67,23 @@ function fail(code: string): never {
   redirect(`/appointments?${buildSearchParams({ error: code })}`);
 }
 
+function readText(formData: FormData, key: string) {
+  const value = formData.get(key);
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readOptionalText(formData: FormData, key: string) {
+  const value = readText(formData, key);
+  return value.length > 0 ? value : null;
+}
+
 export async function createAppointmentAction(formData: FormData) {
-  const customerId = readRequired(formData, "customerId");
-  const technicianId = readRequired(formData, "technicianId");
-  const startAtRaw = readRequired(formData, "startAt");
-  const source = readRequired(formData, "source");
+  const customerId = readOptionalText(formData, "customerId");
+  const technicianId = readOptionalText(formData, "technicianId");
+  const startAtRaw = readOptionalText(formData, "startAt");
+  const source = readOptionalText(formData, "source");
   const note = readOptional(formData, "note");
   const serviceIds = readCheckedValues(formData, "serviceIds");
-
-  if (serviceIds.length === 0) {
-    fail("appointment_invalid_input");
-  }
 
   const supabase = await createSupabaseServerClient().catch(() => null);
 
@@ -102,6 +106,50 @@ export async function createAppointmentAction(formData: FormData) {
 
   if (!can(role, "appointments")) {
     fail("appointment_forbidden");
+  }
+
+  let customersCount: CountResult | null = null;
+  let servicesCount: CountResult | null = null;
+  let staffCount: CountResult | null = null;
+  try {
+    [customersCount, servicesCount, staffCount] = await Promise.all([
+      supabase.from("customers").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId),
+      supabase.from("services").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId),
+      supabase
+        .from("workspace_members")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId)
+        .eq("active", true),
+    ]);
+  } catch (error) {
+    console.error("appointment dependency count failed", error);
+    fail("appointment_create_failed");
+  }
+
+  const dependencyError = [customersCount, servicesCount, staffCount].find((result) => result?.error)?.error;
+  if (dependencyError) {
+    console.error("appointment dependency count failed", dependencyError);
+    fail("appointment_create_failed");
+  }
+
+  if ((customersCount?.count ?? 0) === 0) {
+    fail("appointment_missing_customers");
+  }
+
+  if ((servicesCount?.count ?? 0) === 0) {
+    fail("appointment_missing_services");
+  }
+
+  if ((staffCount?.count ?? 0) === 0) {
+    fail("appointment_missing_staff");
+  }
+
+  if (!customerId || !technicianId || !startAtRaw || !source) {
+    fail("appointment_invalid_input");
+  }
+
+  if (serviceIds.length === 0) {
+    fail("appointment_invalid_input");
   }
 
   const startAt = parseDateTimeLocal(startAtRaw);
