@@ -26,7 +26,7 @@ import { dashboardMetrics } from "@/lib/analytics";
 import { orderPaymentState, orderStatusLabel, orderStatusTone, orderSubtotal, orderTotal, outstandingAmount } from "@/lib/orders";
 import { can, roleLabel } from "@/lib/permissions";
 import type { AppData } from "@/lib/app-data";
-import { isWorkspaceEmpty } from "@/lib/app-data";
+import { getWorkspaceSetupGuide, isWorkspaceEmpty } from "@/lib/app-data";
 import type { Appointment, Customer, InventoryItem, Order, ServiceItem, Shift, StaffMember } from "@/lib/types";
 import { buildStaffInvitePath } from "@/lib/staff-invites";
 import { currency, formatDate, formatTime } from "@/lib/utils";
@@ -1307,6 +1307,7 @@ export function DashboardView({ data }: { data: AppData }) {
     data.staff,
   );
   const workspaceEmpty = isWorkspaceEmpty(data);
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
 
   return (
     <AppShell
@@ -1343,7 +1344,16 @@ export function DashboardView({ data }: { data: AppData }) {
           </div>
         </div>
       ) : null}
-      {workspaceEmpty ? (
+      {setupGuide ? (
+        <div className="mt-4">
+          <SetupGuide
+            title={setupGuide.title}
+            action={setupGuide.action}
+            links={setupGuide.links}
+          />
+        </div>
+      ) : null}
+      {workspaceEmpty && !setupGuide ? (
         <SetupGuide
           title="先建立第一組營運資料"
           action="完成店鋪設定後，依序新增服務、員工與客戶，今日重點與 KPI 才會開始有意義。"
@@ -2492,13 +2502,23 @@ export function ReportsView({ data }: { data: AppData }) {
     .filter((movement) => movement.quantity < 0)
     .reduce((sum, movement) => sum + Math.abs(movement.quantity), 0);
   const workspaceEmpty = isWorkspaceEmpty(data);
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
   return (
     <AppShell
       title="報表分析"
       subtitle="日 / 月營收、服務排行、技師排行、回訪率、客單價、來源與庫存消耗分析。"
       {...shellProps(data)}
     >
-      {workspaceEmpty ? (
+      {setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide
+            title={setupGuide.title}
+            action={setupGuide.action}
+            links={setupGuide.links}
+          />
+        </div>
+      ) : null}
+      {workspaceEmpty && !setupGuide ? (
         <SetupGuide
           title="報表會在第一筆營運資料後開始有內容"
           action="先建立服務、客戶與第一筆預約或訂單，這裡就會開始出現營收、排行與來源分析。"
@@ -2639,6 +2659,7 @@ export function SettingsView({
       return data.workspace.businessHours || "{}";
     }
   }, [data.workspace.businessHours]);
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
 
   return (
     <AppShell
@@ -2647,7 +2668,16 @@ export function SettingsView({
       {...shellProps(data)}
     >
       <NoticeBanner notice={notice} />
-      {isWorkspaceEmpty(data) ? (
+      {setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide
+            title={setupGuide.title}
+            action={setupGuide.action}
+            links={setupGuide.links}
+          />
+        </div>
+      ) : null}
+      {isWorkspaceEmpty(data) && !setupGuide ? (
         <div className="mb-5">
           <SetupGuide
             title="先把店鋪骨架補齊"

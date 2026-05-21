@@ -14,6 +14,20 @@ import type { AppData } from "./app-data";
 
 // Shared fixtures for unit tests.
 
+type WorkspaceSetupData = Pick<
+  AppData,
+  | "needsWorkspace"
+  | "workspace"
+  | "categories"
+  | "services"
+  | "staff"
+  | "customers"
+  | "appointments"
+  | "orders"
+  | "inventory"
+  | "shifts"
+>;
+
 export const workspace: Workspace = {
   id: "ws_test_luxe",
   name: "Lumière Nail & Beauty",
@@ -84,6 +98,72 @@ export const inventoryMovements: InventoryMovement[] = [
   { id: "move_002", workspaceId: workspace.id, itemId: "inv_lash_c", movementType: "consume", quantity: -3, note: "實際扣料", createdAt: "2026-05-15T18:05:00+08:00" },
   { id: "move_003", workspaceId: workspace.id, itemId: "inv_oil", movementType: "adjust", quantity: 2, note: "盤點修正", createdAt: "2026-05-16T12:00:00+08:00" }
 ];
+
+function isWorkspaceProfileIncomplete(data: WorkspaceSetupData) {
+  return (
+    data.needsWorkspace ||
+    data.workspace.name.trim() === "" ||
+    data.workspace.name === "尚未建立 workspace" ||
+    data.workspace.phone.trim() === "" ||
+    data.workspace.address.trim() === "" ||
+    data.workspace.businessHours.trim() === "{}"
+  );
+}
+
+export const seedWorkspaceSetupSteps = [
+  {
+    area: "店鋪設定",
+    label: "先去設定",
+    matches: isWorkspaceProfileIncomplete,
+    href: (data: WorkspaceSetupData) =>
+      data.needsWorkspace
+        ? "/settings?message=settings_setup_hint"
+        : "/settings?message=settings_setup_incomplete",
+  },
+  {
+    area: "服務",
+    href: "/services",
+    label: "建立服務",
+    matches: (data: WorkspaceSetupData) =>
+      data.categories.length === 0 || data.services.length === 0,
+  },
+  {
+    area: "員工",
+    href: "/staff",
+    label: "建立員工",
+    matches: (data: WorkspaceSetupData) => data.staff.length === 0,
+  },
+  {
+    area: "客戶",
+    href: "/customers",
+    label: "建立客戶",
+    matches: (data: WorkspaceSetupData) => data.customers.length === 0,
+  },
+  {
+    area: "預約",
+    href: "/appointments",
+    label: "建立預約",
+    matches: (data: WorkspaceSetupData) => data.appointments.length === 0,
+  },
+  {
+    area: "訂單",
+    href: "/checkout",
+    label: "建立訂單",
+    matches: (data: WorkspaceSetupData) => data.orders.length === 0,
+  },
+  {
+    area: "庫存",
+    href: "/inventory",
+    label: "建立庫存",
+    matches: (data: WorkspaceSetupData) => data.inventory.length === 0,
+  },
+  {
+    area: "班表",
+    label: "建立班表",
+    matches: (data: WorkspaceSetupData) => data.staff.length > 0 && data.shifts.length === 0,
+    href: "/staff",
+  },
+] as const;
 
 export function buildSeedAppData(user: { id: string; email: string | null }): AppData {
   return {

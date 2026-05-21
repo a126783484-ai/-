@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, MetricCard, StatusPill } from "@/components/ui";
 import { dashboardMetrics } from "@/lib/analytics";
-import { isWorkspaceEmpty, loadAppData } from "@/lib/app-data";
+import { getWorkspaceSetupGuide, isWorkspaceEmpty, loadAppData } from "@/lib/app-data";
 import { statusLabel } from "@/lib/appointments";
 import { orderTotal, outstandingAmount } from "@/lib/orders";
 import { currency, formatDate, formatTime } from "@/lib/utils";
@@ -12,33 +12,30 @@ export const dynamic = "force-dynamic";
 function SetupGuide({
   title,
   action,
+  links,
 }: {
   title: string;
   action: string;
+  links?: Array<{ href: string; label: string }>;
 }) {
   return (
     <div className="card p-5">
       <h2 className="text-lg font-bold text-plum">{title}</h2>
       <p className="mt-1 text-sm text-ink/60">{action}</p>
       <div className="mt-4 flex flex-wrap gap-2">
-        <Link
-          href="/settings?message=settings_setup_hint"
-          className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
-        >
-          先去設定
-        </Link>
-        <Link
-          href="/services"
-          className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
-        >
-          建立服務
-        </Link>
-        <Link
-          href="/staff"
-          className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
-        >
-          建立員工
-        </Link>
+        {(links ?? [
+          { href: "/settings?message=settings_setup_hint", label: "先去設定" },
+          { href: "/services", label: "建立服務" },
+          { href: "/staff", label: "建立員工" },
+        ]).map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
+          >
+            {link.label}
+          </Link>
+        ))}
       </div>
     </div>
   );
@@ -80,6 +77,7 @@ export default async function OperationsCommandCenterPage() {
         : "營運指揮中心：集中查看今日重點、風險與下一步。",
   } as const;
   const workspaceEmpty = isWorkspaceEmpty(data);
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
 
   return (
     <AppShell
@@ -93,11 +91,20 @@ export default async function OperationsCommandCenterPage() {
           action="完成 workspace 後，這裡會顯示正式營運指標。"
         />
       ) : null}
-      {workspaceEmpty ? (
+      {workspaceEmpty && !setupGuide ? (
         <div className="mt-4">
           <SetupGuide
             title="這個工作區還沒有足夠的營運資料"
             action="先把店鋪設定、服務、員工與第一位客戶補齊，營運指揮中心才會開始反映真實狀態。"
+          />
+        </div>
+      ) : null}
+      {setupGuide ? (
+        <div className="mt-4">
+          <SetupGuide
+            title={setupGuide.title}
+            action={setupGuide.action}
+            links={setupGuide.links}
           />
         </div>
       ) : null}
