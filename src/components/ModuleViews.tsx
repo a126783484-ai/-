@@ -1374,6 +1374,12 @@ export function InventoryView({
   notice?: Notice;
 }) {
   const canManageInventory = can(data.currentMember?.role ?? "staff", "inventory");
+  const inventoryRows = [...data.inventory].sort((a, b) => {
+    const aLow = a.quantity <= a.lowStockThreshold;
+    const bLow = b.quantity <= b.lowStockThreshold;
+    if (aLow !== bLow) return aLow ? -1 : 1;
+    return a.quantity - b.quantity;
+  });
   const lowStockCount = data.inventory.filter(
     (item) => item.quantity <= item.lowStockThreshold,
   ).length;
@@ -1416,7 +1422,7 @@ export function InventoryView({
       </div>
       <div className="mt-5">
         <ModuleTable
-          rows={data.inventory}
+          rows={inventoryRows}
           searchPlaceholder="搜尋品牌、品項、分類"
           filterOptions={["凝膠", "保養", "耗材", "工具"]}
           emptyTitle="尚無庫存資料"
