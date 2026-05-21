@@ -2051,6 +2051,9 @@ export function SettingsView({
               className={`${fieldClass()} min-h-40 font-mono text-xs`}
               defaultValue={parsedHours}
             />
+            <p className="mt-2 text-xs font-normal text-ink/60">
+              可先保留 `{}`，之後再補上各日的營業時段。
+            </p>
           </label>
         </div>
         <div className="mt-6 grid gap-3 md:grid-cols-2">
