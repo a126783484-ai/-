@@ -23,7 +23,7 @@ import { ModuleTable } from "@/components/ModuleTable";
 import { MetricCard, StatusPill, EmptyState } from "@/components/ui";
 import { statusLabel, summarizeAppointmentDependencies } from "@/lib/appointments";
 import { dashboardMetrics } from "@/lib/analytics";
-import { orderTotal, outstandingAmount } from "@/lib/orders";
+import { orderPaymentState, orderStatusLabel, orderStatusTone, orderSubtotal, orderTotal, outstandingAmount } from "@/lib/orders";
 import { can, roleLabel } from "@/lib/permissions";
 import type { AppData } from "@/lib/app-data";
 import type { Appointment, Customer, InventoryItem, Order, ServiceItem, Shift, StaffMember } from "@/lib/types";
@@ -559,9 +559,70 @@ function OrderForm({ data }: { data: AppData }) {
       appointment.status !== "cancelled" &&
       appointment.status !== "no_show",
   );
+  const activeStaff = data.staff.filter((member) => member.active);
+  const enabledServices = data.services.filter((service) => service.enabled);
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
+  const [customName, setCustomName] = useState("");
+  const [customPrice, setCustomPrice] = useState(0);
+  const [customQuantity, setCustomQuantity] = useState(1);
+  const [discount, setDiscount] = useState(0);
+  const [tip, setTip] = useState(0);
+  const [paidAmount, setPaidAmount] = useState(0);
+  const [status, setStatus] = useState<(typeof orderStatuses)[number] | "">("");
+
+  const selectedServices = useMemo(
+    () => enabledServices.filter((service) => selectedServiceIds.includes(service.id)),
+    [enabledServices, selectedServiceIds],
+  );
+  const draftLines = useMemo(
+    () => [
+      ...selectedServices.map((service) => ({
+        serviceId: service.id,
+        name: service.name,
+        quantity: 1,
+        unitPrice: service.price,
+      })),
+      ...(customName.trim()
+        ? [
+            {
+              serviceId: "",
+              name: customName.trim(),
+              quantity: customQuantity,
+              unitPrice: customPrice,
+            },
+          ]
+        : []),
+    ],
+    [customName, customPrice, customQuantity, selectedServices],
+  );
+  const subtotal = useMemo(
+    () => draftLines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0),
+    [draftLines],
+  );
+  const total = Math.max(0, subtotal - discount + tip);
+  const balance = Math.max(0, total - paidAmount);
+  const draftState = (status || orderPaymentState({
+    lines: draftLines,
+    discount,
+    tip,
+    paidAmount,
+  })) as (typeof orderStatuses)[number];
+  const canSubmit = activeStaff.length > 0 && data.customers.length > 0 && draftLines.length > 0;
+
+  function toggleService(serviceId: string) {
+    setSelectedServiceIds((current) =>
+      current.includes(serviceId)
+        ? current.filter((id) => id !== serviceId)
+        : [...current, serviceId],
+    );
+  }
+
   return (
     <form action={saveOrder} className="card p-5">
       <h2 className="text-lg font-bold text-plum">新增訂單 / 預約轉結帳</h2>
+      <p className="mt-1 text-sm text-ink/60">
+        勾選既有服務或填寫自訂項目，就能先看到小計、總額與待收金額，再送出建立訂單。
+      </p>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="text-sm font-semibold text-plum">
           轉換預約（選填）
@@ -605,11 +666,9 @@ function OrderForm({ data }: { data: AppData }) {
             required
             name="technician_id"
             className={fieldClass()}
-            defaultValue={data.staff[0]?.id ?? ""}
+            defaultValue={activeStaff[0]?.id ?? ""}
           >
-            {data.staff
-              .filter((member) => member.active)
-              .map((member) => (
+            {activeStaff.map((member) => (
                 <option key={member.id} value={member.id}>
                   {member.name}
                 </option>
@@ -633,9 +692,7 @@ function OrderForm({ data }: { data: AppData }) {
         <fieldset className="md:col-span-2 rounded-3xl border border-champagne p-4">
           <legend className="px-2 text-sm font-bold text-plum">服務明細</legend>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {data.services
-              .filter((service) => service.enabled)
-              .map((service) => (
+            {enabledServices.length ? enabledServices.map((service) => (
                 <label
                   key={service.id}
                   className="flex items-center gap-3 rounded-2xl bg-blush p-3"
@@ -644,6 +701,8 @@ function OrderForm({ data }: { data: AppData }) {
                     type="checkbox"
                     name="line_service_ids"
                     value={service.id}
+                    checked={selectedServiceIds.includes(service.id)}
+                    onChange={() => toggleService(service.id)}
                   />{" "}
                   <span>
                     {service.name}
@@ -652,7 +711,9 @@ function OrderForm({ data }: { data: AppData }) {
                     </small>
                   </span>
                 </label>
-              ))}
+              )) : (
+              <p className="text-sm text-ink/60">目前沒有啟用中的服務，請改用自訂項目開單。</p>
+            )}
           </div>
         </fieldset>
         <label className="text-sm font-semibold text-plum">
@@ -661,6 +722,8 @@ function OrderForm({ data }: { data: AppData }) {
             name="custom_line_name"
             className={fieldClass()}
             placeholder="卸甲 / 產品"
+            value={customName}
+            onChange={(event) => setCustomName(event.target.value)}
           />
         </label>
         <label className="text-sm font-semibold text-plum">
@@ -670,7 +733,8 @@ function OrderForm({ data }: { data: AppData }) {
             min="0"
             name="custom_line_price"
             className={fieldClass()}
-            defaultValue={0}
+            value={customPrice}
+            onChange={(event) => setCustomPrice(Math.max(0, Number(event.target.value) || 0))}
           />
         </label>
         <label className="text-sm font-semibold text-plum">
@@ -680,7 +744,8 @@ function OrderForm({ data }: { data: AppData }) {
             min="1"
             name="custom_line_quantity"
             className={fieldClass()}
-            defaultValue={1}
+            value={customQuantity}
+            onChange={(event) => setCustomQuantity(Math.max(1, Number(event.target.value) || 1))}
           />
         </label>
         <label className="text-sm font-semibold text-plum">
@@ -690,7 +755,8 @@ function OrderForm({ data }: { data: AppData }) {
             min="0"
             name="discount"
             className={fieldClass()}
-            defaultValue={0}
+            value={discount}
+            onChange={(event) => setDiscount(Math.max(0, Number(event.target.value) || 0))}
           />
         </label>
         <label className="text-sm font-semibold text-plum">
@@ -700,7 +766,8 @@ function OrderForm({ data }: { data: AppData }) {
             min="0"
             name="tip"
             className={fieldClass()}
-            defaultValue={0}
+            value={tip}
+            onChange={(event) => setTip(Math.max(0, Number(event.target.value) || 0))}
           />
         </label>
         <label className="text-sm font-semibold text-plum">
@@ -710,24 +777,75 @@ function OrderForm({ data }: { data: AppData }) {
             min="0"
             name="paid_amount"
             className={fieldClass()}
-            defaultValue={0}
+            value={paidAmount}
+            onChange={(event) => setPaidAmount(Math.max(0, Number(event.target.value) || 0))}
           />
         </label>
         <label className="text-sm font-semibold text-plum">
           付款狀態
-          <select name="status" className={fieldClass()} defaultValue="">
+          <select
+            name="status"
+            className={fieldClass()}
+            value={status}
+            onChange={(event) =>
+              setStatus(event.target.value as (typeof orderStatuses)[number] | "")
+            }
+          >
             <option value="">自動判斷</option>
             {orderStatuses.map((status) => (
               <option key={status} value={status}>
-                {status}
+                {orderStatusLabel(status)}
               </option>
             ))}
           </select>
         </label>
+        <div className="md:col-span-2 rounded-3xl border border-champagne bg-blush p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold text-plum">即時預覽</p>
+              <p className="mt-1 text-xs text-ink/60">
+                {draftLines.length ? `${draftLines.length} 筆明細` : "尚未加入明細"}
+              </p>
+            </div>
+            <StatusPill tone={orderStatusTone(draftState)}>{orderStatusLabel(draftState)}</StatusPill>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-2xl bg-white p-3">
+              <p className="text-xs text-ink/55">小計</p>
+              <p className="mt-1 text-lg font-bold text-plum">{currency.format(subtotal)}</p>
+            </div>
+            <div className="rounded-2xl bg-white p-3">
+              <p className="text-xs text-ink/55">總額</p>
+              <p className="mt-1 text-lg font-bold text-plum">{currency.format(total)}</p>
+            </div>
+            <div className="rounded-2xl bg-white p-3">
+              <p className="text-xs text-ink/55">已收</p>
+              <p className="mt-1 text-lg font-bold text-plum">{currency.format(paidAmount)}</p>
+            </div>
+            <div className="rounded-2xl bg-white p-3">
+              <p className="text-xs text-ink/55">待收</p>
+              <p className="mt-1 text-lg font-bold text-plum">{currency.format(balance)}</p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs text-ink/60">
+            <span>未收 = 尚未收款</span>
+            <span>部分 = 已收但仍有待收金額</span>
+            <span>已結清 = 已收金額覆蓋總額</span>
+          </div>
+        </div>
       </div>
       <div className="mt-4">
-        <SubmitButton>建立訂單</SubmitButton>
+        <SubmitButton disabled={!canSubmit}>建立訂單</SubmitButton>
       </div>
+      {!canSubmit ? (
+        <p className="mt-2 text-sm text-ink/60">
+          {data.customers.length === 0
+            ? "請先建立至少一位客戶。"
+            : activeStaff.length === 0
+              ? "請先建立至少一位可用技師。"
+              : "請勾選至少一筆服務或輸入自訂項目。"}
+        </p>
+      ) : null}
     </form>
   );
 }
@@ -1832,13 +1950,26 @@ export function CheckoutView({
   data: AppData;
   notice?: Notice;
 }) {
+  const totalOutstanding = data.orders.reduce(
+    (sum, order) => sum + outstandingAmount(order),
+    0,
+  );
+  const paidOrders = data.orders.filter((order) => orderPaymentState(order) === "paid").length;
+  const partialOrders = data.orders.filter((order) => orderPaymentState(order) === "partial").length;
+  const unpaidOrders = data.orders.filter((order) => orderPaymentState(order) === "unpaid").length;
   return (
     <AppShell
       title="訂單 / 結帳 / 收款"
-      subtitle="從預約轉訂單，支援折扣、小費、多付款方式、收據明細與每日結帳。"
+      subtitle="從預約轉訂單或直接開單，支援折扣、小費、多付款方式、收據明細與待收金額。"
       {...shellProps(data)}
     >
       <NoticeBanner notice={notice} />
+      <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="訂單總數" value={`${data.orders.length}`} hint="目前工作區的所有訂單" />
+        <MetricCard label="待收金額" value={currency.format(totalOutstanding)} hint="所有未結清訂單的合計欠款" />
+        <MetricCard label="已結清" value={`${paidOrders}`} hint="付款金額已覆蓋總額" />
+        <MetricCard label="部分 / 未收" value={`${partialOrders + unpaidOrders}`} hint="仍需追款或補收的訂單" />
+      </div>
       <div className="mb-5">
         <OrderForm data={data} />
       </div>
@@ -1889,6 +2020,9 @@ export function CheckoutView({
                   </div>
                 ))}
                 <AddLineForm order={row} services={data.services} />
+                <p className="mt-3 text-xs text-ink/60">
+                  小計 {currency.format(orderSubtotal(row))} · 折扣 {currency.format(row.discount)} · 小費 {currency.format(row.tip)}
+                </p>
               </div>
             ),
           },
@@ -1896,24 +2030,42 @@ export function CheckoutView({
             key: "total",
             label: "總額",
             sortValue: (row) => orderTotal(row),
-            render: (row) => currency.format(orderTotal(row)),
+            render: (row) => (
+              <div>
+                <strong>{currency.format(orderTotal(row))}</strong>
+                <p className="text-xs text-ink/60">已收 {currency.format(row.paidAmount)}</p>
+              </div>
+            ),
           },
           {
             key: "paid",
             label: "待收",
             render: (row) => {
               const balance = outstandingAmount(row);
-              return balance === 0 ? <StatusPill tone="sage">已結清</StatusPill> : currency.format(balance);
+              return (
+                <div>
+                  <strong>{balance === 0 ? "0" : currency.format(balance)}</strong>
+                  <p className="text-xs text-ink/60">
+                    {balance === 0 ? "無未收金額" : `還差 ${currency.format(balance)}`}
+                  </p>
+                </div>
+              );
             },
           },
           {
             key: "status",
             label: "狀態",
-            render: (row) => (
-              <StatusPill tone={row.status === "paid" ? "sage" : "amber"}>
-                {row.status}
-              </StatusPill>
-            ),
+            render: (row) => {
+              const state = orderPaymentState(row);
+              return (
+                <div className="space-y-2">
+                  <StatusPill tone={orderStatusTone(state)}>{orderStatusLabel(state)}</StatusPill>
+                  <p className="text-xs text-ink/60">
+                    帳面狀態：{orderStatusLabel(row.status)} · 付款方式：{paymentMethodLabels[row.paymentMethod]}
+                  </p>
+                </div>
+              );
+            },
           },
         ]}
       />
