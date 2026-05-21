@@ -108,6 +108,23 @@ function compactDateTime(value?: string) {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
+function reminderDisplay(value?: string) {
+  if (!value) return null;
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
+    today.getDate(),
+  ).padStart(2, "0")}`;
+  const reminderKey = value.slice(0, 10);
+
+  if (reminderKey < todayKey) {
+    return { tone: "rose" as const, label: `${formatDate(value)}（逾期）` };
+  }
+  if (reminderKey === todayKey) {
+    return { tone: "amber" as const, label: `${formatDate(value)}（今天）` };
+  }
+  return { tone: "sage" as const, label: formatDate(value) };
+}
+
 function namesFromIds(ids: string[], services: ServiceItem[]) {
   return (
     ids
@@ -1303,7 +1320,14 @@ export function CustomersView({
           {
             key: "reminder",
             label: "回訪提醒",
-            render: (row) => row.nextReminder ?? "-",
+            render: (row) => {
+              const reminder = reminderDisplay(row.nextReminder);
+              return reminder ? (
+                <StatusPill tone={reminder.tone}>{reminder.label}</StatusPill>
+              ) : (
+                "-"
+              );
+            },
           },
           {
             key: "tags",
