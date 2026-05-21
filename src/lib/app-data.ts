@@ -421,7 +421,8 @@ export async function loadAppData(): Promise<AppData> {
       .from("shifts")
       .select("id, workspace_id, staff_id, shift_date, start_time, end_time, leave")
       .eq("workspace_id", workspaceId)
-      .order("shift_date", { ascending: false }),
+      .order("shift_date", { ascending: false })
+      .order("start_time", { ascending: false }),
     supabase
       .from("workspace_member_invites")
       .select("id, workspace_id, email, display_name, phone, role, commission_rate, specialties, token, status, invited_by, created_at, accepted_at")

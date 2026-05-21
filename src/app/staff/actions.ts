@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
@@ -44,6 +45,16 @@ function parseCommissionRate(value: string) {
   const parsed = Number.parseFloat(value);
   if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) return null;
   return parsed;
+}
+
+function readDate(formData: FormData, key: string) {
+  const value = readRequired(formData, key);
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+}
+
+function readTime(formData: FormData, key: string) {
+  const value = readRequired(formData, key);
+  return /^\d{2}:\d{2}$/.test(value) ? value : null;
 }
 
 function readRole(formData: FormData) {
@@ -112,6 +123,22 @@ async function requireStaffAdminContext(supabase: AppSupabaseClient) {
   return context;
 }
 
+async function requireShiftAdminContext(supabase: AppSupabaseClient) {
+  let context: Awaited<ReturnType<typeof getCurrentWorkspaceContext>>;
+
+  try {
+    context = await getCurrentWorkspaceContext(supabase);
+  } catch {
+    fail("staff_shift_failed");
+  }
+
+  if (!can(context.membership.role as Role, "staff")) {
+    fail("staff_shift_forbidden");
+  }
+
+  return context;
+}
+
 function assertRoleAssignable(currentRole: Role, targetRole: Role) {
   if ((targetRole === "owner" || targetRole === "admin") && currentRole !== "owner") {
     fail("staff_owner_required");
@@ -154,6 +181,30 @@ async function assertCanRemoveOwnerRole(supabase: AppSupabaseClient, workspaceId
 
   if (error) throw error;
   if ((count ?? 0) <= 1) fail("staff_last_owner");
+}
+
+async function hasShiftStaffInWorkspace(supabase: AppSupabaseClient, workspaceId: string, staffId: string) {
+  const { data: member, error } = await supabase
+    .from("workspace_members")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("id", staffId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return Boolean(member);
+}
+
+async function shiftExists(supabase: AppSupabaseClient, workspaceId: string, shiftId: string) {
+  const { data: shift, error } = await supabase
+    .from("shifts")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("id", shiftId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return Boolean(shift);
 }
 
 export async function createStaffAction(formData: FormData) {
@@ -241,6 +292,7 @@ export async function createStaffAction(formData: FormData) {
     fail("staff_invite_failed");
   }
 
+  revalidatePath("/staff");
   redirect(`/staff?${buildSearchParams({ message: "staff_created" })}`);
 }
 
@@ -296,7 +348,76 @@ export async function updateStaffAction(formData: FormData) {
     fail("staff_update_failed");
   }
 
+  revalidatePath("/staff");
   redirect(`/staff?${buildSearchParams({ message: "staff_updated" })}`);
+}
+
+export async function saveStaffShiftAction(formData: FormData) {
+  const shiftId = readOptional(formData, "id");
+  const staffId = readRequired(formData, "staffId");
+  const shiftDate = readDate(formData, "shiftDate");
+  const startTime = readTime(formData, "startTime");
+  const endTime = readTime(formData, "endTime");
+  const leave = readBoolean(formData, "leave");
+
+  if (!shiftDate || !startTime || !endTime) {
+    fail("staff_shift_invalid_input");
+  }
+
+  if (!leave && startTime >= endTime) {
+    fail("staff_shift_invalid_input");
+  }
+
+  const supabase = await createSupabaseServerClient().catch(() => null);
+  if (!supabase) {
+    fail("staff_config_missing");
+  }
+
+  const context = await requireShiftAdminContext(supabase);
+
+  const staffInWorkspace = await hasShiftStaffInWorkspace(supabase, context.workspace.id, staffId);
+  if (!staffInWorkspace) {
+    fail("staff_shift_invalid_input");
+  }
+
+  if (shiftId) {
+    const existingShift = await shiftExists(supabase, context.workspace.id, shiftId);
+    if (!existingShift) {
+      fail("staff_shift_invalid_input");
+    }
+  }
+
+  try {
+    const payload = {
+      workspace_id: context.workspace.id,
+      staff_id: staffId,
+      shift_date: shiftDate,
+      start_time: startTime,
+      end_time: endTime,
+      leave,
+    };
+
+    const result = shiftId
+      ? await supabase
+          .from("shifts")
+          .update(payload)
+          .eq("workspace_id", context.workspace.id)
+          .eq("id", shiftId)
+      : await supabase.from("shifts").insert({
+          id: crypto.randomUUID(),
+          ...payload,
+        });
+
+    if (result.error) {
+      throw result.error;
+    }
+  } catch (error) {
+    console.error("staff shift save failed", error);
+    fail("staff_shift_failed");
+  }
+
+  revalidatePath("/staff");
+  redirect(`/staff?${buildSearchParams({ message: "staff_shift_saved" })}`);
 }
 
 export async function createStaffInviteAction(formData: FormData) {
@@ -375,5 +496,6 @@ export async function createStaffInviteAction(formData: FormData) {
     fail("staff_create_failed");
   }
 
+  revalidatePath("/staff");
   redirect(`/staff?${buildSearchParams({ message: "staff_invite_created" })}`);
 }

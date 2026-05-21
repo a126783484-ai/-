@@ -2,7 +2,8 @@ export const staffMessageText: Record<string, string> = {
   staff_invite_created: "員工邀請已建立，請將邀請連結分享給對方。",
   staff_created: "員工邀請已建立，請提醒對方到信箱接受邀請。",
   staff_invite_accepted: "員工邀請已接受，已加入目前店鋪。",
-  staff_updated: "員工資料已更新。"
+  staff_updated: "員工資料已更新。",
+  staff_shift_saved: "班表已儲存。"
 };
 
 export const staffErrorText: Record<string, string> = {
@@ -18,7 +19,10 @@ export const staffErrorText: Record<string, string> = {
   staff_self_update_forbidden: "不能停用自己的帳號或移除自己的管理權限。",
   staff_last_owner: "至少要保留一位啟用中的店主。",
   staff_invite_failed: "員工邀請寄送失敗，請確認 email 或稍後再試。",
-  staff_update_failed: "員工資料更新失敗，請稍後再試。"
+  staff_update_failed: "員工資料更新失敗，請稍後再試。",
+  staff_shift_forbidden: "你沒有權限編輯班表。",
+  staff_shift_invalid_input: "班表資料格式不正確，請檢查欄位內容。",
+  staff_shift_failed: "班表儲存失敗，請稍後再試。"
 };
 
 export function readStaffParam(value: string | string[] | undefined) {

@@ -16,7 +16,7 @@ import {
   updateWorkspaceSettings,
 } from "@/app/crud-actions";
 import { recordInventoryMovementAction, saveInventoryItemAction } from "@/app/inventory/actions";
-import { createStaffAction, createStaffInviteAction, updateStaffAction } from "@/app/staff/actions";
+import { createStaffAction, createStaffInviteAction, updateStaffAction, saveStaffShiftAction } from "@/app/staff/actions";
 import { AppShell } from "@/components/AppShell";
 import { FormNotice } from "@/components/FormNotice";
 import { ModuleTable } from "@/components/ModuleTable";
@@ -26,7 +26,7 @@ import { dashboardMetrics } from "@/lib/analytics";
 import { orderTotal, outstandingAmount } from "@/lib/orders";
 import { can, roleLabel } from "@/lib/permissions";
 import type { AppData } from "@/lib/app-data";
-import type { Appointment, Customer, InventoryItem, Order, ServiceItem, StaffMember } from "@/lib/types";
+import type { Appointment, Customer, InventoryItem, Order, ServiceItem, Shift, StaffMember } from "@/lib/types";
 import { buildStaffInvitePath } from "@/lib/staff-invites";
 import { currency, formatDate, formatTime } from "@/lib/utils";
 
@@ -108,6 +108,15 @@ function compactDateTime(value?: string) {
   if (Number.isNaN(date.getTime())) return "";
   const offset = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function currentDateInput() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function shiftSummary(shift: Shift) {
+  return shift.leave ? "休假 / 休息" : `${shift.startTime}–${shift.endTime}`;
 }
 
 function reminderDisplay(value?: string) {
@@ -978,6 +987,101 @@ function StaffForm({ staff }: { staff?: StaffMember }) {
   );
 }
 
+function ShiftForm({
+  data,
+  shift,
+  defaultStaffId,
+  onReset,
+}: {
+  data: AppData;
+  shift?: Shift;
+  defaultStaffId: string;
+  onReset: () => void;
+}) {
+  const defaultDate = shift?.date ?? currentDateInput();
+  const defaultStart = shift?.startTime ?? "10:00";
+  const defaultEnd = shift?.endTime ?? "19:00";
+
+  return (
+    <form action={saveStaffShiftAction} className="mt-4 rounded-3xl border border-champagne bg-blush/40 p-5">
+      <input type="hidden" name="id" value={shift?.id ?? ""} />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-base font-bold text-plum">{shift ? "編輯班表" : "新增班表"}</h3>
+          <p className="text-sm text-ink/60">勾選「休假 / 休息」可將這筆班表標記為離班狀態。</p>
+        </div>
+        {shift ? (
+          <button type="button" className="mobile-tap rounded-2xl bg-white px-4 py-2 font-semibold text-plum" onClick={onReset}>
+            取消編輯
+          </button>
+        ) : null}
+      </div>
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <label className="text-sm font-semibold text-plum">
+          員工
+          <select
+            required
+            name="staffId"
+            className={fieldClass()}
+            defaultValue={shift?.staffId ?? defaultStaffId}
+          >
+            <option value="" disabled>
+              請選擇
+            </option>
+            {data.staff.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}｜{roleLabel(member.role)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          日期
+          <input
+            required
+            type="date"
+            name="shiftDate"
+            className={fieldClass()}
+            defaultValue={defaultDate}
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          開始時間
+          <input
+            required
+            type="time"
+            name="startTime"
+            className={fieldClass()}
+            defaultValue={defaultStart}
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          結束時間
+          <input
+            required
+            type="time"
+            name="endTime"
+            className={fieldClass()}
+            defaultValue={defaultEnd}
+          />
+        </label>
+        <label className="flex items-center gap-3 rounded-2xl bg-white p-4 font-semibold text-plum md:col-span-2">
+          <input
+            type="checkbox"
+            name="leave"
+            defaultChecked={shift?.leave ?? false}
+            className="size-5 accent-plum"
+          />
+          休假 / 休息
+        </label>
+      </div>
+      <div className="mt-4">
+        <SubmitButton>{shift ? "儲存班表" : "建立班表"}</SubmitButton>
+      </div>
+    </form>
+  );
+}
+
 function shellProps(data: AppData) {
   return {
     workspace: data.workspace,
@@ -1760,11 +1864,23 @@ export function StaffView({
   notice?: Notice;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
+  const [draftShiftStaffId, setDraftShiftStaffId] = useState<string | null>(null);
   const editing = data.staff.find((staff) => staff.id === editingId);
+  const editingShift = data.shifts.find((shift) => shift.id === editingShiftId);
+  const defaultShiftStaffId =
+    editingShift?.staffId ??
+    draftShiftStaffId ??
+    editing?.id ??
+    data.staff.find((member) => member.role === "technician" && member.active)?.id ??
+    data.staff.find((member) => member.active)?.id ??
+    data.staff[0]?.id ??
+    "";
   const canManageStaff = can(data.currentMember?.role ?? "staff", "staff");
   const activeStaff = data.staff.filter((staff) => staff.active).length;
   const technicians = data.staff.filter((staff) => staff.role === "technician" && staff.active).length;
   const admins = data.staff.filter((staff) => (staff.role === "owner" || staff.role === "admin") && staff.active).length;
+  const shifts = [...data.shifts].sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
 
   return (
     <AppShell
@@ -1844,7 +1960,7 @@ export function StaffView({
         </div>
       ) : null}
       <div className="mb-5 grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
-        {canManageStaff ? <StaffForm staff={editing} /> : null}
+        {canManageStaff ? <StaffForm key={editing?.id ?? "new"} staff={editing} /> : null}
         <div className="card p-5">
           <h2 className="text-lg font-bold text-plum">人事概況</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
@@ -1871,6 +1987,68 @@ export function StaffView({
           ) : null}
         </div>
       </div>
+      {canManageStaff ? (
+        <div className="mb-5 card p-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-plum">班表 / 休息</h2>
+              <p className="mt-1 text-sm text-ink/60">新增或編輯當日班表，勾選休假 / 休息會把該筆班表視為離班狀態。</p>
+            </div>
+            {editingShift ? (
+              <button
+                type="button"
+                className="mobile-tap rounded-2xl bg-white px-4 py-2 font-semibold text-plum"
+                onClick={() => {
+                  setEditingShiftId(null);
+                  setDraftShiftStaffId(null);
+                }}
+              >
+                改為新增
+              </button>
+            ) : null}
+          </div>
+          <ShiftForm
+            key={editingShift?.id ?? draftShiftStaffId ?? "new"}
+            data={data}
+            shift={editingShift}
+            defaultStaffId={defaultShiftStaffId}
+            onReset={() => {
+              setEditingShiftId(null);
+              setDraftShiftStaffId(null);
+            }}
+          />
+          <div className="mt-5 grid gap-3 xl:grid-cols-2">
+            {shifts.length ? (
+              shifts.map((shift) => {
+                const memberName = data.staff.find((member) => member.id === shift.staffId)?.name ?? "未命名員工";
+                return (
+                  <div key={shift.id} className="flex flex-col gap-3 rounded-2xl bg-blush p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <strong className="block text-plum">{memberName}</strong>
+                      <p className="text-sm text-ink/60">{formatDate(shift.date)} ｜ {shiftSummary(shift)}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {shift.leave ? <StatusPill tone="amber">休息</StatusPill> : <StatusPill tone="sage">排班中</StatusPill>}
+                      <button
+                        type="button"
+                        className="rounded-xl bg-white px-3 py-2 font-semibold text-plum"
+                        onClick={() => {
+                          setDraftShiftStaffId(null);
+                          setEditingShiftId(shift.id);
+                        }}
+                      >
+                        編輯
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="rounded-2xl bg-blush p-4 text-sm text-ink/60">尚無班表，先建立一筆排班或休息紀錄。</p>
+            )}
+          </div>
+        </div>
+      ) : null}
       <ModuleTable
         rows={data.staff}
         searchPlaceholder="搜尋員工、角色、專長"
@@ -1905,10 +2083,18 @@ export function StaffView({
           },
           {
             key: "shift",
-            label: "今日班表",
+            label: "班表",
             render: (row) => {
-              const shift = data.shifts.find((item) => item.staffId === row.id);
-              return shift ? `${shift.startTime}–${shift.endTime}` : "休息";
+              const shift = shifts.find((item) => item.staffId === row.id);
+              if (!shift) {
+                return "未排班";
+              }
+              return (
+                <div>
+                  <p>{formatDate(shift.date)}</p>
+                  <p className="text-ink/60">{shiftSummary(shift)}</p>
+                </div>
+              );
             },
           },
           {
@@ -1927,16 +2113,31 @@ export function StaffView({
                   key: "actions",
                   label: "操作",
                   render: (row: StaffMember) => (
-                    <button
-                      className="rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
-                      onClick={() => setEditingId(row.id)}
-                    >
-                      編輯
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
+                        onClick={() => {
+                          setDraftShiftStaffId(null);
+                          setEditingId(row.id);
+                        }}
+                      >
+                        編輯
+                      </button>
+                      <button
+                        className="rounded-xl bg-white px-3 py-2 font-semibold text-plum"
+                        onClick={() => {
+                          setEditingId(null);
+                          setEditingShiftId(null);
+                          setDraftShiftStaffId(row.id);
+                        }}
+                      >
+                        新增班表
+                      </button>
+                    </div>
                   ),
                 },
-              ]
-            : []),
+            ]
+          : []),
         ]}
       />
     </AppShell>
