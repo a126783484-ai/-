@@ -1498,7 +1498,7 @@ export function AppointmentsView({
     >
       <NoticeBanner notice={notice} />
       <div className="mb-5 grid gap-3 md:grid-cols-2">
-        <AppointmentForm data={data} appointment={editing} />
+        <AppointmentForm key={editing?.id ?? "new"} data={data} appointment={editing} />
         <div className="card p-5">
           <h2 className="text-lg font-bold text-plum">預約資料會即時持久化</h2>
           <p className="mt-2 text-sm text-ink/65">
@@ -1625,7 +1625,7 @@ export function ServicesView({
     >
       <NoticeBanner notice={notice} />
       <div className="mb-5">
-        <ServiceForm service={editing} categories={data.categories} />
+        <ServiceForm key={editing?.id ?? "new"} service={editing} categories={data.categories} />
       </div>
       <ModuleTable
         rows={data.services}
@@ -1725,7 +1725,7 @@ export function CustomersView({
     >
       <NoticeBanner notice={notice} />
       <div className="mb-5">
-        <CustomerForm customer={editing} />
+        <CustomerForm key={editing?.id ?? "new"} customer={editing} />
       </div>
       <ModuleTable
         rows={data.customers}
@@ -1860,7 +1860,11 @@ export function InventoryView({
       </section>
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
         {canManageInventory ? (
-          <InventoryItemForm item={editingItem} onCancel={editingItem ? () => setEditingId(null) : undefined} />
+          <InventoryItemForm
+            key={editingItem?.id ?? "new"}
+            item={editingItem}
+            onCancel={editingItem ? () => setEditingId(null) : undefined}
+          />
         ) : null}
         <div className="space-y-5">
           {canManageInventory && hasInventory ? (

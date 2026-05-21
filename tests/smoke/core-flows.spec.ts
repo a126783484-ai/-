@@ -30,6 +30,18 @@ test.describe('core demo flows', () => {
     await expect(page.getByText('單色凝膠美甲')).toBeVisible();
   });
 
+  test('services edit flow repopulates the selected record', async ({ page }) => {
+    const response = await page.goto('/services');
+    expect(response?.status(), '/services should not return a server error').toBeLessThan(500);
+
+    const serviceRow = page.getByRole('row', { name: /單色凝膠美甲/ });
+    await serviceRow.getByRole('button', { name: '編輯' }).click();
+
+    await expect(page.getByRole('heading', { name: '編輯服務' })).toBeVisible();
+    await expect(page.getByLabel('服務名稱')).toHaveValue('單色凝膠美甲');
+    await expect(page.getByLabel('分類')).toHaveValue('美甲');
+  });
+
   test('inventory page renders stock controls and sample items', async ({ page }) => {
     const response = await page.goto('/inventory');
     expect(response?.status(), '/inventory should not return a server error').toBeLessThan(500);
