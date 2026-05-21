@@ -59,6 +59,8 @@ const paymentMethodLabels: Record<(typeof paymentMethods)[number], string> = {
 const orderStatuses = ["unpaid", "partial", "paid", "refunded"] as const;
 const tiers = ["新客", "一般", "VIP", "VVIP"];
 const staffRoles = ["owner", "admin", "technician", "front_desk", "staff"] as const;
+const staffRoleHelpText =
+  "技師可被排班與指派服務，櫃台負責接待與提醒，一般員工適合支援與行政，管理員 / 店主可管理設定。";
 const inventoryMovementTypes = ["purchase", "consume", "adjust"] as const;
 type Notice = { kind: "error" | "success"; message: string };
 
@@ -821,6 +823,7 @@ function StaffForm({ staff }: { staff?: StaffMember }) {
               </option>
             ))}
           </select>
+          <p className="mt-2 text-xs leading-5 text-ink/60">{staffRoleHelpText}</p>
         </label>
         <label className="text-sm font-semibold text-plum">
           抽成（0 到 1）
