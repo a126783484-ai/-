@@ -1576,7 +1576,10 @@ export function CheckoutView({
           {
             key: "paid",
             label: "待收",
-            render: (row) => currency.format(outstandingAmount(row)),
+            render: (row) => {
+              const balance = outstandingAmount(row);
+              return balance === 0 ? <StatusPill tone="sage">已結清</StatusPill> : currency.format(balance);
+            },
           },
           {
             key: "status",
