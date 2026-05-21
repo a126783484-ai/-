@@ -10,6 +10,7 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run src",
+    "test:smoke": "playwright test",
     "guard:production": "node scripts/production-guard.mjs",
     "db:types": "echo 'Supabase types can be generated with: supabase gen types typescript --project-id <id> > src/lib/database.types.ts'",
     "verify:production-env": "node scripts/verify-production-env.mjs",
