@@ -112,7 +112,7 @@ function SubmitButton({
 }
 
 function fieldClass() {
-  return "mt-2 w-full rounded-2xl border border-champagne bg-white p-3 text-ink";
+  return "mobile-tap mt-2 w-full rounded-2xl border border-champagne bg-white p-3 text-ink";
 }
 
 function compactDateTime(value?: string) {
@@ -789,7 +789,9 @@ function OrderForm({ data }: { data: AppData }) {
                   </span>
                 </label>
               )) : (
-              <p className="text-sm text-ink/60">目前沒有啟用中的服務，請改用自訂項目開單。</p>
+              <div className="rounded-2xl border border-dashed border-champagne bg-white p-4 text-sm text-ink/60">
+                目前沒有啟用中的服務，請改用自訂項目開單。
+              </div>
             )}
           </div>
         </fieldset>
@@ -1678,18 +1680,18 @@ export function AppointmentsView({
             key: "actions",
             label: "操作",
             render: (row) => (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                 <button
-                  className="rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
+                  className="mobile-tap rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
                   onClick={() => setEditingId(row.id)}
                 >
                   編輯
                 </button>
-                <form action={updateAppointmentStatus} className="flex gap-2">
+                <form action={updateAppointmentStatus} className="flex flex-col gap-2 sm:flex-row">
                   <input type="hidden" name="id" value={row.id} />
                   <select
                     name="status"
-                    className="rounded-xl border border-champagne px-2 py-2"
+                    className="mobile-tap w-full rounded-xl border border-champagne px-2 py-2 sm:w-auto"
                     defaultValue={row.status}
                   >
                     {appointmentStatuses.map((status) => (
@@ -1698,7 +1700,7 @@ export function AppointmentsView({
                       </option>
                     ))}
                   </select>
-                  <SubmitButton tone="white">更新</SubmitButton>
+                  <SubmitButton tone="white">更新狀態</SubmitButton>
                 </form>
               </div>
             ),
@@ -1795,7 +1797,7 @@ export function ServicesView({
             render: (row) => (
               <div className="flex flex-wrap gap-2">
                 <button
-                  className="rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
+                  className="mobile-tap rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
                   onClick={() => setEditingId(row.id)}
                 >
                   編輯
@@ -1917,7 +1919,7 @@ export function CustomersView({
             render: (row) => (
               <div className="flex flex-wrap gap-2">
                 <button
-                  className="rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
+                  className="mobile-tap rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
                   onClick={() => setEditingId(row.id)}
                 >
                   編輯
@@ -2316,19 +2318,19 @@ export function StaffView({
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <label className="block text-sm font-semibold text-plum">
               顯示名稱
-              <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="displayName" required />
+              <input className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="displayName" required />
             </label>
             <label className="block text-sm font-semibold text-plum">
               Email
-              <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="email" type="email" autoComplete="email" required />
+              <input className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="email" type="email" autoComplete="email" required />
             </label>
             <label className="block text-sm font-semibold text-plum">
               電話
-              <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="phone" autoComplete="tel" />
+              <input className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="phone" autoComplete="tel" />
             </label>
             <label className="block text-sm font-semibold text-plum">
               角色
-              <select className="mt-2 w-full rounded-2xl border border-champagne p-3" name="role" defaultValue="staff">
+              <select className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="role" defaultValue="staff">
                 <option value="staff">一般員工</option>
                 <option value="front_desk">櫃台</option>
                 <option value="technician">技師</option>
@@ -2338,11 +2340,11 @@ export function StaffView({
             </label>
             <label className="block text-sm font-semibold text-plum">
               抽成
-              <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="commissionRate" type="number" min="0" max="1" step="0.01" defaultValue="0" />
+              <input className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="commissionRate" type="number" min="0" max="1" step="0.01" defaultValue="0" />
             </label>
             <label className="block text-sm font-semibold text-plum">
               專長
-              <textarea className="mt-2 min-h-24 w-full rounded-2xl border border-champagne p-3" name="specialties" placeholder="例如：凝膠美甲, 眉型設計" />
+              <textarea className="mobile-tap mt-2 min-h-24 w-full rounded-2xl border border-champagne p-3" name="specialties" placeholder="例如：凝膠美甲, 眉型設計" />
             </label>
           </div>
           <button type="submit" className="mobile-tap mt-5 rounded-2xl bg-plum font-semibold text-white">
@@ -2664,15 +2666,17 @@ export function ReportsView({ data }: { data: AppData }) {
         </div>
       ) : null}
       {workspaceEmpty && !setupGuide ? (
-        <SetupGuide
-          title="報表會在第一筆營運資料後開始有內容"
-          action="先建立服務、客戶與第一筆預約或訂單，這裡就會開始出現營收、排行與來源分析。"
-          links={[
-            { href: "/settings?message=settings_setup_hint", label: "先去設定" },
-            { href: "/appointments", label: "建立預約" },
-            { href: "/customers", label: "建立客戶" },
-          ]}
-        />
+        <div className="mb-5">
+          <SetupGuide
+            title="報表會在第一筆營運資料後開始有內容"
+            action="先建立服務、客戶與第一筆預約或訂單，這裡就會開始出現營收、排行與來源分析。"
+            links={[
+              { href: "/settings?message=settings_setup_hint", label: "先去設定" },
+              { href: "/appointments", label: "建立預約" },
+              { href: "/customers", label: "建立客戶" },
+            ]}
+          />
+        </div>
       ) : null}
       <section className="grid gap-4 md:grid-cols-4">
         <MetricCard
@@ -2697,7 +2701,7 @@ export function ReportsView({ data }: { data: AppData }) {
         />
       </section>
       <section className="mt-5 card p-5">
-        <h2 className="font-bold text-plum">本月跟進焦點</h2>
+        <h2 className="text-lg font-bold text-plum">本月跟進焦點</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-3">
           <div className="rounded-2xl bg-white p-4">
             <div className="text-sm text-ink/60">待收款</div>
@@ -2721,7 +2725,7 @@ export function ReportsView({ data }: { data: AppData }) {
       </section>
       <section className="mt-5 grid gap-5 lg:grid-cols-2">
         <div className="card p-5">
-          <h2 className="font-bold text-plum">預約來源</h2>
+          <h2 className="text-lg font-bold text-plum">預約來源</h2>
           {data.appointments.length ? (
             sources.map((source) => (
               <div
@@ -2746,7 +2750,7 @@ export function ReportsView({ data }: { data: AppData }) {
           )}
         </div>
         <div className="card p-5">
-          <h2 className="font-bold text-plum">服務銷售排行</h2>
+          <h2 className="text-lg font-bold text-plum">服務銷售排行</h2>
           {metrics.serviceRanking.length ? (
             metrics.serviceRanking.map((item, index) => (
               <div
@@ -2808,7 +2812,7 @@ export function SettingsView({
 
   return (
     <AppShell
-      title="設定頁"
+      title="店鋪設定"
       subtitle="店鋪基本資料、預約規則、收款、稅務、品牌外觀與多店設定。"
       {...shellProps(data)}
     >
@@ -2867,7 +2871,7 @@ export function SettingsView({
             <input
               name="brand_color"
               type="color"
-              className="mt-2 h-12 w-full rounded-2xl border border-champagne p-1"
+              className="mobile-tap mt-2 h-12 w-full rounded-2xl border border-champagne p-1"
               defaultValue={data.workspace.brandColor}
             />
           </label>

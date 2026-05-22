@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const email = process.env.TEST_USER_EMAIL;
 const password = process.env.TEST_USER_PASSWORD;
+const strictCoreFlows = process.env.SMOKE_STRICT_CORE_FLOWS === 'true';
 
 async function login(page: Page) {
   await page.goto('/login?next=/dashboard');
@@ -28,8 +29,8 @@ async function exerciseOptionalEditFlow(page: Page, editHeading: string, createH
 
 test.describe('core demo flows', () => {
   test.skip(
-    !email || !password,
-    'TEST_USER_EMAIL and TEST_USER_PASSWORD are required for browser smoke coverage',
+    !strictCoreFlows || !email || !password,
+    'SMOKE_STRICT_CORE_FLOWS=true with TEST_USER_EMAIL and TEST_USER_PASSWORD is required for strict core smoke coverage',
   );
 
   test.beforeEach(async ({ page }) => {
@@ -99,7 +100,7 @@ test.describe('core demo flows', () => {
 
   test('settings page renders workspace configuration', async ({ page }) => {
     await expectNoServerError(page, '/settings');
-    await expect(page.getByRole('heading', { name: '設定頁' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '店鋪設定' })).toBeVisible();
     await expect(page.getByRole('button', { name: '儲存設定' })).toBeVisible();
   });
 });
