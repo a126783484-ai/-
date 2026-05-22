@@ -942,7 +942,7 @@ function AddLineForm({
       <input type="hidden" name="order_id" value={order.id} />
       <select
         name="line_service_ids"
-        className="rounded-xl border border-champagne p-2"
+        className="mobile-tap w-full rounded-xl border border-champagne p-2"
       >
         <option value="">選擇服務</option>
         {services
@@ -955,14 +955,14 @@ function AddLineForm({
       </select>
       <input
         name="custom_line_name"
-        className="rounded-xl border border-champagne p-2"
+        className="mobile-tap w-full rounded-xl border border-champagne p-2"
         placeholder="或輸入自訂項目"
       />
       <input
         type="number"
         min="0"
         name="custom_line_price"
-        className="rounded-xl border border-champagne p-2"
+        className="mobile-tap w-full rounded-xl border border-champagne p-2"
         defaultValue={0}
       />
       <input type="hidden" name="custom_line_quantity" value="1" />
@@ -1528,34 +1528,48 @@ export function DashboardView({ data }: { data: AppData }) {
         <div className="card p-5">
           <h2 className="text-lg font-bold text-plum">技師業績</h2>
           <div className="mt-4 space-y-3">
-            {metrics.technicianRevenue.map((item, index) => (
-              <div
-                key={`${item.name}-${index}`}
-                className="flex items-center justify-between rounded-2xl bg-white p-4"
-              >
-                <span>
-                  {item.name}
-                  <small className="ml-2 text-ink/45">
-                    服務 {item.services} 次
-                  </small>
-                </span>
-                <strong>{currency.format(item.revenue)}</strong>
-              </div>
-            ))}
+            {metrics.technicianRevenue.length ? (
+              metrics.technicianRevenue.map((item, index) => (
+                <div
+                  key={`${item.name}-${index}`}
+                  className="flex items-center justify-between rounded-2xl bg-white p-4"
+                >
+                  <span>
+                    {item.name}
+                    <small className="ml-2 text-ink/45">
+                      服務 {item.services} 次
+                    </small>
+                  </span>
+                  <strong>{currency.format(item.revenue)}</strong>
+                </div>
+              ))
+            ) : (
+              <EmptyState
+                title="目前沒有技師業績資料"
+                action="完成預約與訂單後，這裡會顯示各技師的營收與服務次數。"
+              />
+            )}
           </div>
         </div>
         <div className="card p-5">
           <h2 className="text-lg font-bold text-plum">熱門服務</h2>
           <div className="mt-4 space-y-3">
-            {metrics.serviceRanking.map((item, index) => (
-              <div
-                key={`${item.name}-${index}`}
-                className="flex items-center justify-between rounded-2xl bg-white p-4"
-              >
-                <span>{item.name}</span>
-                <StatusPill tone="plum">{item.count} 筆</StatusPill>
-              </div>
-            ))}
+            {metrics.serviceRanking.length ? (
+              metrics.serviceRanking.map((item, index) => (
+                <div
+                  key={`${item.name}-${index}`}
+                  className="flex items-center justify-between rounded-2xl bg-white p-4"
+                >
+                  <span>{item.name}</span>
+                  <StatusPill tone="plum">{item.count} 筆</StatusPill>
+                </div>
+              ))
+            ) : (
+              <EmptyState
+                title="目前沒有熱門服務"
+                action="建立服務與預約後，這裡會自動整理最常被選擇的項目。"
+              />
+            )}
           </div>
         </div>
       </section>
@@ -1596,7 +1610,7 @@ export function AppointmentsView({
           onCancel={editing ? () => setEditingId(null) : undefined}
         />
         <div className="card p-5">
-          <h2 className="text-lg font-bold text-plum">預約資料會即時持久化</h2>
+          <h2 className="text-lg font-bold text-plum">預約資料會即時寫入資料庫</h2>
           <p className="mt-2 text-sm text-ink/65">
             新增或編輯預約會寫入 Supabase，並同步
             appointment_services。系統會阻擋同一技師重疊時段。
@@ -2113,6 +2127,7 @@ export function CheckoutView({
   data: AppData;
   notice?: Notice;
 }) {
+  const activeStaff = data.staff.filter((member) => member.active);
   const totalOutstanding = data.orders.reduce(
     (sum, order) => sum + outstandingAmount(order),
     0,
@@ -2128,6 +2143,22 @@ export function CheckoutView({
       {...shellProps(data)}
     >
       <NoticeBanner notice={notice} />
+      {!data.customers.length || !activeStaff.length ? (
+        <div className="mb-5">
+          <EmptyState
+            title={
+              !data.customers.length
+                ? "先建立客戶再開單"
+                : "先建立可指派技師再開單"
+            }
+            action={
+              !data.customers.length
+                ? "建立至少一位客戶後，這裡才能建立訂單並正確歸屬收款。"
+                : "建立至少一位在職技師後，這裡才能建立訂單並指派服務人員。"
+            }
+          />
+        </div>
+      ) : null}
       <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="訂單總數" value={`${data.orders.length}`} hint="目前工作區的所有訂單" />
         <MetricCard label="待收金額" value={currency.format(totalOutstanding)} hint="所有未結清訂單的合計欠款" />

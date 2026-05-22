@@ -68,7 +68,7 @@ test.describe('core demo flows', () => {
   test('appointments page renders booking controls', async ({ page }) => {
     await expectNoServerError(page, '/appointments');
     await expect(page.getByRole('heading', { name: '預約系統' })).toBeVisible();
-    await expect(page.getByText('預約資料會即時持久化')).toBeVisible();
+    await expect(page.getByText('預約資料會即時寫入資料庫')).toBeVisible();
     await expect(page.getByRole('heading', { name: '新增預約' })).toBeVisible();
     await exerciseOptionalEditFlow(page, '編輯預約', '新增預約');
   });
@@ -83,5 +83,23 @@ test.describe('core demo flows', () => {
     await page.getByRole('button', { name: '清空草稿' }).click();
     await expect(page.getByLabel('自訂項目')).toHaveValue('');
     await expect(page.getByLabel('自訂單價')).toHaveValue('0');
+  });
+
+  test('operations page renders the command center', async ({ page }) => {
+    await expectNoServerError(page, '/operations');
+    await expect(page.getByRole('heading', { name: '營運指揮中心' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '今日處理清單' })).toBeVisible();
+  });
+
+  test('reports page renders analytics sections', async ({ page }) => {
+    await expectNoServerError(page, '/reports');
+    await expect(page.getByRole('heading', { name: '報表分析' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '本月跟進焦點' })).toBeVisible();
+  });
+
+  test('settings page renders workspace configuration', async ({ page }) => {
+    await expectNoServerError(page, '/settings');
+    await expect(page.getByRole('heading', { name: '設定頁' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '儲存設定' })).toBeVisible();
   });
 });
