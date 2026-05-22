@@ -25,8 +25,8 @@ import { statusLabel, summarizeAppointmentDependencies } from "@/lib/appointment
 import { dashboardMetrics } from "@/lib/analytics";
 import { orderPaymentState, orderStatusLabel, orderStatusTone, orderSubtotal, orderTotal, outstandingAmount } from "@/lib/orders";
 import { can, roleLabel } from "@/lib/permissions";
-import type { AppData } from "@/lib/app-data";
-import { getWorkspaceSetupGuide, isWorkspaceEmpty } from "@/lib/app-data";
+import type { AppData } from "@/lib/app-data-client";
+import { getWorkspaceSetupGuide, isWorkspaceEmpty } from "@/lib/app-data-client";
 import type { Appointment, Customer, InventoryItem, Order, ServiceItem, Shift, StaffMember } from "@/lib/types";
 import { buildStaffInvitePath } from "@/lib/staff-invites";
 import { currency, formatDate, formatTime } from "@/lib/utils";
