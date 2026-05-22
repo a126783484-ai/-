@@ -1,15 +1,22 @@
 import type { Order, OrderStatus } from "./types";
 
+function normalizeAmount(value: number) {
+  return Number.isFinite(value) ? Math.round(value) : 0;
+}
+
 export function orderSubtotal(order: Pick<Order, "lines">) {
-  return order.lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0);
+  return order.lines.reduce(
+    (sum, line) => sum + normalizeAmount(line.quantity) * normalizeAmount(line.unitPrice),
+    0,
+  );
 }
 
 export function orderTotal(order: Pick<Order, "lines" | "discount" | "tip">) {
-  return Math.max(0, orderSubtotal(order) - order.discount + order.tip);
+  return Math.max(0, orderSubtotal(order) - normalizeAmount(order.discount) + normalizeAmount(order.tip));
 }
 
 export function outstandingAmount(order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount">) {
-  return Math.max(0, orderTotal(order) - order.paidAmount);
+  return Math.max(0, orderTotal(order) - normalizeAmount(order.paidAmount));
 }
 
 export function orderPaymentState(
@@ -17,8 +24,32 @@ export function orderPaymentState(
 ): OrderStatus {
   const balance = outstandingAmount(order);
   if (balance <= 0) return "paid";
-  if (order.paidAmount > 0) return "partial";
+  if (normalizeAmount(order.paidAmount) > 0) return "partial";
   return "unpaid";
+}
+
+export function orderFinancialSummary(
+  order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount">,
+) {
+  const subtotal = orderSubtotal(order);
+  const total = orderTotal(order);
+  const paidAmount = Math.max(0, normalizeAmount(order.paidAmount));
+  const outstanding = Math.max(0, total - paidAmount);
+
+  return {
+    subtotal,
+    total,
+    paidAmount,
+    outstanding,
+    state: (outstanding <= 0 ? "paid" : paidAmount > 0 ? "partial" : "unpaid") as OrderStatus,
+  };
+}
+
+export function resolveOrderStatus(
+  order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount">,
+  selectedStatus?: OrderStatus | "",
+): OrderStatus {
+  return selectedStatus === "refunded" ? "refunded" : orderPaymentState(order);
 }
 
 export function orderStatusLabel(status: OrderStatus) {

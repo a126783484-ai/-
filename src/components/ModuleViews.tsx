@@ -23,7 +23,16 @@ import { ModuleTable } from "@/components/ModuleTable";
 import { MetricCard, StatusPill, EmptyState } from "@/components/ui";
 import { statusLabel, summarizeAppointmentDependencies } from "@/lib/appointments";
 import { dashboardMetrics } from "@/lib/analytics";
-import { orderPaymentState, orderStatusLabel, orderStatusTone, orderSubtotal, orderTotal, outstandingAmount } from "@/lib/orders";
+import {
+  orderFinancialSummary,
+  orderPaymentState,
+  orderStatusLabel,
+  orderStatusTone,
+  orderSubtotal,
+  orderTotal,
+  outstandingAmount,
+  resolveOrderStatus,
+} from "@/lib/orders";
 import { can, roleLabel } from "@/lib/permissions";
 import type { AppData } from "@/lib/app-data-client";
 import { getWorkspaceSetupGuide, isWorkspaceEmpty } from "@/lib/app-data-client";
@@ -640,18 +649,21 @@ function OrderForm({ data }: { data: AppData }) {
     ],
     [customName, customPrice, customQuantity, selectedServices],
   );
-  const subtotal = useMemo(
-    () => draftLines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0),
-    [draftLines],
-  );
-  const total = Math.max(0, subtotal - discount + tip);
-  const balance = Math.max(0, total - paidAmount);
-  const draftState = (status || orderPaymentState({
+  const draftFinancials = orderFinancialSummary({
     lines: draftLines,
     discount,
     tip,
     paidAmount,
-  })) as (typeof orderStatuses)[number];
+  });
+  const draftState = resolveOrderStatus(
+    {
+      lines: draftLines,
+      discount,
+      tip,
+      paidAmount,
+    },
+    status,
+  ) as (typeof orderStatuses)[number];
   const canSubmit = activeStaff.length > 0 && data.customers.length > 0 && draftLines.length > 0;
 
   function toggleService(serviceId: string) {
@@ -847,7 +859,7 @@ function OrderForm({ data }: { data: AppData }) {
           />
         </label>
         <label className="text-sm font-semibold text-plum">
-          付款狀態
+          結帳狀態（未收 / 部分 / 已結清依金額自動判斷；僅退款可手動）
           <select
             name="status"
             className={fieldClass()}
@@ -877,25 +889,25 @@ function OrderForm({ data }: { data: AppData }) {
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-2xl bg-white p-3">
               <p className="text-xs text-ink/55">小計</p>
-              <p className="mt-1 text-lg font-bold text-plum">{currency.format(subtotal)}</p>
+              <p className="mt-1 text-lg font-bold text-plum">{currency.format(draftFinancials.subtotal)}</p>
             </div>
             <div className="rounded-2xl bg-white p-3">
               <p className="text-xs text-ink/55">總額</p>
-              <p className="mt-1 text-lg font-bold text-plum">{currency.format(total)}</p>
+              <p className="mt-1 text-lg font-bold text-plum">{currency.format(draftFinancials.total)}</p>
             </div>
             <div className="rounded-2xl bg-white p-3">
-              <p className="text-xs text-ink/55">已收</p>
-              <p className="mt-1 text-lg font-bold text-plum">{currency.format(paidAmount)}</p>
+              <p className="text-xs text-ink/55">實收</p>
+              <p className="mt-1 text-lg font-bold text-plum">{currency.format(draftFinancials.paidAmount)}</p>
             </div>
             <div className="rounded-2xl bg-white p-3">
-              <p className="text-xs text-ink/55">待收</p>
-              <p className="mt-1 text-lg font-bold text-plum">{currency.format(balance)}</p>
+              <p className="text-xs text-ink/55">尚欠</p>
+              <p className="mt-1 text-lg font-bold text-plum">{currency.format(draftFinancials.outstanding)}</p>
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2 text-xs text-ink/60">
-            <span>未收 = 尚未收款</span>
-            <span>部分 = 已收但仍有待收金額</span>
-            <span>已結清 = 已收金額覆蓋總額</span>
+            <span>未收 = 尚未收到任何款項</span>
+            <span>部分 = 已收但仍有尚欠金額</span>
+            <span>已結清 = 實收金額已覆蓋總額</span>
           </div>
         </div>
       </div>
@@ -2185,7 +2197,7 @@ export function CheckoutView({
             render: (row) => (
               <div>
                 <strong>{currency.format(orderTotal(row))}</strong>
-                <p className="text-xs text-ink/60">已收 {currency.format(row.paidAmount)}</p>
+                <p className="text-xs text-ink/60">實收 {currency.format(row.paidAmount)}</p>
               </div>
             ),
           },
@@ -2198,7 +2210,7 @@ export function CheckoutView({
                 <div>
                   <strong>{balance === 0 ? "0" : currency.format(balance)}</strong>
                   <p className="text-xs text-ink/60">
-                    {balance === 0 ? "無未收金額" : `還差 ${currency.format(balance)}`}
+                    {balance === 0 ? "已結清" : `尚欠 ${currency.format(balance)}`}
                   </p>
                 </div>
               );
@@ -2213,7 +2225,7 @@ export function CheckoutView({
                 <div className="space-y-2">
                   <StatusPill tone={orderStatusTone(state)}>{orderStatusLabel(state)}</StatusPill>
                   <p className="text-xs text-ink/60">
-                    帳面狀態：{orderStatusLabel(row.status)} · 付款方式：{paymentMethodLabels[row.paymentMethod]}
+                    訂單狀態：{orderStatusLabel(row.status)} · 付款方式：{paymentMethodLabels[row.paymentMethod]}
                   </p>
                 </div>
               );

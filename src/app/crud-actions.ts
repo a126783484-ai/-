@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { can } from "@/lib/permissions";
 import { buildMissingOrderLineServiceMessage } from "@/lib/order-line-errors";
+import { resolveOrderStatus } from "@/lib/orders";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
 import type { Database, Json } from "@/lib/database.types";
 import type {
@@ -585,7 +586,7 @@ export async function updateAppointmentStatus(formData: FormData) {
 }
 
 function orderLineInput(formData: FormData) {
-  const serviceIds = selectedValues(formData, "line_service_ids");
+  const serviceIds = Array.from(new Set(selectedValues(formData, "line_service_ids")));
   const customName = text(formData, "custom_line_name");
   const customPrice = integerValue(formData, "custom_line_price");
   const customQuantity = Math.max(
@@ -642,12 +643,6 @@ async function buildOrderLines(
   return lines;
 }
 
-function deriveOrderStatus(total: number, paidAmount: number): OrderStatus {
-  if (paidAmount <= 0) return "unpaid";
-  if (paidAmount >= total) return "paid";
-  return "partial";
-}
-
 export async function saveOrder(formData: FormData) {
   try {
     const { supabase, workspaceId, role } = await getActiveWorkspace();
@@ -667,17 +662,21 @@ export async function saveOrder(formData: FormData) {
     const discount = integerValue(formData, "discount");
     const tip = integerValue(formData, "tip");
     const paidAmount = integerValue(formData, "paid_amount");
-    const total = Math.max(
-      0,
-      lineTemplates.reduce(
-        (sum, line) => sum + (line.quantity ?? 1) * line.unit_price,
-        0,
-      ) -
-        discount +
-        tip,
-    );
     const statusRaw = text(formData, "status");
-    const status = (statusRaw ? (statusRaw as OrderStatus) : deriveOrderStatus(total, paidAmount));
+    const status = resolveOrderStatus(
+      {
+        lines: lineTemplates.map((line) => ({
+          serviceId: line.service_id ?? "",
+          name: line.name,
+          quantity: line.quantity ?? 1,
+          unitPrice: line.unit_price,
+        })),
+        discount,
+        tip,
+        paidAmount,
+      },
+      statusRaw ? (statusRaw as OrderStatus) : "",
+    );
 
     const { data: order, error: orderError } = await supabase
       .from("orders")
