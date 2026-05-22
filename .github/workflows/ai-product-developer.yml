@@ -1,9 +1,8 @@
 name: AI Product Developer
 
-# PAUSED:
-# Product automation is temporarily disabled by owner request.
-# Keep workflow_dispatch visible, but do not run product agent jobs until re-enabled.
-# Do not push main, merge PRs, edit AI Engine / repair flows, or create new PRs from this workflow.
+# SAFE PRODUCT MODE:
+# Scheduled + manual. Product UX only. Draft PR branch only.
+# This workflow must not push main, merge PRs, edit workflows during runs, or touch AI Engine / repair flows.
 
 on:
   workflow_dispatch:
@@ -17,19 +16,62 @@ on:
           - src/app/services/page.tsx
           - src/app/page.tsx
           - src/components/ModuleViews.tsx
+  schedule:
+    - cron: '20 2 * * *'
 
 permissions:
-  contents: read
-  pull-requests: read
+  contents: write
+  pull-requests: write
 
 concurrency:
   group: ai-product-developer-${{ github.workflow }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   ai-product-develop:
     runs-on: ubuntu-latest
-    if: ${{ false }}
+    env:
+      PRODUCT_AGENT_TARGET_FILE: ${{ github.event.inputs.target_file || 'src/app/services/page.tsx' }}
     steps:
-      - name: Product automation paused
-        run: echo "AI Product Developer workflow is paused by owner request."
+      - name: Checkout product UX branch
+        uses: actions/checkout@v4
+        with:
+          ref: product/ux-p1-demo-flow
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run product UX agent
+        run: node scripts/product-ux-agent.mjs
+
+      - name: Show changed files
+        run: git status --short
+
+      - name: Commit product UX update if changed
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes produced."
+            exit 0
+          fi
+          git config user.name "beauty-os-product-agent"
+          git config user.email "actions@github.com"
+          git add "$PRODUCT_AGENT_TARGET_FILE"
+          git commit -m "feat: improve Beauty OS P1 product UX"
+          git push origin product/ux-p1-demo-flow
+
+      - name: Safety summary
+        run: |
+          echo "## AI Product Developer" >> "$GITHUB_STEP_SUMMARY"
+          echo "Mode: scheduled/manual product UX only" >> "$GITHUB_STEP_SUMMARY"
+          echo "Branch: product/ux-p1-demo-flow" >> "$GITHUB_STEP_SUMMARY"
+          echo "Target: $PRODUCT_AGENT_TARGET_FILE" >> "$GITHUB_STEP_SUMMARY"
+          echo "Main was not pushed by this run." >> "$GITHUB_STEP_SUMMARY"
+          echo "No merge was attempted." >> "$GITHUB_STEP_SUMMARY"
+          echo "No AI Engine or repair flow was touched." >> "$GITHUB_STEP_SUMMARY"
