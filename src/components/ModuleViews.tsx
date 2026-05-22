@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
   addOrderLine,
@@ -149,13 +149,30 @@ function namesFromIds(ids: string[], services: ServiceItem[]) {
   );
 }
 
-function CustomerForm({ customer }: { customer?: Customer }) {
+function CustomerForm({
+  customer,
+  onCancel,
+}: {
+  customer?: Customer;
+  onCancel?: () => void;
+}) {
   return (
     <form action={saveCustomer} className="card p-5">
       <input type="hidden" name="id" value={customer?.id ?? ""} />
-      <h2 className="text-lg font-bold text-plum">
-        {customer ? "編輯客戶" : "新增客戶"}
-      </h2>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h2 className="text-lg font-bold text-plum">
+          {customer ? "編輯客戶" : "新增客戶"}
+        </h2>
+        {customer && onCancel ? (
+          <button
+            type="button"
+            className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
+            onClick={onCancel}
+          >
+            取消編輯
+          </button>
+        ) : null}
+      </div>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="text-sm font-semibold text-plum">
           姓名
@@ -261,16 +278,29 @@ function CustomerForm({ customer }: { customer?: Customer }) {
 function ServiceForm({
   service,
   categories,
+  onCancel,
 }: {
   service?: ServiceItem;
   categories: AppData["categories"];
+  onCancel?: () => void;
 }) {
   return (
     <form action={saveService} className="card p-5">
       <input type="hidden" name="id" value={service?.id ?? ""} />
-      <h2 className="text-lg font-bold text-plum">
-        {service ? "編輯服務" : "新增服務"}
-      </h2>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h2 className="text-lg font-bold text-plum">
+          {service ? "編輯服務" : "新增服務"}
+        </h2>
+        {service && onCancel ? (
+          <button
+            type="button"
+            className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
+            onClick={onCancel}
+          >
+            取消編輯
+          </button>
+        ) : null}
+      </div>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="text-sm font-semibold text-plum">
           服務名稱
@@ -353,9 +383,11 @@ function ServiceForm({
 function AppointmentForm({
   data,
   appointment,
+  onCancel,
 }: {
   data: AppData;
   appointment?: Appointment;
+  onCancel?: () => void;
 }) {
   const fallbackStart = compactDateTime(new Date().toISOString());
   const dependencySummary = summarizeAppointmentDependencies({
@@ -373,9 +405,20 @@ function AppointmentForm({
   return (
     <form action={saveAppointment} className="card p-5">
       <input type="hidden" name="id" value={appointment?.id ?? ""} />
-      <h2 className="text-lg font-bold text-plum">
-        {appointment ? "編輯預約" : "新增預約"}
-      </h2>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h2 className="text-lg font-bold text-plum">
+          {appointment ? "編輯預約" : "新增預約"}
+        </h2>
+        {appointment && onCancel ? (
+          <button
+            type="button"
+            className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
+            onClick={onCancel}
+          >
+            取消編輯
+          </button>
+        ) : null}
+      </div>
       {!dependencySummary.ready ? (
         <div className="mt-4 rounded-3xl border border-amber bg-amber/10 p-4">
           <p className="font-semibold text-plum">先補齊預約基礎資料</p>
@@ -619,9 +662,29 @@ function OrderForm({ data }: { data: AppData }) {
     );
   }
 
+  function resetDraft() {
+    setSelectedServiceIds([]);
+    setCustomName("");
+    setCustomPrice(0);
+    setCustomQuantity(1);
+    setDiscount(0);
+    setTip(0);
+    setPaidAmount(0);
+    setStatus("");
+  }
+
   return (
     <form action={saveOrder} className="card p-5">
-      <h2 className="text-lg font-bold text-plum">新增訂單 / 預約轉結帳</h2>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h2 className="text-lg font-bold text-plum">新增訂單 / 預約轉結帳</h2>
+        <button
+          type="button"
+          className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
+          onClick={resetDraft}
+        >
+          清空草稿
+        </button>
+      </div>
       <p className="mt-1 text-sm text-ink/60">
         勾選既有服務或填寫自訂項目，就能先看到小計、總額與待收金額，再送出建立訂單。
       </p>
@@ -1500,6 +1563,12 @@ export function AppointmentsView({
     (appointment) => appointment.id === editingId,
   );
 
+  useEffect(() => {
+    if (notice?.kind === "success") {
+      setEditingId(null);
+    }
+  }, [notice?.kind, notice?.message]);
+
   return (
     <AppShell
       title="預約系統"
@@ -1508,7 +1577,12 @@ export function AppointmentsView({
     >
       <NoticeBanner notice={notice} />
       <div className="mb-5 grid gap-3 md:grid-cols-2">
-        <AppointmentForm key={editing?.id ?? "new"} data={data} appointment={editing} />
+        <AppointmentForm
+          key={editing?.id ?? "new"}
+          data={data}
+          appointment={editing}
+          onCancel={editing ? () => setEditingId(null) : undefined}
+        />
         <div className="card p-5">
           <h2 className="text-lg font-bold text-plum">預約資料會即時持久化</h2>
           <p className="mt-2 text-sm text-ink/65">
@@ -1525,14 +1599,6 @@ export function AppointmentsView({
               );
             })}
           </div>
-          {editing ? (
-            <button
-              className="mobile-tap mt-4 rounded-2xl bg-white font-semibold text-plum"
-              onClick={() => setEditingId(null)}
-            >
-              清除編輯狀態
-            </button>
-          ) : null}
         </div>
       </div>
       <ModuleTable
@@ -1627,6 +1693,12 @@ export function ServicesView({
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = data.services.find((service) => service.id === editingId);
 
+  useEffect(() => {
+    if (notice?.kind === "success") {
+      setEditingId(null);
+    }
+  }, [notice?.kind, notice?.message]);
+
   return (
     <AppShell
       title="服務項目管理"
@@ -1635,7 +1707,12 @@ export function ServicesView({
     >
       <NoticeBanner notice={notice} />
       <div className="mb-5">
-        <ServiceForm key={editing?.id ?? "new"} service={editing} categories={data.categories} />
+        <ServiceForm
+          key={editing?.id ?? "new"}
+          service={editing}
+          categories={data.categories}
+          onCancel={editing ? () => setEditingId(null) : undefined}
+        />
       </div>
       <ModuleTable
         rows={data.services}
@@ -1727,6 +1804,12 @@ export function CustomersView({
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = data.customers.find((customer) => customer.id === editingId);
 
+  useEffect(() => {
+    if (notice?.kind === "success") {
+      setEditingId(null);
+    }
+  }, [notice?.kind, notice?.message]);
+
   return (
     <AppShell
       title="客戶 CRM"
@@ -1735,7 +1818,11 @@ export function CustomersView({
     >
       <NoticeBanner notice={notice} />
       <div className="mb-5">
-        <CustomerForm key={editing?.id ?? "new"} customer={editing} />
+        <CustomerForm
+          key={editing?.id ?? "new"}
+          customer={editing}
+          onCancel={editing ? () => setEditingId(null) : undefined}
+        />
       </div>
       <ModuleTable
         rows={data.customers}
@@ -1854,6 +1941,12 @@ export function InventoryView({
     .filter((movement) => movement.quantity < 0)
     .reduce((sum, movement) => sum + Math.abs(movement.quantity), 0);
   const recentMovements = data.inventoryMovements.slice(0, 25);
+
+  useEffect(() => {
+    if (notice?.kind === "success") {
+      setEditingId(null);
+    }
+  }, [notice?.kind, notice?.message]);
 
   return (
     <AppShell
@@ -2015,6 +2108,7 @@ export function CheckoutView({
   const paidOrders = data.orders.filter((order) => orderPaymentState(order) === "paid").length;
   const partialOrders = data.orders.filter((order) => orderPaymentState(order) === "partial").length;
   const unpaidOrders = data.orders.filter((order) => orderPaymentState(order) === "unpaid").length;
+  const orderFormKey = `${data.orders.length}:${data.orders[0]?.id ?? "none"}`;
   return (
     <AppShell
       title="訂單 / 結帳 / 收款"
@@ -2029,7 +2123,7 @@ export function CheckoutView({
         <MetricCard label="部分 / 未收" value={`${partialOrders + unpaidOrders}`} hint="仍需追款或補收的訂單" />
       </div>
       <div className="mb-5">
-        <OrderForm data={data} />
+        <OrderForm key={orderFormKey} data={data} />
       </div>
       <ModuleTable
         rows={data.orders}
@@ -2156,6 +2250,14 @@ export function StaffView({
   const technicians = data.staff.filter((staff) => staff.role === "technician" && staff.active).length;
   const admins = data.staff.filter((staff) => (staff.role === "owner" || staff.role === "admin") && staff.active).length;
   const shifts = [...data.shifts].sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
+
+  useEffect(() => {
+    if (notice?.kind === "success") {
+      setEditingId(null);
+      setEditingShiftId(null);
+      setDraftShiftStaffId(null);
+    }
+  }, [notice?.kind, notice?.message]);
 
   return (
     <AppShell
