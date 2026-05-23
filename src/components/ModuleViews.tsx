@@ -2258,6 +2258,7 @@ export function CheckoutView({
   notice?: Notice;
 }) {
   const activeStaff = data.staff.filter((member) => member.active);
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
   const totalOutstanding = data.orders.reduce(
     (sum, order) => sum + outstandingAmount(order),
     0,
@@ -2273,6 +2274,15 @@ export function CheckoutView({
       {...shellProps(data)}
     >
       <NoticeBanner notice={notice} />
+      {setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide
+            title={setupGuide.title}
+            action={setupGuide.action}
+            links={setupGuide.links}
+          />
+        </div>
+      ) : null}
       {!data.customers.length || !activeStaff.length ? (
         <div className="mb-5">
           <EmptyState
@@ -2482,7 +2492,7 @@ export function StaffView({
       ) : canManageStaff ? (
         <div className="card p-5">
           <h2 className="text-lg font-bold text-plum">員工邀請</h2>
-          <p className="mt-1 text-sm text-ink/60">目前資料庫尚未啟用邀請表，請先完成 schema 更新。</p>
+          <p className="mt-1 text-sm text-ink/60">目前尚未啟用員工邀請功能；你仍可直接新增員工資料，之後再視需要開啟邀請連結。</p>
         </div>
       ) : null}
       {data.staffInviteFeatureEnabled && data.staffInvites.some((invite) => invite.status === "pending") ? (
