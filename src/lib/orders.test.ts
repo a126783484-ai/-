@@ -30,7 +30,7 @@ describe("checkout totals", () => {
 
   it("labels payment states for the checkout screen", () => {
     expect(orderStatusLabel("paid")).toBe("已結清");
-    expect(orderStatusLabel("partial")).toBe("部分收款");
+    expect(orderStatusLabel("partial")).toBe("部分付款");
     expect(orderStatusLabel("unpaid")).toBe("未收款");
     expect(orderStatusTone("paid")).toBe("sage");
     expect(orderStatusTone("partial")).toBe("amber");

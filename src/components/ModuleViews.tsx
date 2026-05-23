@@ -67,7 +67,6 @@ const paymentMethodLabels: Record<(typeof paymentMethods)[number], string> = {
   line_pay: "LINE Pay",
   other: "其他",
 };
-const orderStatuses = ["unpaid", "partial", "paid", "refunded"] as const;
 const tiers = ["新客", "一般", "VIP", "VVIP"];
 const staffRoles = ["owner", "admin", "technician", "front_desk", "staff"] as const;
 const staffRoleHelpText =
@@ -639,7 +638,7 @@ function OrderForm({ data }: { data: AppData }) {
   const [discount, setDiscount] = useState(0);
   const [tip, setTip] = useState(0);
   const [paidAmount, setPaidAmount] = useState(0);
-  const [status, setStatus] = useState<(typeof orderStatuses)[number] | "">("");
+  const [status, setStatus] = useState<"" | "refunded">("");
 
   const selectedServices = useMemo(
     () => enabledServices.filter((service) => selectedServiceIds.includes(service.id)),
@@ -680,7 +679,7 @@ function OrderForm({ data }: { data: AppData }) {
       paidAmount,
     },
     status,
-  ) as (typeof orderStatuses)[number];
+  );
   const canSubmit = activeStaff.length > 0 && data.customers.length > 0 && draftLines.length > 0;
 
   function toggleService(serviceId: string) {
@@ -878,21 +877,15 @@ function OrderForm({ data }: { data: AppData }) {
           />
         </label>
         <label className="text-sm font-semibold text-plum">
-          結帳狀態（未收 / 部分 / 已結清依金額自動判斷；僅退款可手動）
+          付款狀態（依已收金額自動判斷；僅退款可手動指定）
           <select
             name="status"
             className={fieldClass()}
             value={status}
-            onChange={(event) =>
-              setStatus(event.target.value as (typeof orderStatuses)[number] | "")
-            }
+            onChange={(event) => setStatus(event.target.value as "" | "refunded")}
           >
             <option value="">自動判斷</option>
-            {orderStatuses.map((status) => (
-              <option key={status} value={status}>
-                {orderStatusLabel(status)}
-              </option>
-            ))}
+            <option value="refunded">{orderStatusLabel("refunded")}</option>
           </select>
         </label>
         <div className="md:col-span-2 rounded-3xl border border-champagne bg-blush p-4">
@@ -953,6 +946,10 @@ function AddLineForm({
   order: Order;
   services: ServiceItem[];
 }) {
+  const [selectedServiceId, setSelectedServiceId] = useState("");
+  const [customName, setCustomName] = useState("");
+  const [customPrice, setCustomPrice] = useState(0);
+  const canSubmit = selectedServiceId.length > 0 || customName.trim().length > 0;
   return (
     <form
       action={addOrderLine}
@@ -962,6 +959,8 @@ function AddLineForm({
       <select
         name="line_service_ids"
         className="mobile-tap w-full rounded-xl border border-champagne p-3"
+        value={selectedServiceId}
+        onChange={(event) => setSelectedServiceId(event.target.value)}
       >
         <option value="">選擇服務</option>
         {services
@@ -976,16 +975,26 @@ function AddLineForm({
         name="custom_line_name"
         className="mobile-tap w-full rounded-xl border border-champagne p-3"
         placeholder="或輸入自訂項目"
+        value={customName}
+        onChange={(event) => setCustomName(event.target.value)}
       />
       <input
         type="number"
         min="0"
         name="custom_line_price"
         className="mobile-tap w-full rounded-xl border border-champagne p-3"
-        defaultValue={0}
+        value={customPrice}
+        onChange={(event) => setCustomPrice(Math.max(0, Number(event.target.value) || 0))}
       />
       <input type="hidden" name="custom_line_quantity" value="1" />
-      <SubmitButton tone="white">新增明細</SubmitButton>
+      <SubmitButton tone="white" disabled={!canSubmit}>
+        新增明細
+      </SubmitButton>
+      {!canSubmit ? (
+        <p className="sm:col-span-3 text-xs text-ink/55">
+          請先選擇一筆服務或輸入自訂項目，再新增明細。
+        </p>
+      ) : null}
     </form>
   );
 }
@@ -2185,7 +2194,7 @@ export function CheckoutView({
         <MetricCard label="訂單總數" value={`${data.orders.length}`} hint="目前工作區的所有訂單" />
         <MetricCard label="待收金額" value={currency.format(totalOutstanding)} hint="所有未結清訂單的合計欠款" />
         <MetricCard label="已結清" value={`${paidOrders}`} hint="付款金額已覆蓋總額" />
-        <MetricCard label="部分 / 未收" value={`${partialOrders + unpaidOrders}`} hint="仍需追款或補收的訂單" />
+        <MetricCard label="部分付款 / 未收" value={`${partialOrders + unpaidOrders}`} hint="仍有待收金額的訂單" />
       </div>
       <div className="mb-5">
         <OrderForm key={orderFormKey} data={data} />
@@ -2236,7 +2245,7 @@ export function CheckoutView({
                     ) : null}
                   </div>
                 ))}
-                <AddLineForm order={row} services={data.services} />
+                <AddLineForm key={`${row.id}:${row.lines.length}`} order={row} services={data.services} />
                 <p className="mt-3 text-xs text-ink/60">
                   小計 {currency.format(orderSubtotal(row))} · 折扣 {currency.format(row.discount)} · 小費 {currency.format(row.tip)}
                 </p>

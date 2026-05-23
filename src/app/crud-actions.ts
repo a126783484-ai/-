@@ -643,6 +643,35 @@ async function buildOrderLines(
   return lines;
 }
 
+async function buildSingleOrderLine(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+  formData: FormData,
+) {
+  const { serviceIds, customName, customPrice, customQuantity } =
+    orderLineInput(formData);
+
+  if (serviceIds.length) {
+    return buildOrderLines(supabase, workspaceId, formData).then((lines) =>
+      lines.filter((line) => line.service_id !== null),
+    );
+  }
+
+  if (customName) {
+    return [
+      {
+        order_id: "",
+        service_id: null,
+        name: customName,
+        quantity: customQuantity,
+        unit_price: customPrice,
+      },
+    ];
+  }
+
+  throw new Error("請先選擇服務或輸入自訂項目。");
+}
+
 export async function saveOrder(formData: FormData) {
   try {
     const { supabase, workspaceId, role } = await getActiveWorkspace();
@@ -723,7 +752,7 @@ export async function addOrderLine(formData: FormData) {
     requirePermission(role, "checkout", "你沒有權限新增訂單明細。");
     const orderId = text(formData, "order_id");
     await assertWorkspaceRecord("orders", orderId, workspaceId, supabase);
-    const lines = await buildOrderLines(supabase, workspaceId, formData);
+    const lines = await buildSingleOrderLine(supabase, workspaceId, formData);
     const { error } = await supabase
       .from("order_lines")
       .insert(lines.map((line) => ({ ...line, order_id: orderId })));

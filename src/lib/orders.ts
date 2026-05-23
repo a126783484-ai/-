@@ -63,7 +63,7 @@ export function resolveOrderStatus(
 
 export function orderStatusLabel(status: OrderStatus) {
   if (status === "paid") return "已結清";
-  if (status === "partial") return "部分收款";
+  if (status === "partial") return "部分付款";
   if (status === "refunded") return "已退款";
   return "未收款";
 }
