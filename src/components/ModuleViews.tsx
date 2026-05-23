@@ -44,12 +44,12 @@ import {
   hasOutstandingBalance,
   resolveOrderStatus,
 } from "@/lib/orders";
-import { can } from "@/lib/permissions";
 import type { AppData } from "@/lib/app-data-client";
 import { getWorkspaceSetupGuide, isWorkspaceEmpty } from "@/lib/app-data-client";
 import type { Appointment, Customer, InventoryItem, Order, ServiceItem, Shift, StaffMember } from "@/lib/types";
 import { buildStaffInvitePath } from "@/lib/staff-invites";
 import { formatInventoryMovementQuantity, formatInventoryStock } from "@/lib/inventory-feedback";
+import { canManage, moduleAccessMessage, permissionScope } from "@/lib/permissions";
 import { currency, formatDate, formatDateTime, formatTime } from "@/lib/utils";
 
 const liveNotice =
@@ -1835,6 +1835,10 @@ export function AppointmentsView({
   const editing = data.appointments.find(
     (appointment) => appointment.id === editingId,
   );
+  const role = data.currentMember?.role ?? "staff";
+  const appointmentsScope = permissionScope(role, "appointments");
+  const canManageAppointments = appointmentsScope === "manage";
+  const appointmentsAccessMessage = moduleAccessMessage(role, "appointments");
 
   useEffect(() => {
     if (notice?.kind === "success") {
@@ -1850,12 +1854,19 @@ export function AppointmentsView({
     >
       <NoticeBanner notice={notice} />
       <div className="mb-5 grid gap-3 md:grid-cols-2">
-        <AppointmentForm
-          key={editing?.id ?? "new"}
-          data={data}
-          appointment={editing}
-          onCancel={editing ? () => setEditingId(null) : undefined}
-        />
+        {canManageAppointments ? (
+          <AppointmentForm
+            key={editing?.id ?? "new"}
+            data={data}
+            appointment={editing}
+            onCancel={editing ? () => setEditingId(null) : undefined}
+          />
+        ) : (
+          <EmptyState
+            title="預約目前僅供查看"
+            action={appointmentsAccessMessage}
+          />
+        )}
         <div className="card p-5">
           <h2 className="text-lg font-bold text-plum">預約資料會即時寫入資料庫</h2>
           <p className="mt-2 text-sm text-ink/65">
@@ -1924,36 +1935,40 @@ export function AppointmentsView({
               </StatusPill>
             ),
           },
-          {
-            key: "actions",
-            label: "操作",
-            render: (row) => (
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start">
-                <button
-                  type="button"
-                  className="mobile-tap w-full rounded-xl bg-champagne px-3 py-2 font-semibold text-plum sm:w-auto"
-                  onClick={() => setEditingId(row.id)}
-                >
-                  編輯
-                </button>
-                <form action={updateAppointmentStatus} className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                  <input type="hidden" name="id" value={row.id} />
-                  <select
-                    name="status"
-                    className="mobile-tap w-full rounded-xl border border-champagne px-2 py-2 sm:w-40"
-                    defaultValue={row.status}
-                  >
-                    {appointmentStatuses.map((status) => (
-                      <option key={status} value={status}>
-                        {statusLabel(status)}
-                      </option>
-                    ))}
-                  </select>
-                  <SubmitButton tone="white" className="w-full sm:w-auto">更新狀態</SubmitButton>
-                </form>
-              </div>
-            ),
-          },
+          ...(canManageAppointments
+            ? [
+                {
+                  key: "actions",
+                  label: "操作",
+                  render: (row: Appointment) => (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start">
+                      <button
+                        type="button"
+                        className="mobile-tap w-full rounded-xl bg-champagne px-3 py-2 font-semibold text-plum sm:w-auto"
+                        onClick={() => setEditingId(row.id)}
+                      >
+                        編輯
+                      </button>
+                      <form action={updateAppointmentStatus} className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                        <input type="hidden" name="id" value={row.id} />
+                        <select
+                          name="status"
+                          className="mobile-tap w-full rounded-xl border border-champagne px-2 py-2 sm:w-40"
+                          defaultValue={row.status}
+                        >
+                          {appointmentStatuses.map((status) => (
+                            <option key={status} value={status}>
+                              {statusLabel(status)}
+                            </option>
+                          ))}
+                        </select>
+                        <SubmitButton tone="white" className="w-full sm:w-auto">更新狀態</SubmitButton>
+                      </form>
+                    </div>
+                  ),
+                },
+              ]
+            : []),
         ]}
       />
     </AppShell>
@@ -1969,6 +1984,10 @@ export function ServicesView({
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = data.services.find((service) => service.id === editingId);
+  const role = data.currentMember?.role ?? "staff";
+  const servicesScope = permissionScope(role, "services");
+  const canManageServices = servicesScope === "manage";
+  const servicesAccessMessage = moduleAccessMessage(role, "services");
 
   useEffect(() => {
     if (notice?.kind === "success") {
@@ -1983,14 +2002,23 @@ export function ServicesView({
       {...shellProps(data)}
     >
       <NoticeBanner notice={notice} />
-      <div className="mb-5">
-        <ServiceForm
-          key={editing?.id ?? "new"}
-          service={editing}
-          categories={data.categories}
-          onCancel={editing ? () => setEditingId(null) : undefined}
-        />
-      </div>
+      {canManageServices ? (
+        <div className="mb-5">
+          <ServiceForm
+            key={editing?.id ?? "new"}
+            service={editing}
+            categories={data.categories}
+            onCancel={editing ? () => setEditingId(null) : undefined}
+          />
+        </div>
+      ) : (
+        <div className="mb-5">
+          <EmptyState
+            title={servicesScope === "view" ? "服務目前僅供查看" : "你的角色無法管理服務"}
+            action={servicesAccessMessage}
+          />
+        </div>
+      )}
       <ModuleTable
         rows={data.services}
         searchPlaceholder="搜尋服務名稱、分類、說明"
@@ -2040,32 +2068,36 @@ export function ServicesView({
                 <StatusPill>停用</StatusPill>
               ),
           },
-          {
-            key: "actions",
-            label: "操作",
-            render: (row) => (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="mobile-tap rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
-                  onClick={() => setEditingId(row.id)}
-                >
-                  編輯
-                </button>
-                <form action={setServiceEnabled}>
-                  <input type="hidden" name="id" value={row.id} />
-                  <input
-                    type="hidden"
-                    name="enabled"
-                    value={row.enabled ? "false" : "true"}
-                  />
-                  <SubmitButton tone="white" className="w-full sm:w-auto">
-                    {row.enabled ? "停用" : "啟用"}
-                  </SubmitButton>
-                </form>
-              </div>
-            ),
-          },
+          ...(canManageServices
+            ? [
+                {
+                  key: "actions",
+                  label: "操作",
+                  render: (row: ServiceItem) => (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="mobile-tap rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
+                        onClick={() => setEditingId(row.id)}
+                      >
+                        編輯
+                      </button>
+                      <form action={setServiceEnabled}>
+                        <input type="hidden" name="id" value={row.id} />
+                        <input
+                          type="hidden"
+                          name="enabled"
+                          value={row.enabled ? "false" : "true"}
+                        />
+                        <SubmitButton tone="white" className="w-full sm:w-auto">
+                          {row.enabled ? "停用" : "啟用"}
+                        </SubmitButton>
+                      </form>
+                    </div>
+                  ),
+                },
+              ]
+            : []),
         ]}
       />
     </AppShell>
@@ -2196,7 +2228,10 @@ export function InventoryView({
   notice?: Notice;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
-  const canManageInventory = can(data.currentMember?.role ?? "staff", "inventory");
+  const role = data.currentMember?.role ?? "staff";
+  const canManageInventory = canManage(role, "inventory");
+  const inventoryScope = permissionScope(role, "inventory");
+  const inventoryAccessMessage = moduleAccessMessage(role, "inventory");
   const editingItem = data.inventory.find((item) => item.id === editingId);
   const hasInventory = data.inventory.length > 0;
   const inventoryRows = [...data.inventory].sort((a, b) => {
@@ -2260,8 +2295,8 @@ export function InventoryView({
             )
           ) : (
             <EmptyState
-              title="你沒有庫存管理權限"
-              action="目前仍可查看庫存與異動紀錄；若要新增品項或記錄進出貨，請由店主或管理員調整權限。"
+              title={inventoryScope === "view" ? "庫存目前僅供查看" : "你沒有庫存管理權限"}
+              action={inventoryAccessMessage}
             />
           )}
           <div className="card p-5">
@@ -2395,6 +2430,10 @@ export function CheckoutView({
   data: AppData;
   notice?: Notice;
 }) {
+  const role = data.currentMember?.role ?? "staff";
+  const canManageCheckout = canManage(role, "checkout");
+  const checkoutScope = permissionScope(role, "checkout");
+  const checkoutAccessMessage = moduleAccessMessage(role, "checkout");
   const activeStaff = data.staff.filter((member) => member.active);
   const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
   const totalOutstanding = data.orders.reduce(
@@ -2421,7 +2460,7 @@ export function CheckoutView({
           />
         </div>
       ) : null}
-      {!data.customers.length || !activeStaff.length ? (
+      {canManageCheckout && (!data.customers.length || !activeStaff.length) ? (
         <div className="mb-5">
           <EmptyState
             title={
@@ -2437,15 +2476,25 @@ export function CheckoutView({
           />
         </div>
       ) : null}
+      {!canManageCheckout ? (
+        <div className="mb-5">
+          <EmptyState
+            title={checkoutScope === "view" ? "訂單 / 結帳目前僅供查看" : "你的角色無法使用結帳"}
+            action={checkoutAccessMessage}
+          />
+        </div>
+      ) : null}
       <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="訂單總數" value={`${data.orders.length}`} hint="目前工作區的所有訂單" />
         <MetricCard label="待收金額" value={currency.format(totalOutstanding)} hint="所有未結清訂單的合計欠款" />
         <MetricCard label="已結清" value={`${paidOrders}`} hint="付款金額已覆蓋總額" />
         <MetricCard label="部分付款 / 未收" value={`${partialOrders + unpaidOrders}`} hint="仍有待收金額的訂單" />
       </div>
-      <div className="mb-5">
-        <OrderForm key={orderFormKey} data={data} />
-      </div>
+      {canManageCheckout ? (
+        <div className="mb-5">
+          <OrderForm key={orderFormKey} data={data} />
+        </div>
+      ) : null}
       <ModuleTable
         rows={data.orders}
         searchPlaceholder="搜尋訂單、客戶、付款方式"
@@ -2483,16 +2532,20 @@ export function CheckoutView({
                     <span>
                       {line.name} x{line.quantity}
                     </span>
-                    {line.id ? (
+                    {canManageCheckout && line.id ? (
                       <form action={removeOrderLine} className="self-start sm:self-auto">
                         <input type="hidden" name="order_id" value={row.id} />
                         <input type="hidden" name="line_id" value={line.id} />
-                  <SubmitButton tone="white" className="w-full sm:w-auto">移除</SubmitButton>
+                        <SubmitButton tone="white" className="w-full sm:w-auto">移除</SubmitButton>
                       </form>
                     ) : null}
                   </div>
                 ))}
-                <AddLineForm key={`${row.id}:${row.lines.length}`} order={row} services={data.services} />
+                {canManageCheckout ? (
+                  <AddLineForm key={`${row.id}:${row.lines.length}`} order={row} services={data.services} />
+                ) : (
+                  <p className="mt-3 text-xs text-ink/60">你目前只能查看明細，新增或移除明細會隱藏。</p>
+                )}
                 <p className="mt-3 text-xs text-ink/60">
                   小計 {currency.format(orderSubtotal(row))} · 折扣 {currency.format(row.discount)} · 小費 {currency.format(row.tip)}
                 </p>
@@ -2558,6 +2611,7 @@ export function StaffView({
   const [draftShiftStaffId, setDraftShiftStaffId] = useState<string | null>(null);
   const editing = data.staff.find((staff) => staff.id === editingId);
   const editingShift = data.shifts.find((shift) => shift.id === editingShiftId);
+  const role = data.currentMember?.role ?? "staff";
   const defaultShiftStaffId =
     editingShift?.staffId ??
     draftShiftStaffId ??
@@ -2565,7 +2619,9 @@ export function StaffView({
     data.staff.find((member) => member.role === "technician" && member.active)?.id ??
     data.staff.find((member) => member.active)?.id ??
     "";
-  const canManageStaff = can(data.currentMember?.role ?? "staff", "staff");
+  const canManageStaff = canManage(role, "staff");
+  const staffScope = permissionScope(role, "staff");
+  const staffAccessMessage = moduleAccessMessage(role, "staff");
   const activeStaff = data.staff.filter((staff) => staff.active).length;
   const inactiveStaff = data.staff.length - activeStaff;
   const technicians = data.staff.filter((staff) => staff.role === "technician" && staff.active).length;
@@ -2598,7 +2654,14 @@ export function StaffView({
             setEditingShiftId(shiftId);
           }}
         />
-      ) : null}
+      ) : (
+        <div className="mb-5">
+          <EmptyState
+            title={staffScope === "view" ? "員工目前僅供查看" : "你的角色無法管理員工"}
+            action={staffAccessMessage}
+          />
+        </div>
+      )}
       <div className="print:hidden">
         {canManageStaff && data.staffInviteFeatureEnabled ? (
           <form action={createStaffInviteAction} className="card p-5">

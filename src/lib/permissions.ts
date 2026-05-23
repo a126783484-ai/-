@@ -42,6 +42,24 @@ const moduleManagers = {
   staff: "店主與管理員",
 } as const satisfies Record<ModuleKey, string>;
 
+const moduleViewCopy = {
+  appointments: "你目前只能查看預約與流程狀態，但新增、編輯與更新狀態會隱藏。",
+  checkout: "你目前只能查看訂單摘要，但開單、改單、收款與新增明細會隱藏。",
+  customers: "你目前只能查看客戶資料，但新增、編輯與刪除會隱藏。",
+  inventory: "你目前只能查看庫存與異動紀錄，但新增品項與記錄異動會隱藏。",
+  services: "你目前只能查看服務清單與價格，但新增、編輯與停用會隱藏。",
+  staff: "你目前只能查看員工資料與班表，但新增員工、調整角色與排班會隱藏。",
+} as const satisfies Record<ModuleKey, string>;
+
+const moduleNoneCopy = {
+  appointments: "這個區塊仍保留資料摘要，但新增、編輯與更新狀態控制會隱藏。",
+  checkout: "這個區塊仍保留訂單摘要，但開單、改單、收款與新增明細控制會隱藏。",
+  customers: "這個區塊仍保留客戶摘要，但新增、編輯與刪除控制會隱藏。",
+  inventory: "這個區塊仍保留庫存摘要，但新增品項與記錄異動控制會隱藏。",
+  services: "這個區塊仍保留服務摘要，但新增、編輯與停用控制會隱藏。",
+  staff: "這個區塊仍保留員工摘要，但新增員工、調整角色與排班控制會隱藏。",
+} as const satisfies Record<ModuleKey, string>;
+
 export function permissionScope(role: Role, module: ModuleKey) {
   if (canManage(role, module)) return "manage" as const;
   if (can(role, module)) return "view" as const;
@@ -54,7 +72,7 @@ export function moduleAccessMessage(role: Role, module: ModuleKey) {
 
   if (scope === "manage") return "";
   if (scope === "view") {
-    return `你目前只能查看${label}，但只有${moduleManagers[module]}可以新增、編輯或刪除。`;
+    return `${moduleViewCopy[module]} 只有${moduleManagers[module]}可以管理${label}。`;
   }
-  return `你的角色目前無法存取${label}；這個區塊仍會顯示為參考資料，但編輯控制會隱藏。`;
+  return `你的角色目前無法存取${label}；${moduleNoneCopy[module]} 只有${moduleManagers[module]}可以管理${label}。`;
 }
