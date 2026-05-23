@@ -127,20 +127,22 @@ function SubmitButton({
   children,
   tone = "plum",
   disabled = false,
+  className = "",
 }: {
   children: React.ReactNode;
   tone?: "plum" | "white" | "danger";
   disabled?: boolean;
+  className?: string;
 }) {
   const { pending } = useFormStatus();
-  const className =
+  const buttonClassName =
     tone === "danger"
       ? "mobile-tap rounded-2xl bg-rose px-4 py-3 font-semibold text-white disabled:opacity-60"
       : tone === "white"
         ? "mobile-tap rounded-2xl bg-white px-4 py-3 font-semibold text-plum disabled:opacity-60"
       : "mobile-tap rounded-2xl bg-plum px-4 py-3 font-semibold text-white disabled:opacity-60";
   return (
-    <button type="submit" disabled={pending || disabled} className={className}>
+    <button type="submit" disabled={pending || disabled} className={`${buttonClassName} ${className}`.trim()}>
       {pending ? "儲存中…" : children}
     </button>
   );
@@ -349,7 +351,7 @@ function CustomerForm({
         {customer && onCancel ? (
           <button
             type="button"
-            className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
+            className="mobile-tap w-full rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum sm:w-auto"
             onClick={onCancel}
           >
             取消編輯
@@ -452,7 +454,7 @@ function CustomerForm({
         </label>
       </div>
       <div className="mt-4 flex flex-wrap gap-3">
-        <SubmitButton>{customer ? "更新客戶" : "建立客戶"}</SubmitButton>
+        <SubmitButton className="w-full sm:w-auto">{customer ? "更新客戶" : "建立客戶"}</SubmitButton>
       </div>
     </form>
   );
@@ -477,7 +479,7 @@ function ServiceForm({
         {service && onCancel ? (
           <button
             type="button"
-            className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
+            className="mobile-tap w-full rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum sm:w-auto"
             onClick={onCancel}
           >
             取消編輯
@@ -563,7 +565,7 @@ function ServiceForm({
         </label>
       </div>
       <div className="mt-4">
-        <SubmitButton>{service ? "更新服務" : "建立服務"}</SubmitButton>
+        <SubmitButton className="w-full sm:w-auto">{service ? "更新服務" : "建立服務"}</SubmitButton>
       </div>
     </form>
   );
@@ -602,7 +604,7 @@ function AppointmentForm({
         {appointment && onCancel ? (
           <button
             type="button"
-            className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
+            className="mobile-tap w-full rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum sm:w-auto"
             onClick={onCancel}
           >
             取消編輯
@@ -621,13 +623,13 @@ function AppointmentForm({
             目前缺少：{missingDependencyLabels.join("、")}。先建立這些資料後，才能建立或更新預約。
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-sm font-semibold">
-            <Link className="mobile-tap rounded-xl bg-white px-3 py-2 text-plum" href="/customers">
+            <Link className="mobile-tap w-full rounded-xl bg-white px-3 py-2 text-center text-plum sm:w-auto" href="/customers">
               前往客戶
             </Link>
-            <Link className="mobile-tap rounded-xl bg-white px-3 py-2 text-plum" href="/services">
+            <Link className="mobile-tap w-full rounded-xl bg-white px-3 py-2 text-center text-plum sm:w-auto" href="/services">
               前往服務
             </Link>
-            <Link className="mobile-tap rounded-xl bg-white px-3 py-2 text-plum" href="/staff">
+            <Link className="mobile-tap w-full rounded-xl bg-white px-3 py-2 text-center text-plum sm:w-auto" href="/staff">
               前往員工
             </Link>
           </div>
@@ -810,7 +812,7 @@ function AppointmentForm({
         </div>
       </div>
       <div className="mt-4">
-        <SubmitButton disabled={!dependencySummary.ready}>{appointment ? "更新預約" : "建立預約"}</SubmitButton>
+        <SubmitButton className="w-full sm:w-auto" disabled={!dependencySummary.ready}>{appointment ? "更新預約" : "建立預約"}</SubmitButton>
       </div>
     </form>
   );
@@ -901,7 +903,7 @@ function OrderForm({ data }: { data: AppData }) {
         <h2 className="text-lg font-bold text-plum">新增訂單 / 預約轉結帳</h2>
         <button
           type="button"
-          className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
+          className="mobile-tap w-full rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum sm:w-auto"
           onClick={resetDraft}
         >
           清空草稿
@@ -1118,7 +1120,7 @@ function OrderForm({ data }: { data: AppData }) {
         </div>
       </div>
       <div className="mt-4">
-        <SubmitButton disabled={!canSubmit}>建立訂單</SubmitButton>
+        <SubmitButton className="w-full sm:w-auto" disabled={!canSubmit}>建立訂單</SubmitButton>
       </div>
       {!canSubmit ? (
         <p className="mt-2 text-sm text-ink/60">
@@ -1181,7 +1183,7 @@ function AddLineForm({
         onChange={(event) => setCustomPrice(Math.max(0, Number(event.target.value) || 0))}
       />
       <input type="hidden" name="custom_line_quantity" value="1" />
-      <SubmitButton tone="white" disabled={!canSubmit}>
+      <SubmitButton tone="white" className="w-full sm:w-auto" disabled={!canSubmit}>
         新增明細
       </SubmitButton>
       {!canSubmit ? (
@@ -1251,7 +1253,7 @@ function InventoryMovementForm({ data }: { data: AppData }) {
         </label>
       </div>
       <div className="mt-4">
-        <SubmitButton>記錄異動</SubmitButton>
+        <SubmitButton className="w-full sm:w-auto">記錄異動</SubmitButton>
       </div>
     </form>
   );
@@ -1279,7 +1281,7 @@ function InventoryItemForm({
         {item && onCancel ? (
           <button
             type="button"
-            className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
+            className="mobile-tap w-full rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum sm:w-auto"
             onClick={onCancel}
           >
             取消編輯
@@ -1366,7 +1368,7 @@ function InventoryItemForm({
         </label>
       </div>
       <div className="mt-4">
-        <SubmitButton>{item ? "更新品項" : "建立品項"}</SubmitButton>
+        <SubmitButton className="w-full sm:w-auto">{item ? "更新品項" : "建立品項"}</SubmitButton>
       </div>
     </form>
   );
@@ -1457,7 +1459,7 @@ function StaffForm({ staff }: { staff?: StaffMember }) {
         ) : null}
       </div>
       <div className="mt-4">
-        <SubmitButton>{staff ? "儲存員工" : "新增並寄送邀請"}</SubmitButton>
+        <SubmitButton className="w-full sm:w-auto">{staff ? "儲存員工" : "新增並寄送邀請"}</SubmitButton>
       </div>
     </form>
   );
@@ -1489,7 +1491,7 @@ function ShiftForm({
           <p className="text-sm text-ink/60">新班表會先列出在職員工；停用員工會保留在下方，方便編輯既有班表。</p>
         </div>
         {shift ? (
-          <button type="button" className="mobile-tap rounded-2xl bg-white px-4 py-2 font-semibold text-plum" onClick={onReset}>
+          <button type="button" className="mobile-tap w-full rounded-2xl bg-white px-4 py-2 font-semibold text-plum sm:w-auto" onClick={onReset}>
             取消編輯
           </button>
         ) : null}
@@ -1571,7 +1573,7 @@ function ShiftForm({
         </label>
       </div>
       <div className="mt-4">
-        <SubmitButton>{shift ? "儲存班表" : "建立班表"}</SubmitButton>
+        <SubmitButton className="w-full sm:w-auto">{shift ? "儲存班表" : "建立班表"}</SubmitButton>
       </div>
     </form>
   );
@@ -1607,7 +1609,7 @@ function SetupGuide({
           <Link
             key={link.href}
             href={link.href}
-            className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
+            className="mobile-tap w-full rounded-2xl bg-white px-4 py-2 text-center text-sm font-semibold text-plum sm:w-auto"
           >
             {link.label}
           </Link>
@@ -1656,7 +1658,7 @@ export function DashboardView({ data }: { data: AppData }) {
                   <strong className="block text-plum">{invite.displayName}</strong>
                   <p className="text-sm text-ink/60">{invite.email} ｜ {staffRoleSelectLabel(invite.role)}</p>
                 </div>
-                <Link href={buildStaffInvitePath(invite.token)} className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-center font-semibold text-white">
+                <Link href={buildStaffInvitePath(invite.token)} className="mobile-tap w-full rounded-2xl bg-plum px-4 py-2 text-center font-semibold text-white sm:w-auto">
                   開啟邀請
                 </Link>
               </div>
@@ -1926,19 +1928,19 @@ export function AppointmentsView({
             key: "actions",
             label: "操作",
             render: (row) => (
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start">
                 <button
                   type="button"
-                  className="mobile-tap rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
+                  className="mobile-tap w-full rounded-xl bg-champagne px-3 py-2 font-semibold text-plum sm:w-auto"
                   onClick={() => setEditingId(row.id)}
                 >
                   編輯
                 </button>
-                <form action={updateAppointmentStatus} className="flex flex-col gap-2 sm:flex-row">
+                <form action={updateAppointmentStatus} className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                   <input type="hidden" name="id" value={row.id} />
                   <select
                     name="status"
-                    className="mobile-tap w-full rounded-xl border border-champagne px-2 py-2 sm:w-auto"
+                    className="mobile-tap w-full rounded-xl border border-champagne px-2 py-2 sm:w-40"
                     defaultValue={row.status}
                   >
                     {appointmentStatuses.map((status) => (
@@ -1947,7 +1949,7 @@ export function AppointmentsView({
                       </option>
                     ))}
                   </select>
-                  <SubmitButton tone="white">更新狀態</SubmitButton>
+                  <SubmitButton tone="white" className="w-full sm:w-auto">更新狀態</SubmitButton>
                 </form>
               </div>
             ),
@@ -2057,7 +2059,7 @@ export function ServicesView({
                     name="enabled"
                     value={row.enabled ? "false" : "true"}
                   />
-                  <SubmitButton tone="white">
+                  <SubmitButton tone="white" className="w-full sm:w-auto">
                     {row.enabled ? "停用" : "啟用"}
                   </SubmitButton>
                 </form>
@@ -2165,17 +2167,17 @@ export function CustomersView({
             key: "actions",
             label: "操作",
             render: (row) => (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                 <button
                   type="button"
-                  className="mobile-tap rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
+                  className="mobile-tap w-full rounded-xl bg-champagne px-3 py-2 font-semibold text-plum sm:w-auto"
                   onClick={() => setEditingId(row.id)}
                 >
                   編輯
                 </button>
-                <form action={deleteOrArchiveCustomer}>
+                <form action={deleteOrArchiveCustomer} className="w-full sm:w-auto">
                   <input type="hidden" name="id" value={row.id} />
-                  <SubmitButton tone="danger">刪除 / 封存</SubmitButton>
+                  <SubmitButton tone="danger" className="w-full sm:w-auto">刪除 / 封存</SubmitButton>
                 </form>
               </div>
             ),
@@ -2329,7 +2331,7 @@ export function InventoryView({
                     render: (row: InventoryItem) => (
                       <button
                         type="button"
-                        className="mobile-tap rounded-xl bg-white px-3 py-2 text-sm font-semibold text-plum"
+                        className="mobile-tap w-full rounded-xl bg-white px-3 py-2 text-sm font-semibold text-plum sm:w-auto"
                         onClick={() => setEditingId(row.id)}
                       >
                         編輯
@@ -2485,7 +2487,7 @@ export function CheckoutView({
                       <form action={removeOrderLine} className="self-start sm:self-auto">
                         <input type="hidden" name="order_id" value={row.id} />
                         <input type="hidden" name="line_id" value={line.id} />
-                        <SubmitButton tone="white">移除</SubmitButton>
+                  <SubmitButton tone="white" className="w-full sm:w-auto">移除</SubmitButton>
                       </form>
                     ) : null}
                   </div>
@@ -2659,7 +2661,7 @@ export function StaffView({
                   </div>
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <code className="break-all rounded-2xl bg-white px-3 py-2 text-xs text-ink/70">{buildStaffInvitePath(invite.token)}</code>
-                    <Link href={buildStaffInvitePath(invite.token)} className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-center font-semibold text-white">
+                    <Link href={buildStaffInvitePath(invite.token)} className="mobile-tap w-full rounded-2xl bg-plum px-4 py-2 text-center font-semibold text-white sm:w-auto">
                       開啟邀請
                     </Link>
                   </div>
@@ -2827,10 +2829,10 @@ export function StaffView({
                   key: "actions",
                   label: "操作",
                   render: (row: StaffMember) => (
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                       <button
                         type="button"
-                        className="mobile-tap rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
+                        className="mobile-tap w-full rounded-xl bg-champagne px-3 py-2 font-semibold text-plum sm:w-auto"
                         onClick={() => {
                           setDraftShiftStaffId(null);
                           setEditingId(row.id);
@@ -2840,7 +2842,7 @@ export function StaffView({
                       </button>
                       <button
                         type="button"
-                        className="mobile-tap rounded-xl bg-white px-3 py-2 font-semibold text-plum"
+                        className="mobile-tap w-full rounded-xl bg-white px-3 py-2 font-semibold text-plum sm:w-auto"
                         onClick={() => {
                           setEditingId(null);
                           setEditingShiftId(null);
@@ -3423,7 +3425,7 @@ export function SettingsView({
           </div>
         </div>
         <div className="mt-5">
-          <SubmitButton>儲存設定</SubmitButton>
+          <SubmitButton className="w-full sm:w-auto">儲存設定</SubmitButton>
         </div>
       </form>
     </AppShell>
