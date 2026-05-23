@@ -365,7 +365,7 @@ function ServiceForm({
             defaultValue={service?.description}
           />
         </label>
-        <label className="flex items-center gap-3 rounded-2xl bg-blush p-4 font-semibold text-plum">
+        <label className="flex items-start gap-3 rounded-2xl bg-blush p-4 font-semibold text-plum">
           <input
             type="checkbox"
             name="enabled"
@@ -373,7 +373,7 @@ function ServiceForm({
           />{" "}
           啟用服務
         </label>
-        <label className="flex items-center gap-3 rounded-2xl bg-blush p-4 font-semibold text-plum">
+        <label className="flex items-start gap-3 rounded-2xl bg-blush p-4 font-semibold text-plum">
           <input
             type="checkbox"
             name="is_add_on"
@@ -435,13 +435,13 @@ function AppointmentForm({
             目前缺少：{missingDependencyLabels.join("、")}。先建立這些資料後，才能建立或更新預約。
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-sm font-semibold">
-            <Link className="rounded-xl bg-white px-3 py-2 text-plum" href="/customers">
+            <Link className="mobile-tap rounded-xl bg-white px-3 py-2 text-plum" href="/customers">
               前往客戶
             </Link>
-            <Link className="rounded-xl bg-white px-3 py-2 text-plum" href="/services">
+            <Link className="mobile-tap rounded-xl bg-white px-3 py-2 text-plum" href="/services">
               前往服務
             </Link>
-            <Link className="rounded-xl bg-white px-3 py-2 text-plum" href="/staff">
+            <Link className="mobile-tap rounded-xl bg-white px-3 py-2 text-plum" href="/staff">
               前往員工
             </Link>
           </div>
@@ -566,7 +566,7 @@ function AppointmentForm({
                 .map((service) => (
                   <label
                     key={service.id}
-                    className="flex items-center gap-3 rounded-2xl bg-blush p-3"
+                    className="flex items-start gap-3 rounded-2xl bg-blush p-3"
                   >
                     <input
                       type="checkbox"
@@ -769,10 +769,10 @@ function OrderForm({ data }: { data: AppData }) {
         <fieldset className="md:col-span-2 rounded-3xl border border-champagne p-4">
           <legend className="px-2 text-sm font-bold text-plum">服務明細</legend>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {enabledServices.length ? enabledServices.map((service) => (
+              {enabledServices.length ? enabledServices.map((service) => (
                 <label
                   key={service.id}
-                  className="flex items-center gap-3 rounded-2xl bg-blush p-3"
+                  className="flex items-start gap-3 rounded-2xl bg-blush p-3"
                 >
                   <input
                     type="checkbox"
@@ -944,7 +944,7 @@ function AddLineForm({
       <input type="hidden" name="order_id" value={order.id} />
       <select
         name="line_service_ids"
-        className="mobile-tap w-full rounded-xl border border-champagne p-2"
+        className="mobile-tap w-full rounded-xl border border-champagne p-3"
       >
         <option value="">選擇服務</option>
         {services
@@ -957,14 +957,14 @@ function AddLineForm({
       </select>
       <input
         name="custom_line_name"
-        className="mobile-tap w-full rounded-xl border border-champagne p-2"
+        className="mobile-tap w-full rounded-xl border border-champagne p-3"
         placeholder="或輸入自訂項目"
       />
       <input
         type="number"
         min="0"
         name="custom_line_price"
-        className="mobile-tap w-full rounded-xl border border-champagne p-2"
+        className="mobile-tap w-full rounded-xl border border-champagne p-3"
         defaultValue={0}
       />
       <input type="hidden" name="custom_line_quantity" value="1" />
@@ -1317,7 +1317,7 @@ function ShiftForm({
             defaultValue={defaultEnd}
           />
         </label>
-        <label className="flex items-center gap-3 rounded-2xl bg-white p-4 font-semibold text-plum md:col-span-2">
+        <label className="flex items-start gap-3 rounded-2xl bg-white p-4 font-semibold text-plum md:col-span-2">
           <input
             type="checkbox"
             name="leave"
@@ -1465,7 +1465,7 @@ export function DashboardView({ data }: { data: AppData }) {
       </section>
       <section className="mt-5 grid gap-5 xl:grid-cols-[1.25fr_.75fr]">
         <div className="card p-5">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg font-bold text-plum">今日重點：即將到店客人</h2>
             <StatusPill tone="amber">
               取消率 {(metrics.cancellationRate * 100).toFixed(0)}% / 未到率{" "}
@@ -1486,7 +1486,7 @@ export function DashboardView({ data }: { data: AppData }) {
                     key={appointment.id}
                     className="rounded-3xl bg-blush p-4"
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <strong>
                         {formatTime(appointment.startAt)}{" "}
                         {customer?.name ?? "未命名客戶"}
@@ -1534,9 +1534,9 @@ export function DashboardView({ data }: { data: AppData }) {
               metrics.technicianRevenue.map((item, index) => (
                 <div
                   key={`${item.name}-${index}`}
-                  className="flex items-center justify-between rounded-2xl bg-white p-4"
+                  className="flex flex-col gap-2 rounded-2xl bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <span>
+                  <span className="min-w-0 break-words">
                     {item.name}
                     <small className="ml-2 text-ink/45">
                       服務 {item.services} 次
@@ -1560,9 +1560,9 @@ export function DashboardView({ data }: { data: AppData }) {
               metrics.serviceRanking.map((item, index) => (
                 <div
                   key={`${item.name}-${index}`}
-                  className="flex items-center justify-between rounded-2xl bg-white p-4"
+                  className="flex flex-col gap-2 rounded-2xl bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <span>{item.name}</span>
+                  <span className="min-w-0 break-words">{item.name}</span>
                   <StatusPill tone="plum">{item.count} 筆</StatusPill>
                 </div>
               ))
@@ -1682,6 +1682,7 @@ export function AppointmentsView({
             render: (row) => (
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                 <button
+                  type="button"
                   className="mobile-tap rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
                   onClick={() => setEditingId(row.id)}
                 >
@@ -1797,6 +1798,7 @@ export function ServicesView({
             render: (row) => (
               <div className="flex flex-wrap gap-2">
                 <button
+                  type="button"
                   className="mobile-tap rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
                   onClick={() => setEditingId(row.id)}
                 >
@@ -1919,6 +1921,7 @@ export function CustomersView({
             render: (row) => (
               <div className="flex flex-wrap gap-2">
                 <button
+                  type="button"
                   className="mobile-tap rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
                   onClick={() => setEditingId(row.id)}
                 >
@@ -2202,13 +2205,13 @@ export function CheckoutView({
                 {row.lines.map((line) => (
                   <div
                     key={line.id ?? `${line.name}-${line.serviceId}`}
-                    className="mb-2 flex items-center justify-between gap-2"
+                    className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <span>
                       {line.name} x{line.quantity}
                     </span>
                     {line.id ? (
-                      <form action={removeOrderLine}>
+                      <form action={removeOrderLine} className="self-start sm:self-auto">
                         <input type="hidden" name="order_id" value={row.id} />
                         <input type="hidden" name="line_id" value={line.id} />
                         <SubmitButton tone="white">移除</SubmitButton>
@@ -2401,6 +2404,7 @@ export function StaffView({
           </div>
           {canManageStaff && editing ? (
             <button
+              type="button"
               className="mobile-tap mt-4 rounded-2xl bg-white font-semibold text-plum"
               onClick={() => setEditingId(null)}
             >
@@ -2453,7 +2457,7 @@ export function StaffView({
                       {shift.leave ? <StatusPill tone="amber">休息</StatusPill> : <StatusPill tone="sage">排班中</StatusPill>}
                       <button
                         type="button"
-                        className="rounded-xl bg-white px-3 py-2 font-semibold text-plum"
+                        className="mobile-tap rounded-xl bg-white px-3 py-2 font-semibold text-plum"
                         onClick={() => {
                           setDraftShiftStaffId(null);
                           setEditingShiftId(shift.id);
@@ -2537,7 +2541,8 @@ export function StaffView({
                   render: (row: StaffMember) => (
                     <div className="flex flex-wrap gap-2">
                       <button
-                        className="rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
+                        type="button"
+                        className="mobile-tap rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
                         onClick={() => {
                           setDraftShiftStaffId(null);
                           setEditingId(row.id);
@@ -2546,7 +2551,8 @@ export function StaffView({
                         編輯
                       </button>
                       <button
-                        className="rounded-xl bg-white px-3 py-2 font-semibold text-plum"
+                        type="button"
+                        className="mobile-tap rounded-xl bg-white px-3 py-2 font-semibold text-plum"
                         onClick={() => {
                           setEditingId(null);
                           setEditingShiftId(null);
@@ -2730,7 +2736,7 @@ export function ReportsView({ data }: { data: AppData }) {
             sources.map((source) => (
               <div
                 key={source}
-                className="mt-3 flex justify-between rounded-2xl bg-white p-4"
+                className="mt-3 flex flex-col gap-2 rounded-2xl bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <span>{source}</span>
                 <StatusPill>
@@ -2755,9 +2761,9 @@ export function ReportsView({ data }: { data: AppData }) {
             metrics.serviceRanking.map((item, index) => (
               <div
                 key={`${item.name}-${index}`}
-                className="mt-3 flex justify-between rounded-2xl bg-white p-4"
+                className="mt-3 flex flex-col gap-2 rounded-2xl bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
               >
-                <span>{item.name}</span>
+                <span className="min-w-0 break-words">{item.name}</span>
                 <strong>{item.count}</strong>
               </div>
             ))
