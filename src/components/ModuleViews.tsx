@@ -34,6 +34,7 @@ import { dashboardMetrics } from "@/lib/analytics";
 import {
   orderFinancialSummary,
   orderAgeInDays,
+  orderLineSummary,
   orderPaymentState,
   orderStatusLabel,
   orderStatusTone,
@@ -49,7 +50,7 @@ import { getWorkspaceSetupGuide, isWorkspaceEmpty } from "@/lib/app-data-client"
 import type { Appointment, Customer, InventoryItem, Order, ServiceItem, Shift, StaffMember } from "@/lib/types";
 import { buildStaffInvitePath } from "@/lib/staff-invites";
 import { formatInventoryMovementQuantity, formatInventoryStock } from "@/lib/inventory-feedback";
-import { currency, formatDate, formatTime } from "@/lib/utils";
+import { currency, formatDate, formatDateTime, formatTime } from "@/lib/utils";
 
 const liveNotice =
   "正式資料模式：資料由 Supabase Auth + RLS 依 workspace 隔離。";
@@ -2986,6 +2987,39 @@ export function ReportsView({ data }: { data: AppData }) {
     )
     .slice(0, 5);
   const followUpCount = outstandingOrders.length + followUpCustomers.length;
+  const paidOrders = data.orders.filter((order) => orderPaymentState(order) === "paid").length;
+  const partialOrders = data.orders.filter((order) => orderPaymentState(order) === "partial").length;
+  const unpaidOrders = data.orders.filter((order) => orderPaymentState(order) === "unpaid").length;
+  const reportMonthLabel = new Intl.DateTimeFormat("zh-TW", {
+    year: "numeric",
+    month: "long",
+  }).format(now);
+  const reportSummaryText = [
+    `${data.workspace.name}｜${reportMonthLabel}報表摘要`,
+    `產出時間：${formatDateTime(now.toISOString())}`,
+    `月營收：${currency.format(metrics.monthRevenue)} · 客單價：${currency.format(avg)}`,
+    `待收金額：${currency.format(metrics.pendingPayment)} · 待跟進：${followUpCount} 筆`,
+    `訂單狀態：已結清 ${paidOrders} / 部分付款 ${partialOrders} / 未收款 ${unpaidOrders}`,
+    topService
+      ? `主力服務：${topService.name}（${topService.count} 次）`
+      : "主力服務：暫無排行",
+    outstandingOrders.length
+      ? `待收款前 ${Math.min(3, outstandingOrders.length)} 筆：${outstandingOrders
+          .slice(0, 3)
+          .map(({ order, outstanding, ageDays }) => {
+            const customer = data.customers.find((item) => item.id === order.customerId);
+            const technician = data.staff.find((item) => item.id === order.technicianId);
+            return `${customer?.name ?? "未命名客戶"}／${technician?.name ?? "未指派"}｜${currency.format(outstanding)}｜${ageDays === 0 ? "今天新增" : `已建立 ${ageDays} 天`}｜${orderLineSummary(order, 2)}`;
+          })
+          .join("；")}`
+      : "待收款前 0 筆：目前沒有待收款訂單",
+    followUpCustomers.length
+      ? `回訪與提醒：${followUpCustomers
+          .slice(0, 3)
+          .map(({ customer, label, detail }) => `${customer.name}｜${label}｜${detail}`)
+          .join("；")}`
+      : "回訪與提醒：目前沒有需要回訪的客戶",
+  ].join("\n");
   const workspaceEmpty = isWorkspaceEmpty(data);
   const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
   return (
@@ -2995,7 +3029,7 @@ export function ReportsView({ data }: { data: AppData }) {
       {...shellProps(data)}
     >
       {setupGuide ? (
-        <div className="mb-5">
+        <div className="mb-5 print:hidden">
           <SetupGuide
             title={setupGuide.title}
             action={setupGuide.action}
@@ -3004,7 +3038,7 @@ export function ReportsView({ data }: { data: AppData }) {
         </div>
       ) : null}
       {workspaceEmpty && !setupGuide ? (
-        <div className="mb-5">
+        <div className="mb-5 print:hidden">
           <SetupGuide
             title="報表會在第一筆營運資料後開始有內容"
             action="先建立服務、客戶與第一筆預約或訂單，這裡就會開始出現營收、排行與來源分析。"
@@ -3016,7 +3050,55 @@ export function ReportsView({ data }: { data: AppData }) {
           />
         </div>
       ) : null}
-      <section className="grid gap-4 md:grid-cols-4">
+      <section className="card p-5 print:border-0 print:bg-transparent print:p-0">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-plum">主管摘要 / 可列印版</h2>
+            <p className="mt-1 text-sm text-ink/60">
+              這一段可以直接列印或複製給店長、老闆或合夥人，保留本月重點與待辦清單。
+            </p>
+          </div>
+          <button
+            type="button"
+            className="mobile-tap rounded-2xl bg-plum px-4 py-2 font-semibold text-white print:hidden"
+            onClick={() => window.print()}
+          >
+            列印報表
+          </button>
+        </div>
+        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-3xl border border-champagne bg-white p-4 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/45">已結清</p>
+              <p className="mt-2 text-2xl font-bold text-plum">{paidOrders}</p>
+              <p className="mt-1 text-xs text-ink/60">付款金額足以覆蓋總額</p>
+            </div>
+            <div className="rounded-3xl border border-champagne bg-white p-4 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/45">部分付款</p>
+              <p className="mt-2 text-2xl font-bold text-plum">{partialOrders}</p>
+              <p className="mt-1 text-xs text-ink/60">已有收款，但仍有待收餘額</p>
+            </div>
+            <div className="rounded-3xl border border-champagne bg-white p-4 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/45">未收款</p>
+              <p className="mt-2 text-2xl font-bold text-plum">{unpaidOrders}</p>
+              <p className="mt-1 text-xs text-ink/60">尚未收到任何金額</p>
+            </div>
+            <div className="rounded-3xl border border-champagne bg-white p-4 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/45">主力服務</p>
+              <p className="mt-2 truncate text-lg font-bold text-plum">
+                {topService ? topService.name : "暫無排行"}
+              </p>
+              <p className="mt-1 text-xs text-ink/60">
+                {topService ? `${topService.count} 次最多` : "建立訂單後會自動出現"}
+              </p>
+            </div>
+          </div>
+          <pre className="overflow-x-auto rounded-3xl border border-champagne bg-white p-4 text-sm leading-6 text-ink/80 whitespace-pre-wrap shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+            {reportSummaryText}
+          </pre>
+        </div>
+      </section>
+      <section className="mt-5 grid gap-4 md:grid-cols-4 print:grid-cols-2">
         <MetricCard
           label="月營收"
           value={currency.format(metrics.monthRevenue)}
@@ -3038,7 +3120,7 @@ export function ReportsView({ data }: { data: AppData }) {
           hint="待收款與回訪名單合計"
         />
       </section>
-      <section className="mt-5 grid gap-5 lg:grid-cols-3">
+      <section className="mt-5 grid gap-5 lg:grid-cols-3 print:grid-cols-1">
         <div className="card p-5 lg:col-span-2">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -3075,12 +3157,21 @@ export function ReportsView({ data }: { data: AppData }) {
                       <p className="mt-1 text-xs text-ink/50">
                         {ageDays === 0 ? "今天新增，先追蹤付款狀態" : `已建立 ${ageDays} 天，建議優先聯絡`}
                       </p>
+                      <p className="mt-2 text-xs text-ink/60">
+                        項目：{orderLineSummary(order, 3)}
+                      </p>
                     </div>
                     <div className="text-right">
                       <div className="text-lg font-bold text-plum">
                         {currency.format(outstanding)}
                       </div>
                       <div className="text-xs text-ink/60">尚欠金額</div>
+                      <div className="mt-2 text-xs text-ink/50">
+                        總額 {currency.format(orderTotal(order))}
+                      </div>
+                      <div className="text-xs text-ink/50">
+                        已收 {currency.format(order.paidAmount)}
+                      </div>
                     </div>
                   </div>
                 );

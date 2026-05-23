@@ -3,6 +3,7 @@ import { orders } from "./seed";
 import {
   orderFinancialSummary,
   orderAgeInDays,
+  orderLineSummary,
   orderPaymentState,
   orderStatusLabel,
   orderStatusTone,
@@ -67,6 +68,21 @@ describe("checkout totals", () => {
       outstanding: 0,
       state: "paid",
     });
+  });
+
+  it("summarizes order lines for print-ready reports", () => {
+    const order = {
+      lines: [
+        { serviceId: "svc1", name: "單色凝膠", quantity: 1, unitPrice: 1200 },
+        { serviceId: "svc2", name: "保養", quantity: 2, unitPrice: 800 },
+        { serviceId: "svc3", name: "卸甲", quantity: 1, unitPrice: 600 },
+        { serviceId: "svc4", name: "加購修型", quantity: 1, unitPrice: 300 },
+      ],
+    };
+
+    expect(orderLineSummary(order)).toBe("單色凝膠 ×1、保養 ×2、卸甲 ×1、+1 項");
+    expect(orderLineSummary({ lines: [] })).toBe("無明細");
+    expect(orderLineSummary(order, 2)).toBe("單色凝膠 ×1、保養 ×2、+2 項");
   });
 
   it("measures how old an order is in whole days for follow-up sorting", () => {

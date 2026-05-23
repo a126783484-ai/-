@@ -58,6 +58,23 @@ export function orderFinancialSummary(
   };
 }
 
+export function orderLineSummary(order: Pick<Order, "lines">, maxLines = 3) {
+  const visibleLines = order.lines.slice(0, maxLines);
+  if (visibleLines.length === 0) {
+    return "無明細";
+  }
+
+  const summary = visibleLines
+    .map((line) => `${line.name} ×${normalizeAmount(line.quantity)}`)
+    .join("、");
+
+  if (order.lines.length > maxLines) {
+    return `${summary}、+${order.lines.length - maxLines} 項`;
+  }
+
+  return summary;
+}
+
 export function resolveOrderStatus(
   order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount">,
   selectedStatus?: OrderStatus | "",
