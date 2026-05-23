@@ -218,8 +218,8 @@ export function getWorkspaceSetupGuide(
       : "這個工作區還有幾個核心資料缺口",
     action:
       missingAreas.length === 1
-        ? `先補 ${missingAreas[0]}，後續頁面就會更完整。`
-        : `目前還缺 ${missingAreas.slice(0, 3).join("、")}${missingAreas.length > 3 ? " 等" : ""}。先從前幾步開始，其他模組就會慢慢有內容。`,
+        ? `先補 ${missingAreas[0]}，這頁就能開始提供更明確的下一步。`
+        : `先從 ${missingAreas.slice(0, 2).join("、")} 開始，其他缺口可以後補；這會最快打開後續頁面的可操作內容。`,
     links,
   };
 }
