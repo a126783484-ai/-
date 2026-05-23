@@ -25,6 +25,7 @@ import { statusLabel, summarizeAppointmentDependencies } from "@/lib/appointment
 import { dashboardMetrics } from "@/lib/analytics";
 import {
   orderFinancialSummary,
+  orderAgeInDays,
   orderPaymentState,
   orderStatusLabel,
   orderStatusTone,
@@ -74,6 +75,15 @@ const staffRoleHelpText =
 const inventoryMovementTypes = ["purchase", "consume", "adjust"] as const;
 type Notice = { kind: "error" | "success"; message: string };
 type LinkAction = { href: string; label: string };
+type FollowUpCustomer = {
+  customer: Customer;
+  tone: "rose" | "sage" | "amber";
+  label: string;
+  detail: string;
+  priority: number;
+  sortKey: string;
+  ageDays: number;
+};
 
 function appointmentStatusTone(status: (typeof appointmentStatuses)[number]) {
   if (status === "confirmed") return "sage" as const;
@@ -147,6 +157,13 @@ function reminderDisplay(value?: string) {
     return { tone: "amber" as const, label: `${formatDate(value)}（今天）` };
   }
   return { tone: "sage" as const, label: formatDate(value) };
+}
+
+function daysSince(value?: string, now = new Date()) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime()) || Number.isNaN(now.getTime())) return null;
+  return Math.floor((now.getTime() - date.getTime()) / 86_400_000);
 }
 
 function namesFromIds(ids: string[], services: ServiceItem[]) {
@@ -2629,8 +2646,9 @@ export function TechnicianView({ data }: { data: AppData }) {
 }
 
 export function ReportsView({ data }: { data: AppData }) {
+  const now = new Date();
   const metrics = dashboardMetrics(
-    new Date(),
+    now,
     data.appointments,
     data.orders,
     data.customers,
@@ -2640,26 +2658,69 @@ export function ReportsView({ data }: { data: AppData }) {
   const avg = data.orders.length
     ? metrics.monthRevenue / data.orders.length
     : 0;
-  const returningRate = data.customers.length
-    ? Math.round((metrics.returningCustomers / data.customers.length) * 100)
-    : 0;
-  const lowStockCount = data.inventory.filter(
-    (item) => item.quantity <= item.lowStockThreshold,
-  ).length;
   const topService = metrics.serviceRanking[0];
-  const inventoryNet = data.inventoryMovements.reduce(
-    (sum, movement) => sum + movement.quantity,
-    0,
-  );
-  const inventoryOutflow = data.inventoryMovements
-    .filter((movement) => movement.quantity < 0)
-    .reduce((sum, movement) => sum + Math.abs(movement.quantity), 0);
+  const outstandingOrders = data.orders
+    .map((order) => ({
+      order,
+      outstanding: outstandingAmount(order),
+      ageDays: orderAgeInDays(order, now),
+    }))
+    .filter((item) => item.outstanding > 0)
+    .sort(
+      (a, b) =>
+        b.outstanding - a.outstanding ||
+        b.ageDays - a.ageDays ||
+        new Date(a.order.createdAt).getTime() - new Date(b.order.createdAt).getTime(),
+    );
+  const followUpCustomers = data.customers
+    .map<FollowUpCustomer | null>((customer) => {
+      const reminder = reminderDisplay(customer.nextReminder);
+      const reminderDays = daysSince(customer.nextReminder, now);
+      if (reminder) {
+        return {
+          customer,
+          tone: reminder.tone,
+          label: reminder.label,
+          detail: `提醒日 ${formatDate(customer.nextReminder!)}`,
+          priority: 0,
+          sortKey: customer.nextReminder ?? "",
+          ageDays: reminderDays ?? 0,
+        };
+      }
+
+      const visitDaysRaw = daysSince(customer.lastVisit, now);
+      if (visitDaysRaw === null) {
+        return null;
+      }
+      const visitDays = Math.max(0, visitDaysRaw);
+
+      const tone =
+        visitDays >= 90 ? ("rose" as const) : visitDays >= 60 ? ("amber" as const) : ("sage" as const);
+      return {
+        customer,
+        tone,
+        label: `${formatDate(customer.lastVisit!)}（最後到店）`,
+        detail: visitDays === 0 ? "今天有回訪紀錄" : `距上次到店 ${visitDays} 天`,
+        priority: 1,
+        sortKey: customer.lastVisit ?? "",
+        ageDays: visitDays ?? 0,
+      };
+    })
+    .filter((item): item is FollowUpCustomer => item !== null)
+    .sort(
+      (a, b) =>
+        a.priority - b.priority ||
+        b.ageDays - a.ageDays ||
+        a.sortKey.localeCompare(b.sortKey),
+    )
+    .slice(0, 5);
+  const followUpCount = outstandingOrders.length + followUpCustomers.length;
   const workspaceEmpty = isWorkspaceEmpty(data);
   const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
   return (
     <AppShell
       title="報表分析"
-      subtitle="日 / 月營收、服務排行、技師排行、回訪率、客單價、來源與庫存消耗分析。"
+      subtitle="先看本月營收與待收，再看服務排行和需要追款、回訪的名單。"
       {...shellProps(data)}
     >
       {setupGuide ? (
@@ -2693,104 +2754,148 @@ export function ReportsView({ data }: { data: AppData }) {
         <MetricCard
           label="客單價"
           value={currency.format(avg)}
-          hint="訂單平均金額"
+          hint="本月每張訂單平均金額"
         />
         <MetricCard
-          label="回訪率"
-          value={`${returningRate}%`}
-          hint="有 lastVisit 的客戶比例"
+          label="待收金額"
+          value={currency.format(metrics.pendingPayment)}
+          hint="所有未結清訂單的合計欠款"
         />
         <MetricCard
-          label="低庫存"
-          value={`${lowStockCount}`}
-          hint="目前低於警戒值的品項"
+          label="待跟進"
+          value={`${followUpCount}`}
+          hint="待收款與回訪名單合計"
         />
+      </section>
+      <section className="mt-5 grid gap-5 lg:grid-cols-3">
+        <div className="card p-5 lg:col-span-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-plum">待收款優先順序</h2>
+              <p className="mt-1 text-sm text-ink/60">
+                先處理金額高、時間又久的欠款，最容易快速回收現金流。
+              </p>
+            </div>
+            <StatusPill tone="amber">{outstandingOrders.length} 筆</StatusPill>
+          </div>
+          {outstandingOrders.length ? (
+            <div className="mt-4 divide-y divide-champagne overflow-hidden rounded-3xl border border-champagne bg-white">
+              {outstandingOrders.slice(0, 5).map(({ order, outstanding, ageDays }, index) => {
+                const customer = data.customers.find((item) => item.id === order.customerId);
+                const technician = data.staff.find((item) => item.id === order.technicianId);
+                const state = orderPaymentState(order);
+                return (
+                  <div
+                    key={order.id}
+                    className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-plum">
+                          #{index + 1} {customer?.name ?? "未命名客戶"}
+                        </span>
+                        <StatusPill tone={orderStatusTone(state)}>
+                          {orderStatusLabel(state)}
+                        </StatusPill>
+                      </div>
+                      <p className="mt-1 text-sm text-ink/60">
+                        {technician?.name ?? "未指派"} · {order.id.slice(0, 8)} · 建立 {formatDate(order.createdAt)}
+                      </p>
+                      <p className="mt-1 text-xs text-ink/50">
+                        {ageDays === 0 ? "今天新增，先追蹤付款狀態" : `已建立 ${ageDays} 天，建議優先聯絡`}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-bold text-plum">
+                        {currency.format(outstanding)}
+                      </div>
+                      <div className="text-xs text-ink/60">尚欠金額</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-4">
+              <EmptyState
+                title="目前沒有待收款訂單"
+                action="所有訂單都已結清時，這裡會保持乾淨；一旦出現部分收款或未收款，就會自動列出優先追款名單。"
+              />
+            </div>
+          )}
+        </div>
+        <div className="card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-plum">回訪與提醒</h2>
+              <p className="mt-1 text-sm text-ink/60">
+                先看逾期提醒，再看長時間未回訪的客戶。
+              </p>
+            </div>
+            <StatusPill tone="sage">{followUpCustomers.length} 人</StatusPill>
+          </div>
+          {followUpCustomers.length ? (
+            <div className="mt-4 space-y-3">
+              {followUpCustomers.map(({ customer, tone, label, detail }) => (
+                <div key={customer.id} className="rounded-2xl border border-champagne bg-white p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-plum">{customer.name}</p>
+                      <p className="mt-1 text-xs text-ink/60">
+                        {customer.phone} · {customer.tier}
+                      </p>
+                    </div>
+                    <StatusPill tone={tone}>{label}</StatusPill>
+                  </div>
+                  <p className="mt-2 text-sm text-ink/60">{detail}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4">
+              <EmptyState
+                title="目前沒有需要回訪的客戶"
+                action="當客戶設定了下次提醒或累積到需要追蹤的回訪紀錄時，這裡會自動列出。"
+              />
+            </div>
+          )}
+        </div>
       </section>
       <section className="mt-5 card p-5">
-        <h2 className="text-lg font-bold text-plum">本月跟進焦點</h2>
-        <div className="mt-3 grid gap-3 md:grid-cols-3">
-          <div className="rounded-2xl bg-white p-4">
-            <div className="text-sm text-ink/60">待收款</div>
-            <div className="mt-1 text-lg font-bold text-plum">
-              {currency.format(metrics.pendingPayment)}
-            </div>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-plum">服務銷售排行</h2>
+            <p className="mt-1 text-sm text-ink/60">
+              先看最常被選擇的項目，方便安排備貨、排班與主打活動。
+            </p>
           </div>
-          <div className="rounded-2xl bg-white p-4">
-            <div className="text-sm text-ink/60">今日待處理</div>
-            <div className="mt-1 text-lg font-bold text-plum">
-              {metrics.upcoming.length} 筆預約
-            </div>
-          </div>
-          <div className="rounded-2xl bg-white p-4">
-            <div className="text-sm text-ink/60">熱門服務</div>
-            <div className="mt-1 text-lg font-bold text-plum">
-              {topService ? `${topService.name} × ${topService.count}` : "暫無資料"}
-            </div>
-          </div>
+          <StatusPill tone="plum">{topService ? `${topService.count} 次最多` : "暫無排行"}</StatusPill>
         </div>
-      </section>
-      <section className="mt-5 grid gap-5 lg:grid-cols-2">
-        <div className="card p-5">
-          <h2 className="text-lg font-bold text-plum">預約來源</h2>
-          {data.appointments.length ? (
-            sources.map((source) => (
-              <div
-                key={source}
-                className="mt-3 flex flex-col gap-2 rounded-2xl bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <span>{source}</span>
-                <StatusPill>
-                  {
-                    data.appointments.filter((item) => item.source === source)
-                      .length
-                  }{" "}
-                  筆
-                </StatusPill>
-              </div>
-            ))
-          ) : (
-            <EmptyState
-              title="目前還沒有可分析的預約來源"
-              action="先建立第一筆預約，來源分析與到店轉換就會自動出現在這裡。"
-            />
-          )}
-        </div>
-        <div className="card p-5">
-          <h2 className="text-lg font-bold text-plum">服務銷售排行</h2>
-          {metrics.serviceRanking.length ? (
-            metrics.serviceRanking.map((item, index) => (
+        {metrics.serviceRanking.length ? (
+          <div className="mt-4 divide-y divide-champagne overflow-hidden rounded-3xl border border-champagne bg-white">
+            {metrics.serviceRanking.slice(0, 5).map((item, index) => (
               <div
                 key={`${item.name}-${index}`}
-                className="mt-3 flex flex-col gap-2 rounded-2xl bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
               >
-                <span className="min-w-0 break-words">{item.name}</span>
-                <strong>{item.count}</strong>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-plum">{index + 1}. {item.name}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-ink/60">被預約 {item.count} 次</p>
+                </div>
+                <StatusPill tone={index === 0 ? "sage" : "amber"}>{item.count} 次</StatusPill>
               </div>
-            ))
-          ) : (
+            ))}
+          </div>
+        ) : (
+          <div className="mt-4">
             <EmptyState
               title="目前還沒有服務排行"
-              action="建立服務與預約後，這裡會自動整理出最常被選擇的項目。"
+              action="建立服務並安排預約或訂單後，這裡會自動整理出最常被選擇的項目。"
             />
-          )}
-        </div>
-      </section>
-      <section className="mt-5 grid gap-4 md:grid-cols-3">
-        <MetricCard
-          label="庫存淨異動"
-          value={inventoryNet.toFixed(2)}
-          hint="入庫與出庫、調整的淨變化"
-        />
-        <MetricCard
-          label="庫存出庫"
-          value={inventoryOutflow.toFixed(2)}
-          hint="扣料與報廢合計"
-        />
-        <MetricCard
-          label="庫存品項"
-          value={`${data.inventory.length}`}
-          hint="現有在庫品項數"
-        />
+          </div>
+        )}
       </section>
     </AppShell>
   );

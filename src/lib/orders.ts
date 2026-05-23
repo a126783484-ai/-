@@ -19,6 +19,15 @@ export function outstandingAmount(order: Pick<Order, "lines" | "discount" | "tip
   return Math.max(0, orderTotal(order) - normalizeAmount(order.paidAmount));
 }
 
+export function orderAgeInDays(order: Pick<Order, "createdAt">, now = new Date()) {
+  const createdAt = new Date(order.createdAt);
+  if (Number.isNaN(createdAt.getTime()) || Number.isNaN(now.getTime())) {
+    return 0;
+  }
+
+  return Math.max(0, Math.floor((now.getTime() - createdAt.getTime()) / 86_400_000));
+}
+
 export function orderPaymentState(
   order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount">,
 ): OrderStatus {

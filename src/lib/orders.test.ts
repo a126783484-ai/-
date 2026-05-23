@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { orders } from "./seed";
 import {
   orderFinancialSummary,
+  orderAgeInDays,
   orderPaymentState,
   orderStatusLabel,
   orderStatusTone,
@@ -66,5 +67,20 @@ describe("checkout totals", () => {
       outstanding: 0,
       state: "paid",
     });
+  });
+
+  it("measures how old an order is in whole days for follow-up sorting", () => {
+    expect(
+      orderAgeInDays(
+        { createdAt: "2026-05-20T08:30:00.000Z" },
+        new Date("2026-05-23T08:30:00.000Z"),
+      ),
+    ).toBe(3);
+    expect(
+      orderAgeInDays(
+        { createdAt: "2026-05-23T08:30:00.000Z" },
+        new Date("2026-05-23T08:31:00.000Z"),
+      ),
+    ).toBe(0);
   });
 });
