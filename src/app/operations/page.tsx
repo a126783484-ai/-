@@ -26,7 +26,7 @@ function SetupGuide({
   links?: Array<{ href: string; label: string }>;
 }) {
   return (
-    <div className="card p-5">
+    <div className="card p-5 print:hidden">
       <h2 className="text-lg font-bold text-plum">{title}</h2>
       <p className="mt-1 text-sm text-ink/60">{action}</p>
       <div className="mt-4 flex flex-wrap gap-2">

@@ -1601,7 +1601,7 @@ function SetupGuide({
   links: LinkAction[];
 }) {
   return (
-    <div className="card p-5">
+    <div className="card p-5 print:hidden">
       <h2 className="text-lg font-bold text-plum">{title}</h2>
       <p className="mt-1 text-sm text-ink/60">{action}</p>
       <div className="mt-4 flex flex-wrap gap-2">
@@ -1839,6 +1839,8 @@ export function AppointmentsView({
   const appointmentsScope = permissionScope(role, "appointments");
   const canManageAppointments = appointmentsScope === "manage";
   const appointmentsAccessMessage = moduleAccessMessage(role, "appointments");
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
+  const workspaceEmpty = isWorkspaceEmpty(data);
 
   useEffect(() => {
     if (notice?.kind === "success") {
@@ -1852,6 +1854,24 @@ export function AppointmentsView({
       subtitle="把電話、LINE 與現場預約整理成清楚流程，協助櫃台確認時段、技師與服務內容。"
       {...shellProps(data)}
     >
+      {setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide title={setupGuide.title} action={setupGuide.action} links={setupGuide.links} />
+        </div>
+      ) : null}
+      {workspaceEmpty && !setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide
+            title="先建立第一組營運資料"
+            action="先補齊店鋪設定、服務、員工與客戶，預約頁才會有可選資料與明確下一步。"
+            links={[
+              { href: "/settings?message=settings_setup_hint", label: "先去設定" },
+              { href: "/services", label: "建立服務" },
+              { href: "/staff", label: "建立員工" },
+            ]}
+          />
+        </div>
+      ) : null}
       <NoticeBanner notice={notice} />
       <div className="mb-5 grid gap-3 md:grid-cols-2">
         {canManageAppointments ? (
@@ -1988,6 +2008,8 @@ export function ServicesView({
   const servicesScope = permissionScope(role, "services");
   const canManageServices = servicesScope === "manage";
   const servicesAccessMessage = moduleAccessMessage(role, "services");
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
+  const workspaceEmpty = isWorkspaceEmpty(data);
 
   useEffect(() => {
     if (notice?.kind === "success") {
@@ -2001,6 +2023,24 @@ export function ServicesView({
       subtitle="價格、時間、啟用狀態與分類可直接管理，分類欄可留空或輸入新名稱。"
       {...shellProps(data)}
     >
+      {setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide title={setupGuide.title} action={setupGuide.action} links={setupGuide.links} />
+        </div>
+      ) : null}
+      {workspaceEmpty && !setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide
+            title="先建立第一組營運資料"
+            action="先設定店鋪資訊並建立服務分類，服務頁才會有清楚的分類與可用項目。"
+            links={[
+              { href: "/settings?message=settings_setup_hint", label: "先去設定" },
+              { href: "/staff", label: "建立員工" },
+              { href: "/customers", label: "建立客戶" },
+            ]}
+          />
+        </div>
+      ) : null}
       <NoticeBanner notice={notice} />
       {canManageServices ? (
         <div className="mb-5">
@@ -2234,6 +2274,8 @@ export function InventoryView({
   const inventoryAccessMessage = moduleAccessMessage(role, "inventory");
   const editingItem = data.inventory.find((item) => item.id === editingId);
   const hasInventory = data.inventory.length > 0;
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
+  const workspaceEmpty = isWorkspaceEmpty(data);
   const inventoryRows = [...data.inventory].sort((a, b) => {
     const aLow = a.quantity <= a.lowStockThreshold;
     const bLow = b.quantity <= b.lowStockThreshold;
@@ -2268,6 +2310,24 @@ export function InventoryView({
       subtitle="用品、耗材、色膠、低庫存提醒與進銷存紀錄。"
       {...shellProps(data)}
     >
+      {setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide title={setupGuide.title} action={setupGuide.action} links={setupGuide.links} />
+        </div>
+      ) : null}
+      {workspaceEmpty && !setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide
+            title="先建立第一組營運資料"
+            action="先補齊店鋪、服務與員工資料，再建立第一筆庫存品項，低庫存與成本估值才會有意義。"
+            links={[
+              { href: "/settings?message=settings_setup_hint", label: "先去設定" },
+              { href: "/services", label: "建立服務" },
+              { href: "/staff", label: "建立員工" },
+            ]}
+          />
+        </div>
+      ) : null}
       {notice ? <NoticeBanner notice={notice} /> : null}
       <section className="grid gap-4 md:grid-cols-4">
         <MetricCard label="品項數" value={`${data.inventory.length}`} hint="所有在庫品項" />
@@ -2452,7 +2512,7 @@ export function CheckoutView({
     >
       <NoticeBanner notice={notice} />
       {setupGuide ? (
-        <div className="mb-5">
+        <div className="mb-5 print:hidden">
           <SetupGuide
             title={setupGuide.title}
             action={setupGuide.action}
@@ -2627,6 +2687,8 @@ export function StaffView({
   const technicians = data.staff.filter((staff) => staff.role === "technician" && staff.active).length;
   const admins = data.staff.filter((staff) => (staff.role === "owner" || staff.role === "admin") && staff.active).length;
   const shifts = [...data.shifts].sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
+  const workspaceEmpty = isWorkspaceEmpty(data);
 
   useEffect(() => {
     if (notice?.kind === "success") {
@@ -2642,6 +2704,24 @@ export function StaffView({
       subtitle="新增邀請、角色、在職狀態、班表與抽成設定。"
       {...shellProps(data)}
     >
+      {setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide title={setupGuide.title} action={setupGuide.action} links={setupGuide.links} />
+        </div>
+      ) : null}
+      {workspaceEmpty && !setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide
+            title="先建立第一組營運資料"
+            action="先把店鋪設定、服務與客戶建立起來，再新增員工與班表會更順。"
+            links={[
+              { href: "/settings?message=settings_setup_hint", label: "先去設定" },
+              { href: "/services", label: "建立服務" },
+              { href: "/customers", label: "建立客戶" },
+            ]}
+          />
+        </div>
+      ) : null}
       <div className="print:hidden">
         <NoticeBanner notice={notice} />
       </div>
