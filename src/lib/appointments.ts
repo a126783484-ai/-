@@ -1,4 +1,5 @@
 import { addMinutes, areIntervalsOverlapping, parseISO } from "date-fns";
+import { formatDate } from "./utils";
 import type { AppointmentStatus, ServiceItem, StaffMember } from "./types";
 
 type AppointmentService = Pick<ServiceItem, "id" | "durationMin">;
@@ -42,6 +43,15 @@ export const appointmentStatusDescriptions: Record<AppointmentStatus, string> = 
   no_show: "客戶未到，這筆預約不再占用技師時段。",
 };
 
+export function dateKey(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 export function appointmentDuration(serviceIds: string[], services: AppointmentService[]) {
   return serviceIds.reduce((total, id) => total + (services.find((service) => service.id === id)?.durationMin ?? 0), 0);
 }
@@ -77,6 +87,29 @@ export function summarizeAppointmentDependencies(data: AppointmentDependencyInpu
     missingStaff: activeStaffCount === 0,
     ready: data.customers.length > 0 && activeServiceCount > 0 && activeStaffCount > 0,
   };
+}
+
+export function daysSince(value?: string, now = new Date()) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime()) || Number.isNaN(now.getTime())) return null;
+  return Math.floor((now.getTime() - date.getTime()) / 86_400_000);
+}
+
+export function reminderDisplay(value?: string, now = new Date()) {
+  if (!value) return null;
+
+  const reminderKey = dateKey(value);
+  const todayKey = dateKey(now);
+  if (!reminderKey) return null;
+
+  if (reminderKey < todayKey) {
+    return { tone: "rose" as const, label: `${formatDate(value)}（逾期）`, due: true };
+  }
+  if (reminderKey === todayKey) {
+    return { tone: "amber" as const, label: `${formatDate(value)}（今天）`, due: true };
+  }
+  return { tone: "sage" as const, label: formatDate(value), due: false };
 }
 
 export function describeAppointmentDependencies(summary: AppointmentDependencySummary): AppointmentDependencyCopy {

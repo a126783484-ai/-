@@ -25,7 +25,9 @@ import {
   appointmentStatusDescriptions,
   describeAppointmentConflict,
   describeAppointmentDependencies,
+  daysSince,
   statusLabel,
+  reminderDisplay,
   summarizeAppointmentDependencies,
 } from "@/lib/appointments";
 import { dashboardMetrics } from "@/lib/analytics";
@@ -38,6 +40,7 @@ import {
   orderSubtotal,
   orderTotal,
   outstandingAmount,
+  hasOutstandingBalance,
   resolveOrderStatus,
 } from "@/lib/orders";
 import { can } from "@/lib/permissions";
@@ -317,30 +320,6 @@ function StaffScheduleChart({
       )}
     </div>
   );
-}
-
-function reminderDisplay(value?: string) {
-  if (!value) return null;
-  const today = new Date();
-  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
-    today.getDate(),
-  ).padStart(2, "0")}`;
-  const reminderKey = value.slice(0, 10);
-
-  if (reminderKey < todayKey) {
-    return { tone: "rose" as const, label: `${formatDate(value)}（逾期）` };
-  }
-  if (reminderKey === todayKey) {
-    return { tone: "amber" as const, label: `${formatDate(value)}（今天）` };
-  }
-  return { tone: "sage" as const, label: formatDate(value) };
-}
-
-function daysSince(value?: string, now = new Date()) {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime()) || Number.isNaN(now.getTime())) return null;
-  return Math.floor((now.getTime() - date.getTime()) / 86_400_000);
 }
 
 function namesFromIds(ids: string[], services: ServiceItem[]) {
@@ -2957,7 +2936,7 @@ export function ReportsView({ data }: { data: AppData }) {
       outstanding: outstandingAmount(order),
       ageDays: orderAgeInDays(order, now),
     }))
-    .filter((item) => item.outstanding > 0)
+    .filter((item) => hasOutstandingBalance(item.order))
     .sort(
       (a, b) =>
         b.outstanding - a.outstanding ||
@@ -2966,7 +2945,7 @@ export function ReportsView({ data }: { data: AppData }) {
     );
   const followUpCustomers = data.customers
     .map<FollowUpCustomer | null>((customer) => {
-      const reminder = reminderDisplay(customer.nextReminder);
+      const reminder = reminderDisplay(customer.nextReminder, now);
       const reminderDays = daysSince(customer.nextReminder, now);
       if (reminder) {
         return {
