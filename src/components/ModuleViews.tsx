@@ -2919,12 +2919,13 @@ export function SettingsView({
       return data.workspace.businessHours || "{}";
     }
   }, [data.workspace.businessHours]);
+  const brandColor = data.workspace.brandColor || "#C87486";
   const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
 
   return (
     <AppShell
       title="店鋪設定"
-      subtitle="店鋪基本資料、預約規則、收款、稅務、品牌外觀與多店設定。"
+      subtitle="先把店鋪基本資料、營業規則與品牌外觀補齊，後續頁面才會接得上。"
       {...shellProps(data)}
     >
       <NoticeBanner notice={notice} />
@@ -2951,53 +2952,93 @@ export function SettingsView({
         </div>
       ) : null}
       <form action={updateWorkspaceSettings} className="card p-5">
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="block text-sm font-semibold text-plum">
-            店鋪名稱
-            <input
-              required
-              name="name"
-              className={fieldClass()}
-              defaultValue={data.workspace.name}
-            />
-          </label>
-          <label className="block text-sm font-semibold text-plum">
-            電話
-            <input
-              name="phone"
-              className={fieldClass()}
-              defaultValue={data.workspace.phone}
-            />
-          </label>
-          <label className="block text-sm font-semibold text-plum md:col-span-2">
-            地址
-            <input
-              name="address"
-              className={fieldClass()}
-              defaultValue={data.workspace.address}
-            />
-          </label>
-          <label className="block text-sm font-semibold text-plum">
-            品牌色
-            <input
-              name="brand_color"
-              type="color"
-              className="mobile-tap mt-2 h-12 w-full rounded-2xl border border-champagne p-1"
-              defaultValue={data.workspace.brandColor}
-            />
-          </label>
-          <label className="block text-sm font-semibold text-plum md:col-span-2">
-            營業時間 JSON
-            <textarea
-              name="business_hours"
-              className={`${fieldClass()} min-h-40 font-mono text-xs`}
-              defaultValue={parsedHours}
-            />
-            <p className="mt-2 text-xs font-normal text-ink/60">
-              可先保留 `{}`，之後再補上各日的營業時段。
-            </p>
-          </label>
+        <div className="rounded-3xl border border-champagne/70 bg-blush/40 p-4">
+          <p className="text-sm font-semibold text-plum">先完成店鋪骨架</p>
+          <p className="mt-1 text-sm leading-6 text-ink/80">
+            這些設定會影響前台顯示、預約可用時段與後續報表的基礎資料。建議先把店名、聯絡方式、營業規則與品牌色補齊。
+          </p>
         </div>
+        <fieldset className="mt-5 rounded-3xl border border-champagne/70 p-4">
+          <legend className="px-2 text-sm font-semibold text-plum">
+            店鋪基本資料
+          </legend>
+          <div className="mt-3 grid gap-4 md:grid-cols-2">
+            <label className="block text-sm font-semibold text-plum">
+              店鋪名稱
+              <input
+                required
+                name="name"
+                className={fieldClass()}
+                defaultValue={data.workspace.name}
+              />
+            </label>
+            <label className="block text-sm font-semibold text-plum">
+              電話
+              <input
+                name="phone"
+                className={fieldClass()}
+                defaultValue={data.workspace.phone}
+                placeholder="預約或客服專線"
+              />
+            </label>
+            <label className="block text-sm font-semibold text-plum md:col-span-2">
+              地址
+              <input
+                name="address"
+                className={fieldClass()}
+                defaultValue={data.workspace.address}
+                placeholder="門市地址"
+              />
+            </label>
+          </div>
+        </fieldset>
+        <fieldset className="mt-5 rounded-3xl border border-champagne/70 p-4">
+          <legend className="px-2 text-sm font-semibold text-plum">
+            營業與預約規則
+          </legend>
+          <div className="mt-3 grid gap-4">
+            <label className="block text-sm font-semibold text-plum">
+              營業時間 JSON
+              <textarea
+                name="business_hours"
+                className={`${fieldClass()} min-h-40 font-mono text-xs`}
+                defaultValue={parsedHours}
+                placeholder='{"mon":"10:00-20:00","tue":"10:00-20:00"}'
+              />
+            </label>
+            <p className="text-xs leading-6 text-ink/70">
+              請輸入有效 JSON。這裡會影響預約時段與營業資訊的顯示。可先保留 <code>{`{}`}</code>，再逐日補上，例如
+              <code>{`{"mon":"10:00-20:00","sat":"11:00-18:00"}`}</code>。
+            </p>
+          </div>
+        </fieldset>
+        <fieldset className="mt-5 rounded-3xl border border-champagne/70 p-4">
+          <legend className="px-2 text-sm font-semibold text-plum">
+            品牌外觀
+          </legend>
+          <div className="mt-3 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+            <label className="block text-sm font-semibold text-plum">
+              品牌色
+              <input
+                name="brand_color"
+                type="color"
+                className="mobile-tap mt-2 h-12 w-full rounded-2xl border border-champagne p-1"
+                defaultValue={brandColor}
+              />
+            </label>
+            <div className="rounded-2xl border border-champagne bg-white p-3">
+              <div
+                className="h-10 w-24 rounded-xl border border-black/10"
+                style={{ backgroundColor: brandColor }}
+                aria-hidden="true"
+              />
+              <p className="mt-2 text-xs font-semibold text-plum">{brandColor}</p>
+            </div>
+          </div>
+          <p className="mt-3 text-xs leading-6 text-ink/70">
+            這個顏色會套用到按鈕、標籤與品牌識別，先選最接近現場招牌或官網的主色即可。
+          </p>
+        </fieldset>
         <div className="mt-6 grid gap-3 md:grid-cols-2">
           {data.categories.length ? (
             data.categories.map((category) => (
