@@ -163,6 +163,162 @@ function shiftSummary(shift: Shift) {
   return shift.leave ? "休假 / 休息" : `${shift.startTime}–${shift.endTime}`;
 }
 
+function shiftTimeToMinutes(value: string) {
+  const [hours, minutes] = value.split(":").map((part) => Number(part));
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return 0;
+  }
+  return hours * 60 + minutes;
+}
+
+function shiftMinutesToPercent(minutes: number) {
+  return `${(minutes / 1440) * 100}%`;
+}
+
+function StaffScheduleChart({
+  data,
+  shifts,
+  onEditShift,
+}: {
+  data: AppData;
+  shifts: Shift[];
+  onEditShift: (shiftId: string) => void;
+}) {
+  const timelineTicks = [0, 4, 8, 12, 16, 20, 24];
+  const chartDates = useMemo(() => {
+    const grouped = new Map<string, Shift[]>();
+
+    for (const shift of shifts) {
+      const bucket = grouped.get(shift.date) ?? [];
+      bucket.push(shift);
+      grouped.set(shift.date, bucket);
+    }
+
+    return [...grouped.entries()]
+      .sort(([leftDate], [rightDate]) => rightDate.localeCompare(leftDate))
+      .map(([date, dateShifts]) => ({
+        date,
+        dateShifts: [...dateShifts].sort((left, right) => left.startTime.localeCompare(right.startTime)),
+      }));
+  }, [shifts]);
+
+  return (
+    <div className="mb-5 card p-5 print:mb-0 print:rounded-none print:border-0 print:bg-transparent print:p-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-plum">班表圖表</h2>
+          <p className="mt-1 text-sm text-ink/60">
+            依日期分組的可列印時間軸。點選任一班表條目即可回到編輯狀態。
+          </p>
+        </div>
+        <button
+          type="button"
+          className="mobile-tap rounded-2xl bg-plum px-4 py-2 font-semibold text-white print:hidden"
+          onClick={() => window.print()}
+        >
+          列印圖表
+        </button>
+      </div>
+      <div className="mt-4 hidden rounded-2xl bg-champagne/30 px-4 py-3 text-sm text-ink/70 print:block">
+        列印時將保留此圖表，方便直接張貼或攜出。
+      </div>
+      {chartDates.length ? (
+        <div className="mt-5 space-y-5">
+          {chartDates.map(({ date, dateShifts }) => (
+            <section
+              key={date}
+              className="break-inside-avoid rounded-3xl border border-champagne bg-white/80 p-4 shadow-sm print:rounded-none print:border-black/10 print:bg-transparent print:shadow-none"
+            >
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-bold text-plum">{formatDate(date)}</h3>
+                  <p className="mt-1 text-sm text-ink/60">
+                    {dateShifts.length} 筆班表 · {new Set(dateShifts.map((shift) => shift.staffId)).size} 位員工
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3 text-[11px] font-semibold text-ink/45">
+                  {timelineTicks.slice(0, -1).map((hour) => (
+                    <span key={hour} className="w-8 text-center">
+                      {String(hour).padStart(2, "0")}
+                    </span>
+                  ))}
+                  <span className="w-8 text-center">24</span>
+                </div>
+              </div>
+              <div className="mt-4 space-y-3">
+                {data.staff.map((member) => {
+                  const memberShifts = dateShifts.filter((shift) => shift.staffId === member.id);
+                  const shift = memberShifts[0];
+                  const startMinutes = shift ? shiftTimeToMinutes(shift.startTime) : 0;
+                  const endMinutes = shift
+                    ? Math.min(Math.max(shiftTimeToMinutes(shift.endTime), startMinutes + 30), 1440)
+                    : 0;
+                  return (
+                    <div
+                      key={member.id}
+                      className="grid gap-3 md:grid-cols-[11rem_minmax(0,1fr)] md:items-center"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-plum">{member.name}</p>
+                        <p className="text-xs text-ink/60">
+                          {staffRoleSelectLabel(member.role)}
+                          {!member.active ? " · 停用" : ""}
+                        </p>
+                      </div>
+                      <div
+                        className="relative h-14 overflow-hidden rounded-2xl border border-champagne bg-blush/30"
+                        style={{
+                          backgroundImage:
+                            "linear-gradient(to right, rgba(77, 53, 86, 0.08) 1px, transparent 1px)",
+                          backgroundSize: "calc(100% / 24) 100%",
+                        }}
+                      >
+                        {shift ? (
+                          <button
+                            type="button"
+                            className={`absolute inset-y-2 rounded-xl px-3 py-2 text-left text-xs font-semibold shadow-sm transition hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-plum/30 ${
+                              shift.leave ? "bg-amber text-plum" : "bg-plum text-white"
+                            }`}
+                            style={
+                              shift.leave
+                                ? { left: "0.5rem", right: "0.5rem" }
+                                : {
+                                    left: shiftMinutesToPercent(startMinutes),
+                                    width: shiftMinutesToPercent(endMinutes - startMinutes),
+                                  }
+                            }
+                            onClick={() => onEditShift(shift.id)}
+                            title={`${member.name} · ${formatDate(date)} · ${shiftSummary(shift)}`}
+                          >
+                            <span className="block truncate">
+                              {shift.leave ? "休假 / 休息" : shiftSummary(shift)}
+                            </span>
+                            <span className={`block truncate ${shift.leave ? "text-plum/70" : "text-white/80"}`}>
+                              點選編輯
+                            </span>
+                          </button>
+                        ) : (
+                          <div className="flex h-full items-center px-3 text-xs text-ink/45">
+                            未排班
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-5 rounded-3xl border border-dashed border-champagne bg-white/70 p-5 text-sm text-ink/60">
+          目前還沒有班表資料，先新增一筆班表後就會自動出現在這裡。
+        </div>
+      )}
+    </div>
+  );
+}
+
 function reminderDisplay(value?: string) {
   if (!value) return null;
   const today = new Date();
@@ -2448,178 +2604,191 @@ export function StaffView({
       subtitle="新增邀請、角色、在職狀態、班表與抽成設定。"
       {...shellProps(data)}
     >
-      <NoticeBanner notice={notice} />
-      {canManageStaff && data.staffInviteFeatureEnabled ? (
-        <form action={createStaffInviteAction} className="card p-5">
-          <h2 className="text-lg font-bold text-plum">新增員工邀請</h2>
-          <p className="mt-1 text-sm text-ink/60">輸入對方 email 後會產生可分享的加入連結。對方登入並接受後，會成為目前店鋪成員。</p>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <label className="block text-sm font-semibold text-plum">
-              顯示名稱
-              <input className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="displayName" required />
-            </label>
-            <label className="block text-sm font-semibold text-plum">
-              Email
-              <input className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="email" type="email" autoComplete="email" required />
-            </label>
-            <label className="block text-sm font-semibold text-plum">
-              電話
-              <input className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="phone" autoComplete="tel" />
-            </label>
-            <label className="block text-sm font-semibold text-plum">
-              角色
-              <select className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="role" defaultValue="staff">
-                {staffRoles.map((role) => (
-                  <option key={role} value={role}>
-                    {staffRoleSelectLabel(role)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm font-semibold text-plum">
-              抽成比例（可填 25 或 0.25）
-              <input className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="commissionRate" type="number" min="0" max="100" step="0.01" defaultValue="25" />
-            </label>
-            <label className="block text-sm font-semibold text-plum">
-              專長
-              <textarea className="mobile-tap mt-2 min-h-24 w-full rounded-2xl border border-champagne p-3" name="specialties" placeholder="例如：凝膠美甲, 眉型設計" />
-            </label>
-          </div>
-          <button type="submit" className="mobile-tap mt-5 rounded-2xl bg-plum font-semibold text-white">
-            建立邀請連結
-          </button>
-        </form>
-      ) : canManageStaff ? (
-        <div className="card p-5">
-          <h2 className="text-lg font-bold text-plum">員工邀請</h2>
-          <p className="mt-1 text-sm text-ink/60">目前尚未啟用員工邀請功能；你仍可直接新增員工資料，之後再視需要開啟邀請連結。</p>
-        </div>
-      ) : null}
-      {data.staffInviteFeatureEnabled && data.staffInvites.some((invite) => invite.status === "pending") ? (
-        <div className="card p-5">
-          <h2 className="text-lg font-bold text-plum">待處理邀請</h2>
-          <div className="mt-4 space-y-3">
-            {data.staffInvites.filter((invite) => invite.status === "pending").map((invite) => (
-              <div key={invite.id} className="rounded-2xl bg-blush p-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <strong className="block text-plum">{invite.displayName}</strong>
-                    <p className="text-sm text-ink/60">{invite.email} ｜ {staffRoleSelectLabel(invite.role)}</p>
-                  </div>
-                  <StatusPill tone="amber">待接受</StatusPill>
-                </div>
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <code className="break-all rounded-2xl bg-white px-3 py-2 text-xs text-ink/70">{buildStaffInvitePath(invite.token)}</code>
-                  <Link href={buildStaffInvitePath(invite.token)} className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-center font-semibold text-white">
-                    開啟邀請
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-      <div className="mb-5 grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
-        {canManageStaff ? <StaffForm key={editing?.id ?? "new"} staff={editing} /> : null}
-        <div className="card p-5">
-          <h2 className="text-lg font-bold text-plum">人事概況</h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-2xl bg-blush p-4">
-              <p className="text-xs font-semibold text-ink/55">在職人數</p>
-              <p className="mt-1 text-2xl font-bold text-plum">{activeStaff}</p>
-            </div>
-            <div className="rounded-2xl bg-blush p-4">
-              <p className="text-xs font-semibold text-ink/55">停用人數</p>
-              <p className="mt-1 text-2xl font-bold text-plum">{inactiveStaff}</p>
-            </div>
-            <div className="rounded-2xl bg-blush p-4">
-              <p className="text-xs font-semibold text-ink/55">可排技師</p>
-              <p className="mt-1 text-2xl font-bold text-plum">{technicians}</p>
-            </div>
-            <div className="rounded-2xl bg-blush p-4">
-              <p className="text-xs font-semibold text-ink/55">管理權限</p>
-              <p className="mt-1 text-2xl font-bold text-plum">{admins}</p>
-            </div>
-          </div>
-          {canManageStaff && editing ? (
-            <button
-              type="button"
-              className="mobile-tap mt-4 rounded-2xl bg-white font-semibold text-plum"
-              onClick={() => setEditingId(null)}
-            >
-              清除編輯狀態
-            </button>
-          ) : null}
-        </div>
+      <div className="print:hidden">
+        <NoticeBanner notice={notice} />
       </div>
       {canManageStaff ? (
-        <div className="mb-5 card p-5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-plum">班表 / 休息</h2>
-              <p className="mt-1 text-sm text-ink/60">新增或編輯當日班表，勾選休假 / 休息會把該筆班表視為離班狀態；停用員工會被標示並留在清單下方。</p>
+        <StaffScheduleChart
+          data={data}
+          shifts={shifts}
+          onEditShift={(shiftId) => {
+            setDraftShiftStaffId(null);
+            setEditingShiftId(shiftId);
+          }}
+        />
+      ) : null}
+      <div className="print:hidden">
+        {canManageStaff && data.staffInviteFeatureEnabled ? (
+          <form action={createStaffInviteAction} className="card p-5">
+            <h2 className="text-lg font-bold text-plum">新增員工邀請</h2>
+            <p className="mt-1 text-sm text-ink/60">輸入對方 email 後會產生可分享的加入連結。對方登入並接受後，會成為目前店鋪成員。</p>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <label className="block text-sm font-semibold text-plum">
+                顯示名稱
+                <input className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="displayName" required />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                Email
+                <input className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="email" type="email" autoComplete="email" required />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                電話
+                <input className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="phone" autoComplete="tel" />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                角色
+                <select className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="role" defaultValue="staff">
+                  {staffRoles.map((role) => (
+                    <option key={role} value={role}>
+                      {staffRoleSelectLabel(role)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                抽成比例（可填 25 或 0.25）
+                <input className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="commissionRate" type="number" min="0" max="100" step="0.01" defaultValue="25" />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                專長
+                <textarea className="mobile-tap mt-2 min-h-24 w-full rounded-2xl border border-champagne p-3" name="specialties" placeholder="例如：凝膠美甲, 眉型設計" />
+              </label>
             </div>
-            {editingShift ? (
+            <button type="submit" className="mobile-tap mt-5 rounded-2xl bg-plum font-semibold text-white">
+              建立邀請連結
+            </button>
+          </form>
+        ) : canManageStaff ? (
+          <div className="card p-5">
+            <h2 className="text-lg font-bold text-plum">員工邀請</h2>
+            <p className="mt-1 text-sm text-ink/60">目前尚未啟用員工邀請功能；你仍可直接新增員工資料，之後再視需要開啟邀請連結。</p>
+          </div>
+        ) : null}
+        {data.staffInviteFeatureEnabled && data.staffInvites.some((invite) => invite.status === "pending") ? (
+          <div className="card p-5">
+            <h2 className="text-lg font-bold text-plum">待處理邀請</h2>
+            <div className="mt-4 space-y-3">
+              {data.staffInvites.filter((invite) => invite.status === "pending").map((invite) => (
+                <div key={invite.id} className="rounded-2xl bg-blush p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <strong className="block text-plum">{invite.displayName}</strong>
+                      <p className="text-sm text-ink/60">{invite.email} ｜ {staffRoleSelectLabel(invite.role)}</p>
+                    </div>
+                    <StatusPill tone="amber">待接受</StatusPill>
+                  </div>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <code className="break-all rounded-2xl bg-white px-3 py-2 text-xs text-ink/70">{buildStaffInvitePath(invite.token)}</code>
+                    <Link href={buildStaffInvitePath(invite.token)} className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-center font-semibold text-white">
+                      開啟邀請
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <div className="mb-5 grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
+          {canManageStaff ? <StaffForm key={editing?.id ?? "new"} staff={editing} /> : null}
+          <div className="card p-5">
+            <h2 className="text-lg font-bold text-plum">人事概況</h2>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl bg-blush p-4">
+                <p className="text-xs font-semibold text-ink/55">在職人數</p>
+                <p className="mt-1 text-2xl font-bold text-plum">{activeStaff}</p>
+              </div>
+              <div className="rounded-2xl bg-blush p-4">
+                <p className="text-xs font-semibold text-ink/55">停用人數</p>
+                <p className="mt-1 text-2xl font-bold text-plum">{inactiveStaff}</p>
+              </div>
+              <div className="rounded-2xl bg-blush p-4">
+                <p className="text-xs font-semibold text-ink/55">可排技師</p>
+                <p className="mt-1 text-2xl font-bold text-plum">{technicians}</p>
+              </div>
+              <div className="rounded-2xl bg-blush p-4">
+                <p className="text-xs font-semibold text-ink/55">管理權限</p>
+                <p className="mt-1 text-2xl font-bold text-plum">{admins}</p>
+              </div>
+            </div>
+            {canManageStaff && editing ? (
               <button
                 type="button"
-                className="mobile-tap rounded-2xl bg-white px-4 py-2 font-semibold text-plum"
-                onClick={() => {
-                  setEditingShiftId(null);
-                  setDraftShiftStaffId(null);
-                }}
+                className="mobile-tap mt-4 rounded-2xl bg-white font-semibold text-plum"
+                onClick={() => setEditingId(null)}
               >
-                改為新增
+                清除編輯狀態
               </button>
             ) : null}
           </div>
-          <ShiftForm
-            key={editingShift?.id ?? draftShiftStaffId ?? "new"}
-            data={data}
-            shift={editingShift}
-            defaultStaffId={defaultShiftStaffId}
-            onReset={() => {
-              setEditingShiftId(null);
-              setDraftShiftStaffId(null);
-            }}
-          />
-          <div className="mt-5 grid gap-3 xl:grid-cols-2">
-            {shifts.length ? (
-              shifts.map((shift) => {
-                const memberName = data.staff.find((member) => member.id === shift.staffId)?.name ?? "未命名員工";
-                return (
-                  <div key={shift.id} className="flex flex-col gap-3 rounded-2xl bg-blush p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <strong className="block text-plum">{memberName}</strong>
-                      <p className="text-sm text-ink/60">{formatDate(shift.date)} ｜ {shiftSummary(shift)}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {shift.leave ? <StatusPill tone="amber">休息</StatusPill> : <StatusPill tone="sage">排班中</StatusPill>}
-                      <button
-                        type="button"
-                        className="mobile-tap rounded-xl bg-white px-3 py-2 font-semibold text-plum"
-                        onClick={() => {
-                          setDraftShiftStaffId(null);
-                          setEditingShiftId(shift.id);
-                        }}
-                      >
-                        編輯
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <p className="rounded-2xl bg-blush p-4 text-sm text-ink/60">尚無班表，先建立一筆排班或休息紀錄。</p>
-            )}
-          </div>
         </div>
-      ) : null}
-      <ModuleTable
-        rows={data.staff}
-        searchPlaceholder="搜尋員工、角色、專長"
-        filterOptions={["owner", "admin", "technician", "front_desk", "staff"]}
-        emptyTitle="尚無員工資料"
-        columns={[
+        {canManageStaff ? (
+          <div className="mb-5 card p-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-plum">班表 / 休息</h2>
+                <p className="mt-1 text-sm text-ink/60">新增或編輯當日班表，勾選休假 / 休息會把該筆班表視為離班狀態；停用員工會被標示並留在清單下方。</p>
+              </div>
+              {editingShift ? (
+                <button
+                  type="button"
+                  className="mobile-tap rounded-2xl bg-white px-4 py-2 font-semibold text-plum"
+                  onClick={() => {
+                    setEditingShiftId(null);
+                    setDraftShiftStaffId(null);
+                  }}
+                >
+                  改為新增
+                </button>
+              ) : null}
+            </div>
+            <ShiftForm
+              key={editingShift?.id ?? draftShiftStaffId ?? "new"}
+              data={data}
+              shift={editingShift}
+              defaultStaffId={defaultShiftStaffId}
+              onReset={() => {
+                setEditingShiftId(null);
+                setDraftShiftStaffId(null);
+              }}
+            />
+            <div className="mt-5 grid gap-3 xl:grid-cols-2">
+              {shifts.length ? (
+                shifts.map((shift) => {
+                  const memberName = data.staff.find((member) => member.id === shift.staffId)?.name ?? "未命名員工";
+                  return (
+                    <div key={shift.id} className="flex flex-col gap-3 rounded-2xl bg-blush p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <strong className="block text-plum">{memberName}</strong>
+                        <p className="text-sm text-ink/60">{formatDate(shift.date)} ｜ {shiftSummary(shift)}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {shift.leave ? <StatusPill tone="amber">休息</StatusPill> : <StatusPill tone="sage">排班中</StatusPill>}
+                        <button
+                          type="button"
+                          className="mobile-tap rounded-xl bg-white px-3 py-2 font-semibold text-plum"
+                          onClick={() => {
+                            setDraftShiftStaffId(null);
+                            setEditingShiftId(shift.id);
+                          }}
+                        >
+                          編輯
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="rounded-2xl bg-blush p-4 text-sm text-ink/60">尚無班表，先建立一筆排班或休息紀錄。</p>
+              )}
+            </div>
+          </div>
+        ) : null}
+        <ModuleTable
+          rows={data.staff}
+          searchPlaceholder="搜尋員工、角色、專長"
+          filterOptions={["owner", "admin", "technician", "front_desk", "staff"]}
+          emptyTitle="尚無員工資料"
+          columns={[
           {
             key: "name",
             label: "員工",
@@ -2707,6 +2876,7 @@ export function StaffView({
           : []),
         ]}
       />
+      </div>
     </AppShell>
   );
 }
