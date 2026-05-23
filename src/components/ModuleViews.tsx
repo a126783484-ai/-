@@ -21,7 +21,13 @@ import { AppShell } from "@/components/AppShell";
 import { FormNotice } from "@/components/FormNotice";
 import { ModuleTable } from "@/components/ModuleTable";
 import { MetricCard, StatusPill, EmptyState } from "@/components/ui";
-import { statusLabel, summarizeAppointmentDependencies } from "@/lib/appointments";
+import {
+  appointmentStatusDescriptions,
+  describeAppointmentConflict,
+  describeAppointmentDependencies,
+  statusLabel,
+  summarizeAppointmentDependencies,
+} from "@/lib/appointments";
 import { dashboardMetrics } from "@/lib/analytics";
 import {
   orderFinancialSummary,
@@ -34,11 +40,12 @@ import {
   outstandingAmount,
   resolveOrderStatus,
 } from "@/lib/orders";
-import { can, roleLabel } from "@/lib/permissions";
+import { can } from "@/lib/permissions";
 import type { AppData } from "@/lib/app-data-client";
 import { getWorkspaceSetupGuide, isWorkspaceEmpty } from "@/lib/app-data-client";
 import type { Appointment, Customer, InventoryItem, Order, ServiceItem, Shift, StaffMember } from "@/lib/types";
 import { buildStaffInvitePath } from "@/lib/staff-invites";
+import { formatInventoryMovementQuantity, formatInventoryStock } from "@/lib/inventory-feedback";
 import { currency, formatDate, formatTime } from "@/lib/utils";
 
 const liveNotice =
@@ -69,8 +76,15 @@ const paymentMethodLabels: Record<(typeof paymentMethods)[number], string> = {
 };
 const tiers = ["新客", "一般", "VIP", "VVIP"];
 const staffRoles = ["owner", "admin", "technician", "front_desk", "staff"] as const;
+const staffRoleLabels: Record<(typeof staffRoles)[number], string> = {
+  owner: "店主（全部權限）",
+  admin: "管理員（可管理員工與設定）",
+  technician: "技師（可排班與接單）",
+  front_desk: "櫃台（接待與預約）",
+  staff: "一般員工（支援與協作）",
+};
 const staffRoleHelpText =
-  "技師可被排班與指派服務，櫃台負責接待與提醒，一般員工適合支援與行政，管理員 / 店主可管理設定。";
+  "技師可排班與指派服務，櫃台負責接待與預約，一般員工適合支援與行政，管理員與店主可管理所有設定。";
 const inventoryMovementTypes = ["purchase", "consume", "adjust"] as const;
 type Notice = { kind: "error" | "success"; message: string };
 type LinkAction = { href: string; label: string };
@@ -90,6 +104,14 @@ function appointmentStatusTone(status: (typeof appointmentStatuses)[number]) {
   if (status === "completed") return "sage" as const;
   if (status === "cancelled" || status === "no_show") return "rose" as const;
   return "amber" as const;
+}
+
+function formatCommissionRate(rate: number) {
+  return `${Math.round(rate * 100)}%`;
+}
+
+function staffRoleSelectLabel(role: (typeof staffRoles)[number]) {
+  return staffRoleLabels[role];
 }
 
 function NoticeBanner({ notice }: { notice?: Notice }) {
@@ -326,6 +348,9 @@ function ServiceForm({
           </button>
         ) : null}
       </div>
+      <p className="mt-2 text-sm text-ink/70">
+        分類可留空，或直接輸入新名稱建立新分類。價格、時間與啟用狀態會直接影響報價與預約可見性。
+      </p>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="text-sm font-semibold text-plum">
           服務名稱
@@ -337,22 +362,25 @@ function ServiceForm({
           />
         </label>
         <label className="text-sm font-semibold text-plum">
-          分類
+          分類（可留空）
           <input
-            required
             list="service-categories"
             name="category"
             className={fieldClass()}
-            defaultValue={service?.category ?? categories[0]?.name ?? "美甲"}
+            defaultValue={service?.categoryId ? service.category : ""}
+            placeholder="例如：美甲、SPA、加購"
           />
           <datalist id="service-categories">
             {categories.map((category) => (
               <option key={category.id} value={category.name} />
             ))}
           </datalist>
+          <span className="mt-1 block text-xs font-normal text-ink/60">
+            留空會顯示為未分類；輸入現有名稱會沿用，輸入新名稱會建立新的分類。
+          </span>
         </label>
         <label className="text-sm font-semibold text-plum">
-          價格
+          價格（元）
           <input
             required
             type="number"
@@ -363,7 +391,7 @@ function ServiceForm({
           />
         </label>
         <label className="text-sm font-semibold text-plum">
-          時間（分鐘）
+          所需時間（分鐘）
           <input
             required
             type="number"
@@ -387,7 +415,7 @@ function ServiceForm({
             name="enabled"
             defaultChecked={service?.enabled ?? true}
           />{" "}
-          啟用服務
+          啟用中（可被預約）
         </label>
         <label className="flex items-start gap-3 rounded-2xl bg-blush p-4 font-semibold text-plum">
           <input
@@ -395,7 +423,7 @@ function ServiceForm({
             name="is_add_on"
             defaultChecked={service?.addOn ?? false}
           />{" "}
-          加購項目
+          加購服務
         </label>
       </div>
       <div className="mt-4">
@@ -420,6 +448,7 @@ function AppointmentForm({
     services: data.services,
     staff: data.staff,
   });
+  const dependencyCopy = describeAppointmentDependencies(dependencySummary);
   const activeStaff = data.staff.filter((member) => member.active);
   const selectedServiceIds = new Set(appointment?.serviceIds ?? []);
   const missingDependencyLabels = [
@@ -443,6 +472,11 @@ function AppointmentForm({
             取消編輯
           </button>
         ) : null}
+      </div>
+      <div className="mt-4 rounded-3xl bg-champagne/30 p-4 text-sm text-ink/75">
+        <p className="font-semibold text-plum">{dependencyCopy.title}</p>
+        <p className="mt-1">{dependencyCopy.detail}</p>
+        <p className="mt-2">{describeAppointmentConflict()}</p>
       </div>
       {!dependencySummary.ready ? (
         <div className="mt-4 rounded-3xl border border-amber bg-amber/10 p-4">
@@ -495,10 +529,11 @@ function AppointmentForm({
             </option>
             {data.customers.map((customer) => (
               <option key={customer.id} value={customer.id}>
-                {customer.name}｜{customer.phone}
+              {customer.name}｜{customer.phone}
               </option>
             ))}
           </select>
+          <p className="mt-1 text-xs font-normal text-ink/60">預約會綁定這位客戶的記錄，方便後續查詢與回訪。</p>
         </label>
         <label className="text-sm font-semibold text-plum">
           技師
@@ -518,10 +553,11 @@ function AppointmentForm({
             </option>
             {activeStaff.map((member) => (
               <option key={member.id} value={member.id}>
-                {member.name}｜{roleLabel(member.role)}
+                {member.name}｜{staffRoleSelectLabel(member.role)}
               </option>
             ))}
           </select>
+          <p className="mt-1 text-xs font-normal text-ink/60">只能選啟用中的員工，且同一位技師不能有重疊時段。</p>
         </label>
         <label className="text-sm font-semibold text-plum">
           開始時間
@@ -575,6 +611,7 @@ function AppointmentForm({
           <legend className="px-2 text-sm font-bold text-plum">
             服務（可複選）
           </legend>
+          <p className="mt-1 text-xs text-ink/60">所選服務會一起算進這筆預約，請把實際要做的項目勾選完整。</p>
           {data.services.some((service) => service.enabled || selectedServiceIds.has(service.id)) ? (
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               {data.services
@@ -614,6 +651,27 @@ function AppointmentForm({
             defaultValue={appointment?.note}
           />
         </label>
+        <div className="md:col-span-2 rounded-3xl bg-white/80 p-4 text-sm text-ink/70">
+          <p className="font-semibold text-plum">狀態提醒</p>
+          <p className="mt-1">
+            狀態只影響流程標記，不會自動改客戶、技師、時間或服務；要改排程內容請直接編輯預約。
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {appointmentStatuses.map((status) => (
+              <StatusPill key={status} tone={appointmentStatusTone(status)}>
+                {statusLabel(status)}
+              </StatusPill>
+            ))}
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {appointmentStatuses.map((status) => (
+              <p key={status} className="rounded-2xl bg-blush p-3 text-xs text-ink/70">
+                <strong className="text-plum">{statusLabel(status)}</strong>
+                <span className="ml-2">{appointmentStatusDescriptions[status]}</span>
+              </p>
+            ))}
+          </div>
+        </div>
       </div>
       <div className="mt-4">
         <SubmitButton disabled={!dependencySummary.ready}>{appointment ? "更新預約" : "建立預約"}</SubmitButton>
@@ -1033,7 +1091,7 @@ function InventoryMovementForm({ data }: { data: AppData }) {
           </select>
         </label>
         <label className="text-sm font-semibold text-plum">
-          數量 / 異動量
+          數量 / 異動量（調整可填負數）
           <input
             required
             type="number"
@@ -1043,6 +1101,9 @@ function InventoryMovementForm({ data }: { data: AppData }) {
             className={fieldClass()}
             placeholder="3 或 -2"
           />
+          <p className="mt-2 text-xs leading-5 text-ink/60">
+            入庫與出庫請填正數；盤點調整可直接輸入負數修正。
+          </p>
         </label>
         <label className="text-sm font-semibold text-plum md:col-span-2">
           備註
@@ -1076,7 +1137,7 @@ function InventoryItemForm({
             {item ? "編輯庫存品項" : "建立庫存品項"}
           </h2>
           <p className="mt-1 text-sm text-ink/65">
-            建立第一筆品項後，就能在右側記錄入庫、出庫與調整。
+            建立第一筆品項後，就能在右側記錄入庫、出庫與調整；數量與警戒值都以件數計算。
           </p>
         </div>
         {item && onCancel ? (
@@ -1144,7 +1205,7 @@ function InventoryItemForm({
           />
         </label>
         <label className="text-sm font-semibold text-plum">
-          現有數量
+          現有數量（件）
           <input
             required
             type="number"
@@ -1156,7 +1217,7 @@ function InventoryItemForm({
           />
         </label>
         <label className="text-sm font-semibold text-plum">
-          低庫存警戒
+          低庫存警戒（件）
           <input
             required
             type="number"
@@ -1221,21 +1282,22 @@ function StaffForm({ staff }: { staff?: StaffMember }) {
           <select name="role" className={fieldClass()} defaultValue={staff?.role ?? "technician"}>
             {staffRoles.map((role) => (
               <option key={role} value={role}>
-                {roleLabel(role)}
+                {staffRoleSelectLabel(role)}
               </option>
             ))}
           </select>
           <p className="mt-2 text-xs leading-5 text-ink/60">{staffRoleHelpText}</p>
         </label>
         <label className="text-sm font-semibold text-plum">
-          抽成（0 到 1）
+          抽成比例（可填 25 或 0.25）
           <input
             name="commissionRate"
             inputMode="decimal"
             className={fieldClass()}
-            defaultValue={staff?.commissionRate ?? 0.25}
-            placeholder="0.25"
+            defaultValue={Math.round((staff?.commissionRate ?? 0.25) * 100)}
+            placeholder="25"
           />
+          <p className="mt-2 text-xs leading-5 text-ink/60">系統會自動換算成 0 到 1 儲存，例如 25 會儲存成 0.25。</p>
         </label>
         <label className="text-sm font-semibold text-plum md:col-span-2">
           專長（逗號或換行分隔）
@@ -1254,7 +1316,7 @@ function StaffForm({ staff }: { staff?: StaffMember }) {
               defaultChecked={staff.active}
               className="size-5 accent-plum"
             />
-            在職 / 可被排班與指派
+            在職中，可被排班與指派
           </label>
         ) : null}
       </div>
@@ -1279,6 +1341,8 @@ function ShiftForm({
   const defaultDate = shift?.date ?? currentDateInput();
   const defaultStart = shift?.startTime ?? "10:00";
   const defaultEnd = shift?.endTime ?? "19:00";
+  const activeStaff = data.staff.filter((member) => member.active);
+  const inactiveStaff = data.staff.filter((member) => !member.active);
 
   return (
     <form action={saveStaffShiftAction} className="mt-4 rounded-3xl border border-champagne bg-blush/40 p-5">
@@ -1286,7 +1350,7 @@ function ShiftForm({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="text-base font-bold text-plum">{shift ? "編輯班表" : "新增班表"}</h3>
-          <p className="text-sm text-ink/60">勾選「休假 / 休息」可將這筆班表標記為離班狀態。</p>
+          <p className="text-sm text-ink/60">新班表會先列出在職員工；停用員工會保留在下方，方便編輯既有班表。</p>
         </div>
         {shift ? (
           <button type="button" className="mobile-tap rounded-2xl bg-white px-4 py-2 font-semibold text-plum" onClick={onReset}>
@@ -1304,14 +1368,31 @@ function ShiftForm({
             defaultValue={shift?.staffId ?? defaultStaffId}
           >
             <option value="" disabled>
-              請選擇
+              請選擇在職員工
             </option>
-            {data.staff.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.name}｜{roleLabel(member.role)}
-              </option>
-            ))}
+            {activeStaff.length ? (
+              <optgroup label="在職員工">
+                {activeStaff.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}｜{staffRoleSelectLabel(member.role)}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+            {inactiveStaff.length ? (
+              <optgroup label="停用員工（僅供編輯既有班表）">
+                {inactiveStaff.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}｜{staffRoleSelectLabel(member.role)}（停用）
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
           </select>
+          <p className="mt-2 text-xs leading-5 text-ink/60">新班表預設只會指向在職員工；如果要回頭修改舊紀錄，才需要選到停用員工。</p>
+          {!activeStaff.length ? (
+            <p className="mt-2 text-xs leading-5 text-rose">目前沒有在職員工，無法直接建立新班表，請先恢復至少一位員工為在職狀態。</p>
+          ) : null}
         </label>
         <label className="text-sm font-semibold text-plum">
           日期
@@ -1437,7 +1518,7 @@ export function DashboardView({ data }: { data: AppData }) {
               <div key={invite.id} className="flex flex-col gap-3 rounded-2xl bg-blush p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <strong className="block text-plum">{invite.displayName}</strong>
-                  <p className="text-sm text-ink/60">{invite.email} ｜ {roleLabel(invite.role)}</p>
+                  <p className="text-sm text-ink/60">{invite.email} ｜ {staffRoleSelectLabel(invite.role)}</p>
                 </div>
                 <Link href={buildStaffInvitePath(invite.token)} className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-center font-semibold text-white">
                   開啟邀請
@@ -1641,7 +1722,10 @@ export function AppointmentsView({
           <h2 className="text-lg font-bold text-plum">預約資料會即時寫入資料庫</h2>
           <p className="mt-2 text-sm text-ink/65">
             新增或編輯預約會寫入 Supabase，並同步
-            appointment_services。系統會阻擋同一技師重疊時段。
+            appointment_services。系統會阻擋同一技師重疊時段，已取消和未到的預約不會佔用衝突判定。
+          </p>
+          <p className="mt-2 text-sm text-ink/65">
+            狀態更新只會改流程標記，不會改客戶、技師、時間或服務內容。
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {appointmentStatuses.map((status) => {
@@ -1757,7 +1841,7 @@ export function ServicesView({
   return (
     <AppShell
       title="服務項目管理"
-      subtitle="分類、價格、所需時間、說明、啟用狀態與加購項目管理。"
+      subtitle="價格、時間、啟用狀態與分類可直接管理，分類欄可留空或輸入新名稱。"
       {...shellProps(data)}
     >
       <NoticeBanner notice={notice} />
@@ -1798,7 +1882,7 @@ export function ServicesView({
           },
           {
             key: "duration",
-            label: "時間",
+            label: "所需時間",
             sortValue: (row) => row.durationMin,
             render: (row) => `${row.durationMin} 分鐘`,
           },
@@ -1810,10 +1894,10 @@ export function ServicesView({
           },
           {
             key: "enabled",
-            label: "狀態",
+            label: "啟用狀態",
             render: (row) =>
               row.enabled ? (
-                <StatusPill tone="sage">啟用</StatusPill>
+                <StatusPill tone="sage">啟用中</StatusPill>
               ) : (
                 <StatusPill>停用</StatusPill>
               ),
@@ -2027,14 +2111,21 @@ export function InventoryView({
           />
         ) : null}
         <div className="space-y-5">
-          {canManageInventory && hasInventory ? (
-            <InventoryMovementForm data={data} />
-          ) : canManageInventory ? (
+          {canManageInventory ? (
+            hasInventory ? (
+              <InventoryMovementForm data={data} />
+            ) : (
+              <EmptyState
+                title="先建立第一筆庫存品項"
+                action="建立品項後，就能直接記錄入庫、出庫與調整；目前異動功能會保持停用。"
+              />
+            )
+          ) : (
             <EmptyState
-              title="先建立第一筆庫存品項"
-              action="建立品項後，就能直接記錄入庫、出庫與調整。"
+              title="你沒有庫存管理權限"
+              action="目前仍可查看庫存與異動紀錄；若要新增品項或記錄進出貨，請由店主或管理員調整權限。"
             />
-          ) : null}
+          )}
           <div className="card p-5">
             <h2 className="text-lg font-bold text-plum">庫存運作</h2>
             <div className="mt-4 space-y-3 text-sm text-ink/70">
@@ -2050,7 +2141,7 @@ export function InventoryView({
           rows={inventoryRows}
           searchPlaceholder="搜尋品牌、品項、分類"
           filterOptions={["凝膠", "保養", "耗材", "工具"]}
-          emptyTitle="尚無庫存資料"
+          emptyTitle="尚無庫存品項"
           columns={[
             {
               key: "name",
@@ -2068,11 +2159,19 @@ export function InventoryView({
               key: "qty",
               label: "庫存",
               sortValue: (row) => row.quantity,
-              render: (row) => (
-                <StatusPill tone={row.quantity <= row.lowStockThreshold ? "amber" : "sage"}>
-                  {row.quantity}
-                </StatusPill>
-              ),
+              render: (row) => {
+                const lowStock = row.quantity <= row.lowStockThreshold;
+                return (
+                  <div className="space-y-1">
+                    <StatusPill tone={lowStock ? "amber" : "sage"}>
+                      {formatInventoryStock(row.quantity, row.lowStockThreshold)}
+                    </StatusPill>
+                    {lowStock ? (
+                      <p className="text-xs text-amber-700">低於警戒，會優先出現在清單前面。</p>
+                    ) : null}
+                  </div>
+                );
+              },
             },
             {
               key: "cost",
@@ -2111,7 +2210,7 @@ export function InventoryView({
           rows={recentMovements}
           searchPlaceholder="搜尋異動、備註、品項"
           filterOptions={["purchase", "consume", "adjust"]}
-          emptyTitle="尚無庫存異動"
+          emptyTitle="尚無庫存異動紀錄"
           columns={[
             {
               key: "time",
@@ -2137,7 +2236,7 @@ export function InventoryView({
               key: "qty",
               label: "異動量",
               sortValue: (row) => row.quantity,
-              render: (row) => row.quantity.toFixed(2),
+              render: (row) => formatInventoryMovementQuantity(row.quantity),
             },
             {
               key: "note",
@@ -2317,10 +2416,10 @@ export function StaffView({
     editing?.id ??
     data.staff.find((member) => member.role === "technician" && member.active)?.id ??
     data.staff.find((member) => member.active)?.id ??
-    data.staff[0]?.id ??
     "";
   const canManageStaff = can(data.currentMember?.role ?? "staff", "staff");
   const activeStaff = data.staff.filter((staff) => staff.active).length;
+  const inactiveStaff = data.staff.length - activeStaff;
   const technicians = data.staff.filter((staff) => staff.role === "technician" && staff.active).length;
   const admins = data.staff.filter((staff) => (staff.role === "owner" || staff.role === "admin") && staff.active).length;
   const shifts = [...data.shifts].sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
@@ -2336,7 +2435,7 @@ export function StaffView({
   return (
     <AppShell
       title="員工 / 技師管理"
-      subtitle="新增邀請、角色權限、班表、抽成、專長與在職狀態。"
+      subtitle="新增邀請、角色、在職狀態、班表與抽成設定。"
       {...shellProps(data)}
     >
       <NoticeBanner notice={notice} />
@@ -2360,16 +2459,16 @@ export function StaffView({
             <label className="block text-sm font-semibold text-plum">
               角色
               <select className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="role" defaultValue="staff">
-                <option value="staff">一般員工</option>
-                <option value="front_desk">櫃台</option>
-                <option value="technician">技師</option>
-                <option value="admin">管理員</option>
-                <option value="owner">店主</option>
+                {staffRoles.map((role) => (
+                  <option key={role} value={role}>
+                    {staffRoleSelectLabel(role)}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="block text-sm font-semibold text-plum">
-              抽成
-              <input className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="commissionRate" type="number" min="0" max="1" step="0.01" defaultValue="0" />
+              抽成比例（可填 25 或 0.25）
+              <input className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="commissionRate" type="number" min="0" max="100" step="0.01" defaultValue="25" />
             </label>
             <label className="block text-sm font-semibold text-plum">
               專長
@@ -2395,7 +2494,7 @@ export function StaffView({
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <strong className="block text-plum">{invite.displayName}</strong>
-                    <p className="text-sm text-ink/60">{invite.email} ｜ {roleLabel(invite.role)}</p>
+                    <p className="text-sm text-ink/60">{invite.email} ｜ {staffRoleSelectLabel(invite.role)}</p>
                   </div>
                   <StatusPill tone="amber">待接受</StatusPill>
                 </div>
@@ -2414,10 +2513,14 @@ export function StaffView({
         {canManageStaff ? <StaffForm key={editing?.id ?? "new"} staff={editing} /> : null}
         <div className="card p-5">
           <h2 className="text-lg font-bold text-plum">人事概況</h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl bg-blush p-4">
               <p className="text-xs font-semibold text-ink/55">在職人數</p>
               <p className="mt-1 text-2xl font-bold text-plum">{activeStaff}</p>
+            </div>
+            <div className="rounded-2xl bg-blush p-4">
+              <p className="text-xs font-semibold text-ink/55">停用人數</p>
+              <p className="mt-1 text-2xl font-bold text-plum">{inactiveStaff}</p>
             </div>
             <div className="rounded-2xl bg-blush p-4">
               <p className="text-xs font-semibold text-ink/55">可排技師</p>
@@ -2444,7 +2547,7 @@ export function StaffView({
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h2 className="text-lg font-bold text-plum">班表 / 休息</h2>
-              <p className="mt-1 text-sm text-ink/60">新增或編輯當日班表，勾選休假 / 休息會把該筆班表視為離班狀態。</p>
+              <p className="mt-1 text-sm text-ink/60">新增或編輯當日班表，勾選休假 / 休息會把該筆班表視為離班狀態；停用員工會被標示並留在清單下方。</p>
             </div>
             {editingShift ? (
               <button
@@ -2520,7 +2623,7 @@ export function StaffView({
           {
             key: "role",
             label: "角色",
-            render: (row) => <StatusPill>{roleLabel(row.role)}</StatusPill>,
+            render: (row) => <StatusPill>{staffRoleSelectLabel(row.role)}</StatusPill>,
           },
           {
             key: "specialty",
@@ -2531,7 +2634,7 @@ export function StaffView({
             key: "commission",
             label: "抽成",
             sortValue: (row) => row.commissionRate,
-            render: (row) => `${Math.round(row.commissionRate * 100)}%`,
+            render: (row) => formatCommissionRate(row.commissionRate),
           },
           {
             key: "shift",
@@ -2554,9 +2657,9 @@ export function StaffView({
             label: "狀態",
             render: (row) =>
               row.active ? (
-                <StatusPill tone="sage">在職</StatusPill>
+                <StatusPill tone="sage">在職中</StatusPill>
               ) : (
-                <StatusPill>停用</StatusPill>
+                <StatusPill tone="rose">已停用</StatusPill>
               ),
           },
           ...(canManageStaff

@@ -18,6 +18,7 @@ export const staffErrorText: Record<string, string> = {
   staff_owner_required: "只有店主可以建立或調整店主 / 管理員角色。",
   staff_self_update_forbidden: "不能停用自己的帳號或移除自己的管理權限。",
   staff_last_owner: "至少要保留一位啟用中的店主。",
+  staff_shift_inactive: "停用中的員工不能建立新班表，請先恢復在職或改選其他人員。",
   staff_invite_failed: "員工邀請寄送失敗，請確認 email 或稍後再試。",
   staff_update_failed: "員工資料更新失敗，請稍後再試。",
   staff_shift_forbidden: "你沒有權限編輯班表。",

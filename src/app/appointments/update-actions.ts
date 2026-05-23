@@ -44,6 +44,15 @@ function isAppointmentStatus(value: string): value is AppointmentStatus {
   return ["pending", "confirmed", "in_service", "completed", "cancelled", "no_show"].includes(value);
 }
 
+const appointmentStatusSuccessCodes: Record<AppointmentStatus, string> = {
+  pending: "appointment_status_updated_pending",
+  confirmed: "appointment_status_updated_confirmed",
+  in_service: "appointment_status_updated_in_service",
+  completed: "appointment_status_updated_completed",
+  cancelled: "appointment_status_updated_cancelled",
+  no_show: "appointment_status_updated_no_show",
+};
+
 type QueryResult<T> = {
   data: T | null;
   error: { message?: string } | null;
@@ -285,7 +294,7 @@ async function updateStatus(formData: FormData, status: AppointmentStatus, succe
     }
 
     if (!appointment) {
-      fail("appointment_invalid_input");
+      fail("appointment_not_found");
     }
 
     const { error } = await supabase
@@ -311,7 +320,7 @@ export async function updateAppointmentStatusAction(formData: FormData) {
     fail("appointment_invalid_status");
   }
 
-  await updateStatus(formData, statusRaw, "appointment_status_updated");
+  await updateStatus(formData, statusRaw, appointmentStatusSuccessCodes[statusRaw]);
 }
 
 export async function cancelAppointmentAction(formData: FormData) {

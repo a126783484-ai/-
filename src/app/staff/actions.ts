@@ -42,8 +42,12 @@ function splitList(value: string | null) {
 }
 
 function parseCommissionRate(value: string) {
-  const parsed = Number.parseFloat(value);
-  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) return null;
+  const normalized = value.trim().replace(/%$/, "");
+  const parsed = Number.parseFloat(normalized);
+
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) return null;
+  if (parsed > 1) return parsed / 100;
+
   return parsed;
 }
 
@@ -186,13 +190,13 @@ async function assertCanRemoveOwnerRole(supabase: AppSupabaseClient, workspaceId
 async function hasShiftStaffInWorkspace(supabase: AppSupabaseClient, workspaceId: string, staffId: string) {
   const { data: member, error } = await supabase
     .from("workspace_members")
-    .select("id")
+    .select("id, active")
     .eq("workspace_id", workspaceId)
     .eq("id", staffId)
     .maybeSingle();
 
   if (error) throw error;
-  return Boolean(member);
+  return member ?? null;
 }
 
 async function shiftExists(supabase: AppSupabaseClient, workspaceId: string, shiftId: string) {
@@ -378,6 +382,9 @@ export async function saveStaffShiftAction(formData: FormData) {
   const staffInWorkspace = await hasShiftStaffInWorkspace(supabase, context.workspace.id, staffId);
   if (!staffInWorkspace) {
     fail("staff_shift_invalid_input");
+  }
+  if (!staffInWorkspace.active && !shiftId) {
+    fail("staff_shift_inactive");
   }
 
   if (shiftId) {

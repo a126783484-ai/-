@@ -12,6 +12,7 @@ describe("staff feedback helpers", () => {
     expect(getStaffError("staff_invite_unavailable")).toContain("尚未啟用");
     expect(getStaffError("staff_shift_invalid_input")).toContain("班表");
     expect(getStaffError("staff_shift_forbidden")).toContain("權限");
+    expect(getStaffError("staff_shift_inactive")).toContain("停用");
   });
 
   it("ignores array search params", () => {

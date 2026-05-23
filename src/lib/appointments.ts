@@ -28,6 +28,20 @@ export type AppointmentDependencySummary = {
   ready: boolean;
 };
 
+export type AppointmentDependencyCopy = {
+  title: string;
+  detail: string;
+};
+
+export const appointmentStatusDescriptions: Record<AppointmentStatus, string> = {
+  pending: "等待確認中的預約，尚未排定完成。",
+  confirmed: "已確認，客戶與技師都已對上時段。",
+  in_service: "服務進行中，現場已開始處理。",
+  completed: "已完成，這筆預約已結案。",
+  cancelled: "已取消，不再占用技師時段。",
+  no_show: "客戶未到，這筆預約不再占用技師時段。",
+};
+
 export function appointmentDuration(serviceIds: string[], services: AppointmentService[]) {
   return serviceIds.reduce((total, id) => total + (services.find((service) => service.id === id)?.durationMin ?? 0), 0);
 }
@@ -63,6 +77,30 @@ export function summarizeAppointmentDependencies(data: AppointmentDependencyInpu
     missingStaff: activeStaffCount === 0,
     ready: data.customers.length > 0 && activeServiceCount > 0 && activeStaffCount > 0,
   };
+}
+
+export function describeAppointmentDependencies(summary: AppointmentDependencySummary): AppointmentDependencyCopy {
+  if (summary.ready) {
+    return {
+      title: "預約基礎資料已齊全",
+      detail: `目前有 ${summary.customerCount} 位客戶、${summary.activeServiceCount} 項可用服務、${summary.activeStaffCount} 位啟用員工，可以建立或更新預約。`,
+    };
+  }
+
+  const missing = [
+    summary.missingCustomers ? "客戶" : null,
+    summary.missingServices ? "可用服務" : null,
+    summary.missingStaff ? "可指派員工" : null,
+  ].filter(Boolean);
+
+  return {
+    title: "先補齊預約基礎資料",
+    detail: `目前缺少：${missing.join("、")}。建立這些資料後，才可以建立或更新預約。`,
+  };
+}
+
+export function describeAppointmentConflict() {
+  return "同一位技師在重疊時段只能有一筆有效預約；已取消與未到的預約不算衝突。";
 }
 
 export function statusLabel(status: AppointmentStatus) {
