@@ -5,9 +5,11 @@ import { buildDailyCloseoutSummary, getWorkspaceSetupGuide, isWorkspaceEmpty, lo
 import { appointmentCloseoutLabel, reminderDisplay, statusLabel } from "@/lib/appointments";
 import {
   orderCloseoutLabel,
+  orderPaymentState,
   orderStatusLabel,
   orderStatusTone,
   orderTotal,
+  paymentMethodLabel,
 } from "@/lib/orders";
 import type { Customer } from "@/lib/types";
 import { currency, formatDate, formatTime } from "@/lib/utils";
@@ -396,6 +398,43 @@ export default async function OperationsCommandCenterPage() {
             ) : null}
           </div>
         </div>
+
+        {closeout.refundedOrders.length ? (
+          <div className="card p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-plum">今天要查退款</h2>
+                <p className="mt-1 text-sm text-ink/60">
+                  已退款的訂單也會集中列出，方便核對付款方式與金額。
+                </p>
+              </div>
+              <StatusPill tone="plum">{closeout.refundedOrders.length} 筆</StatusPill>
+            </div>
+            <div className="mt-4 space-y-3">
+              {closeout.refundedOrders.slice(0, 5).map(({ order }) => {
+                const customer = data.customers.find((item) => item.id === order.customerId);
+                const technician = data.staff.find((item) => item.id === order.technicianId);
+                const state = orderPaymentState(order);
+                return (
+                  <article key={order.id} className="rounded-3xl border border-champagne bg-white p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <strong className="block text-plum">{customer?.name ?? "未命名客戶"}</strong>
+                        <p className="mt-1 text-sm text-ink/60">
+                          {technician?.name ?? "未指派"} · {order.id.slice(0, 8)} · {paymentMethodLabel(order.paymentMethod)}
+                        </p>
+                      </div>
+                      <StatusPill tone={orderStatusTone(state)}>{orderStatusLabel(state)}</StatusPill>
+                    </div>
+                    <p className="mt-2 text-sm text-ink/60">
+                      訂單總額 {currency.format(orderTotal(order))} · 實收 {currency.format(order.paidAmount)}
+                    </p>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
 
         <div className="card p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">

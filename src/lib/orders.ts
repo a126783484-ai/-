@@ -1,8 +1,18 @@
-import type { Order, OrderStatus } from "./types";
+import type { Order, OrderStatus, PaymentMethod } from "./types";
 import { currency, formatDateTime } from "./utils";
 
 function normalizeAmount(value: number) {
   return Number.isFinite(value) ? Math.round(value) : 0;
+}
+
+const paymentMethodOrder: PaymentMethod[] = ["cash", "card", "transfer", "line_pay", "other"];
+
+export function paymentMethodLabel(method: PaymentMethod) {
+  if (method === "cash") return "現金";
+  if (method === "card") return "信用卡";
+  if (method === "transfer") return "轉帳";
+  if (method === "line_pay") return "LINE Pay";
+  return "其他";
 }
 
 export function orderSubtotal(order: Pick<Order, "lines">) {
@@ -16,7 +26,10 @@ export function orderTotal(order: Pick<Order, "lines" | "discount" | "tip">) {
   return Math.max(0, orderSubtotal(order) - normalizeAmount(order.discount) + normalizeAmount(order.tip));
 }
 
-export function outstandingAmount(order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount">) {
+export function outstandingAmount(
+  order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount"> & Partial<Pick<Order, "status">>,
+) {
+  if (order.status === "refunded") return 0;
   return Math.max(0, orderTotal(order) - normalizeAmount(order.paidAmount));
 }
 
@@ -25,7 +38,7 @@ export function hasOutstandingBalance(order: Pick<Order, "lines" | "discount" | 
 }
 
 export function orderCloseoutSummary(
-  order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount" | "createdAt">,
+  order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount" | "createdAt"> & Partial<Pick<Order, "status">>,
   now = new Date(),
 ) {
   return {
@@ -45,8 +58,9 @@ export function orderAgeInDays(order: Pick<Order, "createdAt">, now = new Date()
 }
 
 export function orderPaymentState(
-  order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount">,
+  order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount"> & Partial<Pick<Order, "status">>,
 ): OrderStatus {
+  if (order.status === "refunded") return "refunded";
   const balance = outstandingAmount(order);
   if (balance <= 0) return "paid";
   if (normalizeAmount(order.paidAmount) > 0) return "partial";
@@ -54,20 +68,67 @@ export function orderPaymentState(
 }
 
 export function orderFinancialSummary(
-  order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount">,
+  order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount"> & Partial<Pick<Order, "status">>,
 ) {
   const subtotal = orderSubtotal(order);
   const total = orderTotal(order);
   const paidAmount = Math.max(0, normalizeAmount(order.paidAmount));
-  const outstanding = Math.max(0, total - paidAmount);
+  const outstanding = order.status === "refunded" ? 0 : Math.max(0, total - paidAmount);
 
   return {
     subtotal,
     total,
     paidAmount,
     outstanding,
-    state: (outstanding <= 0 ? "paid" : paidAmount > 0 ? "partial" : "unpaid") as OrderStatus,
+    state: (order.status === "refunded"
+      ? "refunded"
+      : outstanding <= 0
+        ? "paid"
+        : paidAmount > 0
+          ? "partial"
+          : "unpaid") as OrderStatus,
   };
+}
+
+export function orderPaymentMethodBreakdown(
+  orders: Array<Pick<Order, "paymentMethod" | "lines" | "discount" | "tip" | "paidAmount"> & Partial<Pick<Order, "status">>>,
+) {
+  const buckets = new Map<PaymentMethod, { count: number; total: number; outstanding: number }>();
+
+  for (const order of orders) {
+    const current = buckets.get(order.paymentMethod) ?? { count: 0, total: 0, outstanding: 0 };
+    const financial = orderFinancialSummary(order);
+    current.count += 1;
+    current.total += financial.total;
+    current.outstanding += financial.outstanding;
+    buckets.set(order.paymentMethod, current);
+  }
+
+  return paymentMethodOrder
+    .map((method) => {
+      const summary = buckets.get(method);
+      return summary
+        ? {
+            method,
+            label: paymentMethodLabel(method),
+            count: summary.count,
+            total: summary.total,
+            outstanding: summary.outstanding,
+          }
+        : null;
+    })
+    .filter(
+      (
+        summary,
+      ): summary is {
+        method: PaymentMethod;
+        label: string;
+        count: number;
+        total: number;
+        outstanding: number;
+      } => summary !== null,
+    )
+    .sort((left, right) => right.count - left.count || right.total - left.total || left.label.localeCompare(right.label));
 }
 
 export function orderLineSummary(order: Pick<Order, "lines">, maxLines = 3) {
@@ -118,7 +179,8 @@ export function orderCloseoutLabel(
 }
 
 export function orderHandoffSummary(
-  order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount" | "createdAt">,
+  order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount" | "createdAt" | "paymentMethod"> &
+    Partial<Pick<Order, "status">>,
   customerName?: string,
   technicianName?: string,
   now = new Date(),
@@ -128,6 +190,7 @@ export function orderHandoffSummary(
   return [
     "今天要收",
     orderStatusLabel(summary.paymentState),
+    paymentMethodLabel(order.paymentMethod),
     `${customerName ?? "未命名客戶"}／${technicianName ?? "未指派"}`,
     `${currency.format(summary.outstanding)} 尚欠`,
     ageLabel,
@@ -136,7 +199,8 @@ export function orderHandoffSummary(
 }
 
 export function orderExportSummary(
-  order: Pick<Order, "id" | "lines" | "discount" | "tip" | "paidAmount" | "createdAt">,
+  order: Pick<Order, "id" | "lines" | "discount" | "tip" | "paidAmount" | "createdAt" | "paymentMethod"> &
+    Partial<Pick<Order, "status">>,
   now = new Date(),
 ) {
   const financial = orderFinancialSummary(order);
@@ -144,6 +208,7 @@ export function orderExportSummary(
     `#${order.id.slice(0, 8)}`,
     formatDateTime(order.createdAt),
     `總額 ${currency.format(financial.total)}`,
+    `付款方式 ${paymentMethodLabel(order.paymentMethod)}`,
     `實收 ${currency.format(financial.paidAmount)}`,
     `尚欠 ${currency.format(financial.outstanding)}`,
     `狀態 ${orderStatusLabel(financial.state)}`,

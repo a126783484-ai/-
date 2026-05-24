@@ -36,11 +36,13 @@ import {
   orderFinancialSummary,
   orderExportSummary,
   orderLineSummary,
+  orderPaymentMethodBreakdown,
   orderPaymentState,
   orderStatusLabel,
   orderStatusTone,
   orderSubtotal,
   orderTotal,
+  paymentMethodLabel,
   outstandingAmount,
   resolveOrderStatus,
 } from "@/lib/orders";
@@ -2657,6 +2659,14 @@ export function CheckoutView({
   const paidOrders = data.orders.filter((order) => orderPaymentState(order) === "paid").length;
   const partialOrders = data.orders.filter((order) => orderPaymentState(order) === "partial").length;
   const unpaidOrders = data.orders.filter((order) => orderPaymentState(order) === "unpaid").length;
+  const refundedOrders = [...data.orders]
+    .filter((order) => orderPaymentState(order) === "refunded")
+    .sort(
+      (left, right) =>
+        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime() ||
+        orderTotal(right) - orderTotal(left) ||
+        left.id.localeCompare(right.id),
+    );
   const now = new Date();
   const outstandingOrders = [...data.orders]
     .filter((order) => outstandingAmount(order) > 0)
@@ -2665,9 +2675,13 @@ export function CheckoutView({
         outstandingAmount(right) - outstandingAmount(left) ||
         new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
     );
+  const paymentMethodBreakdown = orderPaymentMethodBreakdown(data.orders);
   const checkoutPrintSummary = [
     `${data.workspace.name}｜${formatDateTime(now.toISOString())} 訂單結帳摘要`,
-    `訂單 ${data.orders.length}、已結清 ${paidOrders}、部分付款 ${partialOrders}、未收 ${unpaidOrders}、待收 ${currency.format(totalOutstanding)}`,
+    `訂單 ${data.orders.length}、已結清 ${paidOrders}、部分付款 ${partialOrders}、未收 ${unpaidOrders}、已退款 ${refundedOrders.length}、待收 ${currency.format(totalOutstanding)}`,
+    paymentMethodBreakdown.length
+      ? `付款方式：${paymentMethodBreakdown.map((item) => `${item.label} ${item.count} 筆`).join("／")}`
+      : "付款方式：目前沒有訂單",
     outstandingOrders.length
       ? `待收前 ${Math.min(5, outstandingOrders.length)} 筆：${outstandingOrders
           .slice(0, 5)
@@ -2678,6 +2692,16 @@ export function CheckoutView({
           })
           .join("；")}`
       : "待收：目前沒有待收款訂單",
+    refundedOrders.length
+      ? `已退款待查：${refundedOrders
+          .slice(0, 5)
+          .map((order) => {
+            const customer = data.customers.find((item) => item.id === order.customerId);
+            const technician = data.staff.find((item) => item.id === order.technicianId);
+            return `${customer?.name ?? "未命名客戶"}／${technician?.name ?? "未指派"}｜${orderExportSummary(order, now)}`;
+          })
+          .join("；")}`
+      : "已退款待查：目前沒有退款單",
   ].join("\n");
   const orderFormKey = `${data.orders.length}:${data.orders[0]?.id ?? "none"}`;
   return (
@@ -2742,12 +2766,117 @@ export function CheckoutView({
           {checkoutPrintSummary}
         </pre>
       </section>
-      <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <MetricCard label="訂單總數" value={`${data.orders.length}`} hint="目前工作區的所有訂單" />
         <MetricCard label="待收金額" value={currency.format(totalOutstanding)} hint="所有未結清訂單的合計欠款" />
         <MetricCard label="已結清" value={`${paidOrders}`} hint="付款金額已覆蓋總額" />
         <MetricCard label="部分付款 / 未收" value={`${partialOrders + unpaidOrders}`} hint="仍有待收金額的訂單" />
+        <MetricCard label="已退款" value={`${refundedOrders.length}`} hint="需要人工複核的退款單" />
       </div>
+      <section className="mb-5 grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <div className="card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-plum">待收款</h2>
+              <p className="mt-1 text-sm text-ink/60">
+                先看部分付款與未收款，金額大的排前面。
+              </p>
+            </div>
+            <StatusPill tone="amber">{outstandingOrders.length} 筆</StatusPill>
+          </div>
+          {outstandingOrders.length ? (
+            <div className="mt-4 space-y-3">
+              {outstandingOrders.slice(0, 5).map((order) => {
+                const customer = data.customers.find((item) => item.id === order.customerId);
+                const technician = data.staff.find((item) => item.id === order.technicianId);
+                const balance = outstandingAmount(order);
+                const state = orderPaymentState(order);
+                return (
+                  <article key={order.id} className="rounded-3xl border border-champagne bg-white p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <strong className="block truncate text-plum">{customer?.name ?? "未命名客戶"}</strong>
+                        <p className="mt-1 text-sm text-ink/60">
+                          {technician?.name ?? "未指派"} · {paymentMethodLabel(order.paymentMethod)} · {order.id.slice(0, 8)}
+                        </p>
+                      </div>
+                      <StatusPill tone={orderStatusTone(state)}>{orderStatusLabel(state)}</StatusPill>
+                    </div>
+                    <p className="mt-2 text-sm text-ink/60">
+                      項目：{orderLineSummary(order, 2)}
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+                      <p className="text-sm text-ink/60">
+                        總額 {currency.format(orderTotal(order))} · 已收 {currency.format(order.paidAmount)}
+                      </p>
+                      <p className="text-lg font-bold text-plum">{currency.format(balance)}</p>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState
+              title="目前沒有待收款訂單"
+              action="所有訂單都已結清時，這裡會保持乾淨；一旦出現部分收款或未收款，就會自動列出優先追款名單。"
+            />
+          )}
+        </div>
+        <div className="card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-plum">退款待查與付款方式</h2>
+              <p className="mt-1 text-sm text-ink/60">
+                退款單集中檢查，右側也能直接看到付款方式分布。
+              </p>
+            </div>
+            <StatusPill tone="plum">{refundedOrders.length} 筆退款</StatusPill>
+          </div>
+          {refundedOrders.length ? (
+            <div className="mt-4 space-y-3">
+              {refundedOrders.slice(0, 5).map((order) => {
+                const customer = data.customers.find((item) => item.id === order.customerId);
+                const technician = data.staff.find((item) => item.id === order.technicianId);
+                const state = orderPaymentState(order);
+                return (
+                  <article key={order.id} className="rounded-3xl border border-champagne bg-white p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <strong className="block truncate text-plum">{customer?.name ?? "未命名客戶"}</strong>
+                        <p className="mt-1 text-sm text-ink/60">
+                          {technician?.name ?? "未指派"} · {paymentMethodLabel(order.paymentMethod)} · {order.id.slice(0, 8)}
+                        </p>
+                      </div>
+                      <StatusPill tone={orderStatusTone(state)}>{orderStatusLabel(state)}</StatusPill>
+                    </div>
+                    <p className="mt-2 text-sm text-ink/60">
+                      項目：{orderLineSummary(order, 2)}
+                    </p>
+                    <p className="mt-3 text-sm text-ink/60">
+                      總額 {currency.format(orderTotal(order))} · 實收 {currency.format(order.paidAmount)}
+                    </p>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState
+              title="目前沒有待查退款"
+              action="如果有退款單，這裡會直接列出方便複核。"
+            />
+          )}
+          <div className="mt-5 rounded-3xl border border-champagne bg-blush p-4">
+            <p className="text-sm font-bold text-plum">付款方式分布</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {paymentMethodBreakdown.map((item) => (
+                <StatusPill key={item.method} tone="sage">
+                  {item.label} {item.count}
+                </StatusPill>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
       {canManageCheckout ? (
         <div id="checkout-form" className="mb-5 scroll-mt-28">
           <OrderForm key={orderFormKey} data={data} />
@@ -2756,7 +2885,7 @@ export function CheckoutView({
       <div id="checkout-list" className="scroll-mt-28">
         <ModuleTable
           rows={data.orders}
-          searchPlaceholder="搜尋訂單、客戶、付款方式"
+          searchPlaceholder="搜尋訂單、客戶、付款方式、退款"
           filterOptions={["paid", "partial", "unpaid", "refunded", "cash", "card", "transfer", "line_pay"]}
           emptyTitle="尚無訂單"
           columns={[
@@ -3332,6 +3461,8 @@ export function ReportsView({
   const topService = metrics.serviceRanking[0];
   const closeout = providedCloseout ?? buildDailyCloseoutSummary(data, now);
   const outstandingOrders = closeout.unpaidOrders;
+  const refundedOrders = closeout.refundedOrders;
+  const paymentMethodBreakdown = closeout.paymentMethodBreakdown;
   const followUpCustomers = data.customers
     .map<FollowUpCustomer | null>((customer) => {
       const reminder = reminderDisplay(customer.nextReminder, now);
@@ -3392,8 +3523,12 @@ export function ReportsView({
     `${data.workspace.name}｜${reportMonthLabel}報表摘要`,
     `產出時間：${formatDateTime(now.toISOString())}`,
     `月營收：${currency.format(metrics.monthRevenue)} · 客單價：${currency.format(avg)}`,
-    `待收金額：${currency.format(metrics.pendingPayment)} · 待跟進：${followUpCount} 筆`,
+    `待收金額：${currency.format(closeout.totalOutstanding)} · 待跟進：${followUpCount} 筆`,
     `今天先處理：未完成預約 ${closeout.unfinishedAppointments.length} / 待收訂單 ${outstandingOrders.length} / 低庫存 ${closeout.lowStockItems.length}`,
+    `已退款：${refundedOrders.length} 筆`,
+    paymentMethodBreakdown.length
+      ? `付款方式：${paymentMethodBreakdown.map((item) => `${item.label} ${item.count} 筆`).join("／")}`
+      : "付款方式：目前沒有訂單",
     `可以稍後：回訪提醒 ${followUpCustomers.length} 位 / 明日預約 ${closeout.tomorrowAppointments.length} 筆 / 明日班表 ${closeout.tomorrowShifts.length} 筆`,
     `訂單狀態：已結清 ${paidOrders} / 部分付款 ${partialOrders} / 未收款 ${unpaidOrders}`,
     topService
@@ -3511,7 +3646,7 @@ export function ReportsView({
           </pre>
         </div>
       </section>
-      <section className="mt-5 grid gap-4 md:grid-cols-4 print:grid-cols-2">
+      <section className="mt-5 grid gap-4 md:grid-cols-5 print:grid-cols-2">
         <MetricCard
           label="月營收"
           value={currency.format(metrics.monthRevenue)}
@@ -3524,13 +3659,18 @@ export function ReportsView({
         />
         <MetricCard
           label="待收金額"
-          value={currency.format(metrics.pendingPayment)}
+          value={currency.format(closeout.totalOutstanding)}
           hint="所有未結清訂單的合計欠款"
         />
         <MetricCard
           label="待跟進"
           value={`${followUpCount}`}
           hint="待收款與回訪名單合計"
+        />
+        <MetricCard
+          label="已退款"
+          value={`${refundedOrders.length}`}
+          hint="需人工複核的退款單"
         />
       </section>
       <section className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
@@ -3690,6 +3830,39 @@ export function ReportsView({
               />
             </div>
           )}
+          {refundedOrders.length ? (
+            <div className="mt-5 rounded-3xl border border-champagne bg-blush/30 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-bold text-plum">已退款待查</h3>
+                  <p className="mt-1 text-sm text-ink/60">退款單也會列在這裡，方便櫃台一起核對付款方式與內容。</p>
+                </div>
+                <StatusPill tone="plum">{refundedOrders.length} 筆</StatusPill>
+              </div>
+              <div className="mt-4 space-y-3">
+                {refundedOrders.slice(0, 5).map(({ order }) => {
+                  const customer = data.customers.find((item) => item.id === order.customerId);
+                  const technician = data.staff.find((item) => item.id === order.technicianId);
+                  return (
+                    <article key={order.id} className="rounded-2xl border border-champagne bg-white p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <strong className="block text-plum">{customer?.name ?? "未命名客戶"}</strong>
+                          <p className="mt-1 text-sm text-ink/60">
+                            {technician?.name ?? "未指派"} · {order.id.slice(0, 8)} · {paymentMethodLabel(order.paymentMethod)}
+                          </p>
+                        </div>
+                        <StatusPill tone={orderStatusTone("refunded")}>{orderStatusLabel("refunded")}</StatusPill>
+                      </div>
+                      <p className="mt-2 text-sm text-ink/60">
+                        總額 {currency.format(orderTotal(order))} · 實收 {currency.format(order.paidAmount)}
+                      </p>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
         <div className="card p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">

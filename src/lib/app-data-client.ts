@@ -7,6 +7,7 @@ import {
 import {
   orderCloseoutSummary,
   orderHandoffSummary,
+  orderPaymentMethodBreakdown,
   orderStatusTone,
 } from "./orders";
 import { currency, formatDate, formatTime } from "./utils";
@@ -68,6 +69,11 @@ export interface DailyCloseoutSummary {
     ageDays: number;
     paymentState: ReturnType<typeof orderCloseoutSummary>["paymentState"];
   }>;
+  refundedOrders: Array<{
+    order: Order;
+    ageDays: number;
+  }>;
+  paymentMethodBreakdown: ReturnType<typeof orderPaymentMethodBreakdown>;
   lowStockItems: InventoryItem[];
   tomorrowAppointments: Appointment[];
   tomorrowShifts: Shift[];
@@ -110,6 +116,21 @@ export function buildDailyCloseoutSummary(
         right.ageDays - left.ageDays ||
         new Date(left.order.createdAt).getTime() - new Date(right.order.createdAt).getTime(),
     );
+
+  const refundedOrders = [...data.orders]
+    .filter((order) => order.status === "refunded")
+    .map((order) => ({
+      order,
+      ageDays: Math.max(0, Math.floor((now.getTime() - new Date(order.createdAt).getTime()) / 86_400_000)),
+    }))
+    .sort(
+      (left, right) =>
+        new Date(right.order.createdAt).getTime() - new Date(left.order.createdAt).getTime() ||
+        right.ageDays - left.ageDays ||
+        left.order.id.localeCompare(right.order.id),
+    );
+
+  const paymentMethodBreakdown = orderPaymentMethodBreakdown(data.orders);
 
   const lowStockItems = [...data.inventory]
     .filter((item) => item.quantity <= item.lowStockThreshold)
@@ -233,7 +254,12 @@ export function buildDailyCloseoutSummary(
   const auditLines = [
     `今天先處理：未完成預約 ${unfinishedAppointments.length} 筆、待收訂單 ${unpaidOrders.length} 筆（${currency.format(
       unpaidOrders.reduce((sum, item) => sum + item.outstanding, 0),
-    )}）、低庫存 ${lowStockItems.length} 項`,
+    )}）、已退款 ${refundedOrders.length} 筆、低庫存 ${lowStockItems.length} 項`,
+    paymentMethodBreakdown.length
+      ? `付款方式：${paymentMethodBreakdown
+          .map((item) => `${item.label} ${item.count} 筆`)
+          .join("、")}`
+      : "付款方式：目前沒有訂單",
     `可以稍後：回訪提醒 ${followUpCustomers.length} 位、明日預約 ${tomorrowAppointments.length} 筆、明日班表 ${tomorrowShifts.length} 筆`,
     handoffItems.length
       ? `要交接/列印：${handoffItems
@@ -248,6 +274,8 @@ export function buildDailyCloseoutSummary(
     tomorrowKey,
     unfinishedAppointments,
     unpaidOrders,
+    refundedOrders,
+    paymentMethodBreakdown,
     lowStockItems,
     tomorrowAppointments,
     tomorrowShifts,
