@@ -1,5 +1,5 @@
 import type { Order, OrderStatus } from "./types";
-import { currency } from "./utils";
+import { currency, formatDateTime } from "./utils";
 
 function normalizeAmount(value: number) {
   return Number.isFinite(value) ? Math.round(value) : 0;
@@ -115,4 +115,21 @@ export function orderCloseoutLabel(
   const summary = orderCloseoutSummary(order, now);
   const ageLabel = summary.ageDays === 0 ? "今天新增" : `已建立 ${summary.ageDays} 天`;
   return `${currency.format(summary.outstanding)} · ${ageLabel}`;
+}
+
+export function orderExportSummary(
+  order: Pick<Order, "id" | "lines" | "discount" | "tip" | "paidAmount" | "createdAt">,
+  now = new Date(),
+) {
+  const financial = orderFinancialSummary(order);
+  return [
+    `#${order.id.slice(0, 8)}`,
+    formatDateTime(order.createdAt),
+    `總額 ${currency.format(financial.total)}`,
+    `實收 ${currency.format(financial.paidAmount)}`,
+    `尚欠 ${currency.format(financial.outstanding)}`,
+    `狀態 ${orderStatusLabel(financial.state)}`,
+    `明細 ${orderLineSummary(order, 4)}`,
+    `追款 ${orderCloseoutLabel(order, now)}`,
+  ].join("｜");
 }

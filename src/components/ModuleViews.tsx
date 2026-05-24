@@ -33,8 +33,8 @@ import {
 } from "@/lib/appointments";
 import { dashboardMetrics } from "@/lib/analytics";
 import {
-  orderCloseoutLabel,
   orderFinancialSummary,
+  orderExportSummary,
   orderLineSummary,
   orderPaymentState,
   orderStatusLabel,
@@ -2308,6 +2308,7 @@ export function InventoryView({
   const hasInventory = data.inventory.length > 0;
   const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
   const workspaceEmpty = isWorkspaceEmpty(data);
+  const now = new Date();
   const inventoryRows = [...data.inventory].sort((a, b) => {
     const aLow = a.quantity <= a.lowStockThreshold;
     const bLow = b.quantity <= b.lowStockThreshold;
@@ -2329,6 +2330,26 @@ export function InventoryView({
     .filter((movement) => movement.quantity < 0)
     .reduce((sum, movement) => sum + Math.abs(movement.quantity), 0);
   const recentMovements = data.inventoryMovements.slice(0, 25);
+  const lowStockItems = inventoryRows.filter((item) => item.quantity <= item.lowStockThreshold);
+  const inventoryPrintSummary = [
+    `${data.workspace.name}｜${formatDateTime(now.toISOString())} 庫存摘要`,
+    `品項 ${data.inventory.length}、低庫存 ${lowStockCount}、庫存成本 ${currency.format(totalValue)}、淨異動 ${netMovement.toFixed(2)} 件`,
+    lowStockItems.length
+      ? `需補貨：${lowStockItems
+          .slice(0, 5)
+          .map((item) => `${item.name} ${formatInventoryStock(item.quantity, item.lowStockThreshold)}`)
+          .join("；")}`
+      : "需補貨：目前沒有低庫存品項",
+    recentMovements.length
+      ? `最近異動：${recentMovements
+          .slice(0, 5)
+          .map((movement) => {
+            const itemName = data.inventory.find((item) => item.id === movement.itemId)?.name ?? movement.itemId;
+            return `${new Date(movement.createdAt).toLocaleString("zh-TW")}｜${itemName}｜${formatInventoryMovementQuantity(movement.quantity)}`;
+          })
+          .join("；")}`
+      : "最近異動：目前沒有紀錄",
+  ].join("\n");
 
   useEffect(() => {
     if (notice?.kind === "success") {
@@ -2361,6 +2382,20 @@ export function InventoryView({
         </div>
       ) : null}
       {notice ? <NoticeBanner notice={notice} /> : null}
+      <section className="mb-5 hidden rounded-3xl border border-black/10 bg-transparent p-5 print:block">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-plum">庫存列印摘要</h2>
+            <p className="mt-1 text-sm text-ink/60">
+              這段可以直接列印或複製，方便盤點、補貨與交接。
+            </p>
+          </div>
+          <StatusPill tone="amber">{lowStockCount} 項需補貨</StatusPill>
+        </div>
+        <pre className="mt-4 whitespace-pre-wrap rounded-3xl border border-champagne bg-white p-4 text-sm leading-6 text-ink/80 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+          {inventoryPrintSummary}
+        </pre>
+      </section>
       <section className="grid gap-4 md:grid-cols-4">
         <MetricCard label="品項數" value={`${data.inventory.length}`} hint="所有在庫品項" />
         <MetricCard label="低庫存" value={`${lowStockCount}`} hint="已低於警戒值" />
@@ -2535,6 +2570,28 @@ export function CheckoutView({
   const paidOrders = data.orders.filter((order) => orderPaymentState(order) === "paid").length;
   const partialOrders = data.orders.filter((order) => orderPaymentState(order) === "partial").length;
   const unpaidOrders = data.orders.filter((order) => orderPaymentState(order) === "unpaid").length;
+  const now = new Date();
+  const outstandingOrders = [...data.orders]
+    .filter((order) => outstandingAmount(order) > 0)
+    .sort(
+      (left, right) =>
+        outstandingAmount(right) - outstandingAmount(left) ||
+        new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
+    );
+  const checkoutPrintSummary = [
+    `${data.workspace.name}｜${formatDateTime(now.toISOString())} 訂單結帳摘要`,
+    `訂單 ${data.orders.length}、已結清 ${paidOrders}、部分付款 ${partialOrders}、未收 ${unpaidOrders}、待收 ${currency.format(totalOutstanding)}`,
+    outstandingOrders.length
+      ? `待收前 ${Math.min(5, outstandingOrders.length)} 筆：${outstandingOrders
+          .slice(0, 5)
+          .map((order) => {
+            const customer = data.customers.find((item) => item.id === order.customerId);
+            const technician = data.staff.find((item) => item.id === order.technicianId);
+            return `${customer?.name ?? "未命名客戶"}／${technician?.name ?? "未指派"}｜${orderExportSummary(order, now)}`;
+          })
+          .join("；")}`
+      : "待收：目前沒有待收款訂單",
+  ].join("\n");
   const orderFormKey = `${data.orders.length}:${data.orders[0]?.id ?? "none"}`;
   return (
     <AppShell
@@ -2576,6 +2633,20 @@ export function CheckoutView({
           />
         </div>
       ) : null}
+      <section className="mb-5 hidden rounded-3xl border border-black/10 bg-transparent p-5 print:block">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-plum">訂單列印摘要</h2>
+            <p className="mt-1 text-sm text-ink/60">
+              印出後可直接給櫃台、老闆或客戶做收款與對帳備查。
+            </p>
+          </div>
+          <StatusPill tone="amber">{currency.format(totalOutstanding)} 待收</StatusPill>
+        </div>
+        <pre className="mt-4 whitespace-pre-wrap rounded-3xl border border-champagne bg-white p-4 text-sm leading-6 text-ink/80 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+          {checkoutPrintSummary}
+        </pre>
+      </section>
       <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="訂單總數" value={`${data.orders.length}`} hint="目前工作區的所有訂單" />
         <MetricCard label="待收金額" value={currency.format(totalOutstanding)} hint="所有未結清訂單的合計欠款" />
@@ -2721,6 +2792,20 @@ export function StaffView({
   const shifts = [...data.shifts].sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
   const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
   const workspaceEmpty = isWorkspaceEmpty(data);
+  const now = new Date();
+  const staffPrintSummary = [
+    `${data.workspace.name}｜${formatDateTime(now.toISOString())} 員工與班表摘要`,
+    `在職 ${activeStaff}、停用 ${inactiveStaff}、可排技師 ${technicians}、管理權限 ${admins}`,
+    shifts.length
+      ? `近期班表：${shifts
+          .slice(0, 6)
+          .map((shift) => {
+            const memberName = data.staff.find((member) => member.id === shift.staffId)?.name ?? "未命名員工";
+            return `${formatDate(shift.date)}｜${memberName}｜${shiftSummary(shift)}`;
+          })
+          .join("；")}`
+      : "近期班表：目前沒有班表",
+  ].join("\n");
 
   useEffect(() => {
     if (notice?.kind === "success") {
@@ -2757,6 +2842,20 @@ export function StaffView({
       <div className="print:hidden">
         <NoticeBanner notice={notice} />
       </div>
+      <section className="mb-5 hidden rounded-3xl border border-black/10 bg-transparent p-5 print:block">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-plum">班表列印摘要</h2>
+            <p className="mt-1 text-sm text-ink/60">
+              直接張貼或交接都可用，印出後不需要再看畫面操作。
+            </p>
+          </div>
+          <StatusPill tone="sage">{shifts.length} 筆班表</StatusPill>
+        </div>
+        <pre className="mt-4 whitespace-pre-wrap rounded-3xl border border-champagne bg-white p-4 text-sm leading-6 text-ink/80 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+          {staffPrintSummary}
+        </pre>
+      </section>
       {canManageStaff ? (
         <StaffScheduleChart
           data={data}
@@ -3182,7 +3281,7 @@ export function ReportsView({
           .map(({ order }) => {
             const customer = data.customers.find((item) => item.id === order.customerId);
             const technician = data.staff.find((item) => item.id === order.technicianId);
-            return `${customer?.name ?? "未命名客戶"}／${technician?.name ?? "未指派"}｜${orderCloseoutLabel(order, now)}｜${orderLineSummary(order, 2)}`;
+            return `${customer?.name ?? "未命名客戶"}／${technician?.name ?? "未指派"}｜${orderExportSummary(order, now)}`;
           })
           .join("；")}`
       : "待收款前 0 筆：目前沒有待收款訂單",
