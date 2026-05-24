@@ -61,6 +61,33 @@ export function normalizeShiftLeaveType(value: string | null | undefined): Shift
   return (shiftLeaveTypes as readonly string[]).includes(value ?? "") ? (value as ShiftLeaveType) : "work";
 }
 
+const legacyLeaveStartTimeMap: Record<Exclude<ShiftLeaveType, "work">, string> = {
+  rest: "00:00",
+  personal: "00:15",
+  sick: "00:30",
+  comp_time: "00:45",
+  national_holiday: "01:00",
+  annual: "01:15",
+};
+
+const legacyLeaveTypeByStartTime = Object.fromEntries(
+  Object.entries(legacyLeaveStartTimeMap).map(([leaveType, startTime]) => [startTime, leaveType]),
+) as Record<string, Exclude<ShiftLeaveType, "work">>;
+
+export function encodeLegacyLeaveShiftTimes(leaveType: Exclude<ShiftLeaveType, "work">) {
+  const startTime = legacyLeaveStartTimeMap[leaveType];
+  return {
+    startTime,
+    endTime: "23:59",
+  };
+}
+
+export function decodeLegacyLeaveShiftType(leave: boolean, startTime: string, leaveType?: string | null) {
+  if (!leave) return "work" as ShiftLeaveType;
+  if (leaveType) return normalizeShiftLeaveType(leaveType);
+  return (legacyLeaveTypeByStartTime[startTime] ?? "rest") as ShiftLeaveType;
+}
+
 export function shiftSummary(leaveType: ShiftLeaveType, startTime: string, endTime: string) {
   if (leaveType === "work") {
     return `${startTime}–${endTime}`;

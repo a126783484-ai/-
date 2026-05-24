@@ -26,6 +26,7 @@ import {
 } from "@/lib/staff-invites";
 import { ensureOwnerWorkspaceForUser } from "@/lib/workspace";
 import { buildSeedAppData, seedWorkspaceSetupSteps } from "@/lib/seed";
+import { decodeLegacyLeaveShiftType } from "@/lib/shifts";
 
 type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
 type WorkspaceSummaryRow = Pick<
@@ -366,7 +367,7 @@ function toInventoryMovement(row: InventoryMovementSummaryRow): InventoryMovemen
 }
 
 function toShift(row: ShiftSummaryRow): Shift {
-  const leaveType = (row.leave_type ?? (row.leave ? "rest" : "work")) as ShiftLeaveType;
+  const leaveType = decodeLegacyLeaveShiftType(row.leave, row.start_time, row.leave_type);
   return {
     id: row.id,
     workspaceId: row.workspace_id,

@@ -10,7 +10,7 @@ import type { Role, ShiftLeaveType } from "@/lib/types";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
 import type { Database } from "@/lib/database.types";
 import { isMissingStaffInviteTableError } from "@/lib/staff-invites";
-import { normalizeShiftLeaveType } from "@/lib/shifts";
+import { encodeLegacyLeaveShiftTimes, normalizeShiftLeaveType } from "@/lib/shifts";
 
 type AppSupabaseClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 type AdminSupabaseClient = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
@@ -424,12 +424,13 @@ export async function saveStaffShiftAction(formData: FormData) {
         });
 
     if (result.error && isMissingShiftLeaveTypeColumn(result.error)) {
+      const legacyLeaveTimes = leave ? encodeLegacyLeaveShiftTimes(leaveType as Exclude<ShiftLeaveType, "work">) : null;
       const legacyPayload = {
         workspace_id: context.workspace.id,
         staff_id: staffId,
         shift_date: shiftDate,
-        start_time: startTime,
-        end_time: endTime,
+        start_time: legacyLeaveTimes?.startTime ?? startTime,
+        end_time: legacyLeaveTimes?.endTime ?? endTime,
         leave,
       };
 
