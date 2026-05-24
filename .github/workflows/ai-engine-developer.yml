@@ -22,7 +22,6 @@ permissions:
 jobs:
   ai-engine-develop:
     runs-on: ubuntu-latest
-    if: ${{ false }}
     steps:
       - name: Automation paused
         run: echo "AI Engine Developer workflow is paused for safety."

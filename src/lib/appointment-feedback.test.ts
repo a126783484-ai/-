@@ -7,9 +7,9 @@ describe("appointment feedback helpers", () => {
     expect(getAppointmentMessage("appointment_updated")).toContain("已更新");
     expect(getAppointmentMessage("appointment_status_updated")).toContain("已更新");
     expect(getAppointmentMessage("appointment_cancelled")).toContain("已取消");
-    expect(getAppointmentError("appointment_conflict")).toContain("衝突");
-    expect(getAppointmentError("appointment_update_conflict")).toContain("衝突");
-    expect(getAppointmentError("appointment_invalid_status")).toContain("不正確");
+    expect(getAppointmentError("appointment_conflict")).toContain("改時間");
+    expect(getAppointmentError("appointment_update_conflict")).toContain("改派");
+    expect(getAppointmentError("appointment_invalid_status")).toContain("有效的預約狀態");
   });
 
   it("ignores array search params", () => {

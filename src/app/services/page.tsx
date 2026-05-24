@@ -1,58 +1,19 @@
-'use client';
+export const dynamic = "force-dynamic";
 
-import { useState, useEffect } from 'react';
-import { getSupabaseBrowserClient } from '@/lib/supabase';
-import type { ServiceItem } from '@/lib/types';
+import { ServicesView } from "@/components/ModuleViews";
+import { loadAppData } from "@/lib/app-data";
+import { getServiceError, getServiceMessage, readServiceParam } from "@/lib/service-feedback";
 
-const ServicesPage = () => {
-  const [services, setServices] = useState<ServiceItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+interface ServicesPageProps {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}
 
-  useEffect(() => {
-    const fetchServices = async () => {
-      setLoading(true);
-      try {
-        const supabase = getSupabaseBrowserClient();
-        const { data, error } = await supabase
-          .from('service_items')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (error) {
-          setError(error.message);
-        } else {
-          setServices(data || []);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unknown error');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchServices();
-  }, []);
+export default async function ServicesPage({ searchParams }: ServicesPageProps) {
+  const data = await loadAppData();
+  const params = searchParams ? await searchParams : undefined;
+  const message = getServiceMessage(readServiceParam(params?.message));
+  const error = getServiceError(readServiceParam(params?.error));
+  const notice = error ? { kind: "error" as const, message: error } : message ? { kind: "success" as const, message } : undefined;
 
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Services</h1>
-      {loading ? (
-        <p>Loading...</p>
-      ) : error ? (
-        <p className="text-red-500">{error}</p>
-      ) : services.length === 0 ? (
-        <p>No services found.</p>
-      ) : (
-        <div className="grid gap-4">
-          {services.map((service) => (
-            <div key={service.id} className="p-4 border rounded">
-              <h2 className="text-xl font-semibold">{service.name}</h2>
-              <p className="text-gray-600">{service.description || ''}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default ServicesPage;
+  return <ServicesView data={data} notice={notice} />;
+}

@@ -41,6 +41,20 @@ jobs:
           npm install -D @playwright/test
           npx playwright install --with-deps chromium
 
+      - name: Resolve Supabase env
+        shell: bash
+        run: |
+          node <<SUPABASE_ENV >> "$GITHUB_ENV"
+          const fs = require("fs");
+          const text = fs.readFileSync("src/lib/supabase.ts", "utf8");
+          const url = text.match(/const EXPECTED_PRODUCTION_SUPABASE_URL = \"([^\"]+)\";/)?.[1];
+          const key = text.match(/const EXPECTED_PRODUCTION_SUPABASE_ANON_KEY = \"([^\"]+)\";/)?.[1];
+          if (!url || !key) process.exit(1);
+          console.log("NEXT_PUBLIC_SUPABASE_URL=" + url);
+          console.log("NEXT_PUBLIC_SUPABASE_ANON_KEY=" + key);
+          console.log("SUPABASE_URL=" + url);
+          console.log("SUPABASE_ANON_KEY=" + key);
+          SUPABASE_ENV
       - name: Start app
         run: |
           npm run dev > smoke-server.log 2>&1 &

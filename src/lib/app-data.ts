@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+export { buildDailyCloseoutSummary, dateKey } from "@/lib/app-data-client";
+export type { CloseoutAttentionItem, DailyCloseoutSummary } from "@/lib/app-data-client";
 import type { Database } from "@/lib/database.types";
 import type {
   Appointment,
@@ -22,6 +24,7 @@ import {
   toStaffInvite,
 } from "@/lib/staff-invites";
 import { ensureOwnerWorkspaceForUser } from "@/lib/workspace";
+import { buildSeedAppData, seedWorkspaceSetupSteps } from "@/lib/seed";
 
 type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
 type WorkspaceSummaryRow = Pick<
@@ -89,6 +92,13 @@ export interface AppData {
   inventoryMovements: InventoryMovement[];
   shifts: Shift[];
   needsWorkspace: boolean;
+  demoMode: boolean;
+}
+
+export interface WorkspaceSetupGuide {
+  title: string;
+  action: string;
+  links: Array<{ href: string; label: string }>;
 }
 
 function emptyWorkspace(): Workspace {
@@ -119,6 +129,90 @@ function emptyAppData(user: { id: string; email: string | null }): AppData {
     inventoryMovements: [],
     shifts: [],
     needsWorkspace: true,
+    demoMode: false,
+  };
+}
+
+export function isWorkspaceEmpty(data: Pick<AppData, "staff" | "categories" | "services" | "customers" | "appointments" | "orders" | "inventory" | "inventoryMovements" | "shifts">) {
+  return (
+    data.staff.length === 0 &&
+    data.categories.length === 0 &&
+    data.services.length === 0 &&
+    data.customers.length === 0 &&
+    data.appointments.length === 0 &&
+    data.orders.length === 0 &&
+    data.inventory.length === 0 &&
+    data.inventoryMovements.length === 0 &&
+    data.shifts.length === 0
+  );
+}
+
+function isWorkspaceSetupIncomplete(
+  data: Pick<
+    AppData,
+    | "needsWorkspace"
+    | "workspace"
+    | "categories"
+    | "services"
+    | "staff"
+  >,
+) {
+  return (
+    data.needsWorkspace ||
+    data.workspace.name.trim() === "" ||
+    data.workspace.name === "尚未建立 workspace" ||
+    data.workspace.phone.trim() === "" ||
+    data.workspace.address.trim() === "" ||
+    data.workspace.businessHours.trim() === "{}" ||
+    data.categories.length === 0 ||
+    data.services.length === 0 ||
+    data.staff.length === 0
+  );
+}
+
+export function getWorkspaceSetupGuide(
+  data: Pick<
+    AppData,
+    | "needsWorkspace"
+    | "workspace"
+    | "categories"
+    | "services"
+    | "staff"
+    | "customers"
+    | "appointments"
+    | "orders"
+    | "inventory"
+    | "shifts"
+  >,
+): WorkspaceSetupGuide | null {
+  if (!isWorkspaceSetupIncomplete(data)) {
+    return null;
+  }
+
+  const links = seedWorkspaceSetupSteps
+    .filter((step) => step.matches(data))
+    .reduce<Array<{ href: string; label: string }>>((items, step) => {
+      const href = typeof step.href === "function" ? step.href(data) : step.href;
+      if (!items.some((item) => item.href === href)) {
+        items.push({ href, label: step.label });
+      }
+      return items;
+    }, [])
+    .slice(0, 3);
+
+  const missingAreas = seedWorkspaceSetupSteps
+    .filter((step) => step.matches(data))
+    .map((step) => step.area);
+
+  return {
+    title: data.needsWorkspace
+      ? "尚未完成 workspace 初始化"
+      : "這個工作區還有幾個核心資料缺口",
+    action:
+      missingAreas.length === 1
+        ? `先補 ${missingAreas[0]}，這頁就能開始提供更明確的下一步。`
+        : `先從 ${missingAreas.slice(0, 2).join("、")} 開始，其他缺口可以後補；這會最快打開後續頁面的可操作內容。`,
+    links,
   };
 }
 
@@ -295,6 +389,7 @@ async function getUser() {
 }
 
 export async function loadAppData(): Promise<AppData> {
+  const config = getSupabaseConfig();
   const { supabase, user } = await getUser();
   const userSummary = { id: user.id, email: user.email ?? null };
 
@@ -328,6 +423,7 @@ export async function loadAppData(): Promise<AppData> {
         ...emptyAppData(userSummary),
         staffInvites: pendingInvites,
         staffInviteFeatureEnabled: true,
+        demoMode: config.demoMode,
       };
     }
 
@@ -421,7 +517,8 @@ export async function loadAppData(): Promise<AppData> {
       .from("shifts")
       .select("id, workspace_id, staff_id, shift_date, start_time, end_time, leave")
       .eq("workspace_id", workspaceId)
-      .order("shift_date", { ascending: false }),
+      .order("shift_date", { ascending: false })
+      .order("start_time", { ascending: false }),
     supabase
       .from("workspace_member_invites")
       .select("id, workspace_id, email, display_name, phone, role, commission_rate, specialties, token, status, invited_by, created_at, accepted_at")
@@ -499,6 +596,38 @@ export async function loadAppData(): Promise<AppData> {
   );
   const orderIds = new Set((ordersResult.data ?? []).map((order) => order.id));
 
+  if (config.demoMode && isWorkspaceEmpty({
+    staff: (staffResult.data ?? []).map(toStaff),
+    categories: (categoriesResult.data ?? []).map(toCategory),
+    services: (servicesResult.data ?? []).map((service) =>
+      toService(service, categoriesResult.data ?? []),
+    ),
+    customers: (customersResult.data ?? []).map(toCustomer),
+    appointments: (appointmentsResult.data ?? []).map((appointment) =>
+      toAppointment(
+        appointment,
+        (appointmentServicesResult.data ?? []).filter((item) =>
+          appointmentIds.has(item.appointment_id),
+        ),
+      ),
+    ),
+    orders: (ordersResult.data ?? []).map((order) =>
+      toOrder(
+        order,
+        (orderLinesResult.data ?? []).filter((line) =>
+          orderIds.has(line.order_id),
+        ),
+      ),
+    ),
+    inventory: (inventoryResult.data ?? []).map(toInventory),
+    inventoryMovements: (inventoryMovementsResult.data ?? []).map(
+      toInventoryMovement,
+    ),
+    shifts: (shiftsResult.data ?? []).map(toShift),
+  })) {
+    return buildSeedAppData(userSummary);
+  }
+
   return {
     user: userSummary,
     workspace: toWorkspace(workspaceResult.data),
@@ -533,5 +662,6 @@ export async function loadAppData(): Promise<AppData> {
     ),
     shifts: (shiftsResult.data ?? []).map(toShift),
     needsWorkspace: false,
+    demoMode: config.demoMode,
   };
 }

@@ -62,7 +62,7 @@ jobs:
           fi
           git config user.name "beauty-os-product-agent"
           git config user.email "actions@github.com"
-          git add "$PRODUCT_AGENT_TARGET_FILE"
+          git add src/app/services/page.tsx src/app/page.tsx src/components/ModuleViews.tsx
           git commit -m "feat: improve Beauty OS P1 product UX"
           git push origin product/ux-p1-demo-flow
 

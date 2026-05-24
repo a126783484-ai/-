@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 const email = process.env.TEST_USER_EMAIL;
 const password = process.env.TEST_USER_PASSWORD;
+const authSmokeRequired = process.env.SMOKE_AUTH_REQUIRED === 'true';
 
 async function login(page: import('@playwright/test').Page) {
   await page.goto('/login?next=/dashboard');
@@ -12,7 +13,10 @@ async function login(page: import('@playwright/test').Page) {
 }
 
 test.describe('authenticated smoke flow', () => {
-  test.skip(!email || !password, 'TEST_USER_EMAIL and TEST_USER_PASSWORD are required for authenticated smoke tests');
+  test.skip(
+    !authSmokeRequired || !email || !password,
+    'SMOKE_AUTH_REQUIRED=true with TEST_USER_EMAIL and TEST_USER_PASSWORD is required for authenticated smoke tests',
+  );
 
   test('test user can login and reach dashboard', async ({ page }) => {
     await login(page);

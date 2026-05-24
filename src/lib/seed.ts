@@ -1,6 +1,32 @@
-import type { Appointment, Customer, InventoryItem, Order, ServiceItem, Shift, StaffMember, Workspace } from "./types";
+import type {
+  Appointment,
+  Customer,
+  InventoryItem,
+  InventoryMovement,
+  Order,
+  ServiceCategory,
+  ServiceItem,
+  Shift,
+  StaffMember,
+  Workspace,
+} from "./types";
+import type { AppData } from "./app-data";
 
 // Shared fixtures for unit tests.
+
+type WorkspaceSetupData = Pick<
+  AppData,
+  | "needsWorkspace"
+  | "workspace"
+  | "categories"
+  | "services"
+  | "staff"
+  | "customers"
+  | "appointments"
+  | "orders"
+  | "inventory"
+  | "shifts"
+>;
 
 export const workspace: Workspace = {
   id: "ws_test_luxe",
@@ -10,6 +36,14 @@ export const workspace: Workspace = {
   brandColor: "#C87486",
   businessHours: "週一至週六 11:00–21:00，週日預約制"
 };
+
+export const categories: ServiceCategory[] = [
+  { id: "cat_nail", workspaceId: workspace.id, name: "美甲", sortOrder: 1 },
+  { id: "cat_lash", workspaceId: workspace.id, name: "美睫", sortOrder: 2 },
+  { id: "cat_brow", workspaceId: workspace.id, name: "霧眉", sortOrder: 3 },
+  { id: "cat_spa", workspaceId: workspace.id, name: "SPA", sortOrder: 4 },
+  { id: "cat_addon", workspaceId: workspace.id, name: "加購", sortOrder: 5 }
+];
 
 export const staff: StaffMember[] = [
   { id: "st_owner", workspaceId: workspace.id, name: "Mia 林", role: "owner", phone: "0911-111-111", active: true, commissionRate: 0.12, specialties: ["凝膠美甲", "品牌營運"] },
@@ -55,5 +89,99 @@ export const inventory: InventoryItem[] = [
 export const shifts: Shift[] = [
   { id: "shift_ava", workspaceId: workspace.id, staffId: "st_ava", date: "2026-05-15", startTime: "11:00", endTime: "20:00", leave: false },
   { id: "shift_nina", workspaceId: workspace.id, staffId: "st_nina", date: "2026-05-15", startTime: "13:00", endTime: "21:00", leave: false },
-  { id: "shift_lulu", workspaceId: workspace.id, staffId: "st_lulu", date: "2026-05-15", startTime: "10:30", endTime: "19:30", leave: false }
+  { id: "shift_lulu", workspaceId: workspace.id, staffId: "st_lulu", date: "2026-05-15", startTime: "10:30", endTime: "19:30", leave: false },
+  { id: "shift_ava_rest", workspaceId: workspace.id, staffId: "st_ava", date: "2026-05-16", startTime: "10:00", endTime: "18:00", leave: true }
 ];
+
+export const inventoryMovements: InventoryMovement[] = [
+  { id: "move_001", workspaceId: workspace.id, itemId: "inv_gel_rose", movementType: "purchase", quantity: 8, note: "首批進貨", createdAt: "2026-05-01T09:30:00+08:00" },
+  { id: "move_002", workspaceId: workspace.id, itemId: "inv_lash_c", movementType: "consume", quantity: -3, note: "實際扣料", createdAt: "2026-05-15T18:05:00+08:00" },
+  { id: "move_003", workspaceId: workspace.id, itemId: "inv_oil", movementType: "adjust", quantity: 2, note: "盤點修正", createdAt: "2026-05-16T12:00:00+08:00" }
+];
+
+function isWorkspaceProfileIncomplete(data: WorkspaceSetupData) {
+  return (
+    data.needsWorkspace ||
+    data.workspace.name.trim() === "" ||
+    data.workspace.name === "尚未建立 workspace" ||
+    data.workspace.phone.trim() === "" ||
+    data.workspace.address.trim() === "" ||
+    data.workspace.businessHours.trim() === "{}"
+  );
+}
+
+export const seedWorkspaceSetupSteps = [
+  {
+    area: "店鋪設定",
+    label: "先去設定",
+    matches: isWorkspaceProfileIncomplete,
+    href: (data: WorkspaceSetupData) =>
+      data.needsWorkspace
+        ? "/settings?message=settings_setup_hint"
+        : "/settings?message=settings_setup_incomplete",
+  },
+  {
+    area: "服務",
+    href: "/services",
+    label: "建立服務",
+    matches: (data: WorkspaceSetupData) =>
+      data.categories.length === 0 || data.services.length === 0,
+  },
+  {
+    area: "員工",
+    href: "/staff",
+    label: "建立員工",
+    matches: (data: WorkspaceSetupData) => data.staff.length === 0,
+  },
+  {
+    area: "客戶",
+    href: "/customers",
+    label: "建立客戶",
+    matches: (data: WorkspaceSetupData) => data.customers.length === 0,
+  },
+  {
+    area: "預約",
+    href: "/appointments",
+    label: "建立預約",
+    matches: (data: WorkspaceSetupData) => data.appointments.length === 0,
+  },
+  {
+    area: "訂單",
+    href: "/checkout",
+    label: "建立訂單",
+    matches: (data: WorkspaceSetupData) => data.orders.length === 0,
+  },
+  {
+    area: "庫存",
+    href: "/inventory",
+    label: "建立庫存",
+    matches: (data: WorkspaceSetupData) => data.inventory.length === 0,
+  },
+  {
+    area: "班表",
+    label: "建立班表",
+    matches: (data: WorkspaceSetupData) => data.staff.length > 0 && data.shifts.length === 0,
+    href: "/staff",
+  },
+] as const;
+
+export function buildSeedAppData(user: { id: string; email: string | null }): AppData {
+  return {
+    user,
+    workspace,
+    currentMember: staff[0] ?? null,
+    staff,
+    categories,
+    staffInvites: [],
+    staffInviteFeatureEnabled: false,
+    services,
+    customers,
+    appointments,
+    orders,
+    inventory,
+    inventoryMovements,
+    shifts,
+    needsWorkspace: false,
+    demoMode: true
+  };
+}

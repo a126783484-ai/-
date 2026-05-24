@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { can } from "@/lib/permissions";
 import { buildMissingOrderLineServiceMessage } from "@/lib/order-line-errors";
+import { resolveOrderStatus } from "@/lib/orders";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
 import type { Database, Json } from "@/lib/database.types";
 import type {
@@ -585,7 +586,7 @@ export async function updateAppointmentStatus(formData: FormData) {
 }
 
 function orderLineInput(formData: FormData) {
-  const serviceIds = selectedValues(formData, "line_service_ids");
+  const serviceIds = Array.from(new Set(selectedValues(formData, "line_service_ids")));
   const customName = text(formData, "custom_line_name");
   const customPrice = integerValue(formData, "custom_line_price");
   const customQuantity = Math.max(
@@ -642,10 +643,33 @@ async function buildOrderLines(
   return lines;
 }
 
-function deriveOrderStatus(total: number, paidAmount: number): OrderStatus {
-  if (paidAmount <= 0) return "unpaid";
-  if (paidAmount >= total) return "paid";
-  return "partial";
+async function buildSingleOrderLine(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+  formData: FormData,
+) {
+  const { serviceIds, customName, customPrice, customQuantity } =
+    orderLineInput(formData);
+
+  if (serviceIds.length) {
+    return buildOrderLines(supabase, workspaceId, formData).then((lines) =>
+      lines.filter((line) => line.service_id !== null),
+    );
+  }
+
+  if (customName) {
+    return [
+      {
+        order_id: "",
+        service_id: null,
+        name: customName,
+        quantity: customQuantity,
+        unit_price: customPrice,
+      },
+    ];
+  }
+
+  throw new Error("請先選擇服務或輸入自訂項目。");
 }
 
 export async function saveOrder(formData: FormData) {
@@ -667,17 +691,21 @@ export async function saveOrder(formData: FormData) {
     const discount = integerValue(formData, "discount");
     const tip = integerValue(formData, "tip");
     const paidAmount = integerValue(formData, "paid_amount");
-    const total = Math.max(
-      0,
-      lineTemplates.reduce(
-        (sum, line) => sum + (line.quantity ?? 1) * line.unit_price,
-        0,
-      ) -
-        discount +
-        tip,
-    );
     const statusRaw = text(formData, "status");
-    const status = (statusRaw ? (statusRaw as OrderStatus) : deriveOrderStatus(total, paidAmount));
+    const status = resolveOrderStatus(
+      {
+        lines: lineTemplates.map((line) => ({
+          serviceId: line.service_id ?? "",
+          name: line.name,
+          quantity: line.quantity ?? 1,
+          unitPrice: line.unit_price,
+        })),
+        discount,
+        tip,
+        paidAmount,
+      },
+      statusRaw ? (statusRaw as OrderStatus) : "",
+    );
 
     const { data: order, error: orderError } = await supabase
       .from("orders")
@@ -724,7 +752,7 @@ export async function addOrderLine(formData: FormData) {
     requirePermission(role, "checkout", "你沒有權限新增訂單明細。");
     const orderId = text(formData, "order_id");
     await assertWorkspaceRecord("orders", orderId, workspaceId, supabase);
-    const lines = await buildOrderLines(supabase, workspaceId, formData);
+    const lines = await buildSingleOrderLine(supabase, workspaceId, formData);
     const { error } = await supabase
       .from("order_lines")
       .insert(lines.map((line) => ({ ...line, order_id: orderId })));

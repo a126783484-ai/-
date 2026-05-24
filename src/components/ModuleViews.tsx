@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
   addOrderLine,
@@ -15,20 +15,47 @@ import {
   updateAppointmentStatus,
   updateWorkspaceSettings,
 } from "@/app/crud-actions";
-import { createStaffAction, createStaffInviteAction, updateStaffAction } from "@/app/staff/actions";
-import { recordInventoryMovementAction } from "@/app/inventory/actions";
+import { recordInventoryMovementAction, saveInventoryItemAction } from "@/app/inventory/actions";
+import { createStaffAction, createStaffInviteAction, updateStaffAction, saveStaffShiftAction } from "@/app/staff/actions";
 import { AppShell } from "@/components/AppShell";
 import { FormNotice } from "@/components/FormNotice";
 import { ModuleTable } from "@/components/ModuleTable";
 import { MetricCard, StatusPill, EmptyState } from "@/components/ui";
-import { statusLabel } from "@/lib/appointments";
+import {
+  appointmentCloseoutLabel,
+  appointmentStatusDescriptions,
+  appointmentNextStepLabel,
+  describeAppointmentConflict,
+  describeAppointmentDependencies,
+  daysSince,
+  statusLabel,
+  reminderDisplay,
+  summarizeAppointmentDependencies,
+} from "@/lib/appointments";
 import { dashboardMetrics } from "@/lib/analytics";
-import { orderTotal, outstandingAmount } from "@/lib/orders";
-import { can, roleLabel } from "@/lib/permissions";
-import type { AppData } from "@/lib/app-data";
-import type { Appointment, Customer, Order, ServiceItem, StaffMember } from "@/lib/types";
+import {
+  orderCloseoutLabel,
+  orderFinancialSummary,
+  orderExportSummary,
+  orderLineSummary,
+  orderPaymentMethodBreakdown,
+  orderPaymentState,
+  orderNextStepLabel,
+  orderStatusLabel,
+  orderStatusTone,
+  orderSubtotal,
+  orderTotal,
+  paymentMethodLabel,
+  outstandingAmount,
+  resolveOrderStatus,
+} from "@/lib/orders";
+import type { AppData } from "@/lib/app-data-client";
+import { buildDailyCloseoutSummary, getWorkspaceSetupGuide, isWorkspaceEmpty } from "@/lib/app-data-client";
+import type { Appointment, Customer, InventoryItem, Order, ServiceItem, Shift, StaffMember } from "@/lib/types";
 import { buildStaffInvitePath } from "@/lib/staff-invites";
-import { currency, formatDate, formatTime } from "@/lib/utils";
+import { formatInventoryMovementQuantity, formatInventoryStock } from "@/lib/inventory-feedback";
+import { canManage, moduleAccessMessage, permissionScope } from "@/lib/permissions";
+import { currency, formatDate, formatDateTime, formatTime } from "@/lib/utils";
 
 const liveNotice =
   "正式資料模式：資料由 Supabase Auth + RLS 依 workspace 隔離。";
@@ -49,40 +76,142 @@ const paymentMethods = [
   "line_pay",
   "other",
 ] as const;
-const orderStatuses = ["unpaid", "partial", "paid", "refunded"] as const;
+const paymentMethodLabels: Record<(typeof paymentMethods)[number], string> = {
+  cash: "現金",
+  card: "信用卡",
+  transfer: "轉帳",
+  line_pay: "LINE Pay",
+  other: "其他",
+};
 const tiers = ["新客", "一般", "VIP", "VVIP"];
 const staffRoles = ["owner", "admin", "technician", "front_desk", "staff"] as const;
+const staffRoleLabels: Record<(typeof staffRoles)[number], string> = {
+  owner: "店主（完整管理 / 交接）",
+  admin: "管理員（店務管理 / 排班）",
+  technician: "技師（預約 / 班表）",
+  front_desk: "櫃台（接待 / 預約 / 收款）",
+  staff: "支援員工（預約查看 / 行政備援）",
+};
+const staffRoleHelpText =
+  "店主與管理員可新增員工、調整角色與班表；櫃台與技師可查看員工資料、班表圖表與列印摘要；支援員工只保留自己的預約可見範圍，適合備援與行政。";
 const inventoryMovementTypes = ["purchase", "consume", "adjust"] as const;
 type Notice = { kind: "error" | "success"; message: string };
+type LinkAction = { href: string; label: string };
+type FollowUpCustomer = {
+  customer: Customer;
+  tone: "rose" | "sage" | "amber";
+  label: string;
+  detail: string;
+  priority: number;
+  sortKey: string;
+  ageDays: number;
+};
+type QuickJumpLink = { href: string; label: string };
+const handoffKindLabels = {
+  appointment: "預約",
+  order: "收款",
+  reminder: "回訪",
+  inventory: "庫存",
+} as const;
+
+function appointmentStatusTone(status: (typeof appointmentStatuses)[number]) {
+  if (status === "confirmed") return "sage" as const;
+  if (status === "in_service") return "plum" as const;
+  if (status === "completed") return "sage" as const;
+  if (status === "cancelled" || status === "no_show") return "rose" as const;
+  return "amber" as const;
+}
+
+function formatCommissionRate(rate: number) {
+  return `${Math.round(rate * 100)}%`;
+}
+
+function staffRoleSelectLabel(role: (typeof staffRoles)[number]) {
+  return staffRoleLabels[role];
+}
 
 function NoticeBanner({ notice }: { notice?: Notice }) {
   if (!notice) return null;
   return <FormNotice kind={notice.kind}>{notice.message}</FormNotice>;
 }
 
+function QuickJumpBar({ title, links }: { title: string; links: QuickJumpLink[] }) {
+  return (
+    <nav className="sticky top-3 z-20 mb-5 rounded-2xl border border-champagne/80 bg-white/90 p-2 shadow-sm backdrop-blur print:hidden">
+      <p className="px-2 text-xs font-semibold uppercase tracking-[0.2em] text-ink/45">{title}</p>
+      <div className="mt-2 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {links.map((link) => (
+          <a
+            key={link.href}
+            href={link.href}
+            className="mobile-tap shrink-0 rounded-2xl bg-plum px-4 py-2 text-sm font-semibold text-white transition hover:bg-plum/90"
+          >
+            {link.label}
+          </a>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+export function CloseoutCard({
+  title,
+  value,
+  detail,
+  links,
+}: {
+  title: string;
+  value: string;
+  detail: string;
+  links: Array<{ href: string; label: string }>;
+}) {
+  return (
+    <div className="rounded-3xl border border-champagne bg-white p-4 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/45">{title}</p>
+      <p className="mt-2 text-2xl font-bold text-plum">{value}</p>
+      <p className="mt-1 text-sm text-ink/60">{detail}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {links.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-sm font-semibold text-white print:bg-white print:text-plum"
+          >
+            {link.label}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SubmitButton({
   children,
   tone = "plum",
+  disabled = false,
+  className = "",
 }: {
   children: React.ReactNode;
   tone?: "plum" | "white" | "danger";
+  disabled?: boolean;
+  className?: string;
 }) {
   const { pending } = useFormStatus();
-  const className =
+  const buttonClassName =
     tone === "danger"
       ? "mobile-tap rounded-2xl bg-rose px-4 py-3 font-semibold text-white disabled:opacity-60"
       : tone === "white"
         ? "mobile-tap rounded-2xl bg-white px-4 py-3 font-semibold text-plum disabled:opacity-60"
-        : "mobile-tap rounded-2xl bg-plum px-4 py-3 font-semibold text-white disabled:opacity-60";
+      : "mobile-tap rounded-2xl bg-plum px-4 py-3 font-semibold text-white disabled:opacity-60";
   return (
-    <button type="submit" disabled={pending} className={className}>
+    <button type="submit" disabled={pending || disabled} className={`${buttonClassName} ${className}`.trim()}>
       {pending ? "儲存中…" : children}
     </button>
   );
 }
 
 function fieldClass() {
-  return "mt-2 w-full rounded-2xl border border-champagne bg-white p-3 text-ink";
+  return "mobile-tap mt-2 w-full rounded-2xl border border-champagne bg-white p-3 text-ink";
 }
 
 function compactDateTime(value?: string) {
@@ -91,6 +220,192 @@ function compactDateTime(value?: string) {
   if (Number.isNaN(date.getTime())) return "";
   const offset = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function currentDateInput() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function shiftSummary(shift: Shift) {
+  return shift.leave ? "休假 / 休息" : `${shift.startTime}–${shift.endTime}`;
+}
+
+function shiftTimeToMinutes(value: string) {
+  const [hours, minutes] = value.split(":").map((part) => Number(part));
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return 0;
+  }
+  return hours * 60 + minutes;
+}
+
+function shiftMinutesToPercent(minutes: number) {
+  return `${(minutes / 1440) * 100}%`;
+}
+
+function StaffScheduleChart({
+  data,
+  shifts,
+  onEditShift,
+}: {
+  data: AppData;
+  shifts: Shift[];
+  onEditShift?: (shiftId: string) => void;
+}) {
+  const timelineTicks = [0, 4, 8, 12, 16, 20, 24];
+  const chartDates = useMemo(() => {
+    const grouped = new Map<string, Shift[]>();
+
+    for (const shift of shifts) {
+      const bucket = grouped.get(shift.date) ?? [];
+      bucket.push(shift);
+      grouped.set(shift.date, bucket);
+    }
+
+    return [...grouped.entries()]
+      .sort(([leftDate], [rightDate]) => rightDate.localeCompare(leftDate))
+      .map(([date, dateShifts]) => ({
+        date,
+        dateShifts: [...dateShifts].sort((left, right) => left.startTime.localeCompare(right.startTime)),
+      }));
+  }, [shifts]);
+
+  return (
+    <div className="mb-5 card p-5 print:mb-0 print:rounded-none print:border-0 print:bg-transparent print:p-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-plum">班表圖表</h2>
+          <p className="mt-1 text-sm text-ink/60">
+            依日期分組的可列印時間軸。點選任一班表條目即可回到編輯狀態。
+          </p>
+        </div>
+        <button
+          type="button"
+          className="mobile-tap rounded-2xl bg-plum px-4 py-2 font-semibold text-white print:hidden"
+          onClick={() => window.print()}
+        >
+          列印圖表
+        </button>
+      </div>
+      <div className="mt-4 hidden rounded-2xl bg-champagne/30 px-4 py-3 text-sm text-ink/70 print:block">
+        列印時將保留此圖表，方便直接張貼或攜出。
+      </div>
+      {chartDates.length ? (
+        <div className="mt-5 space-y-5">
+          {chartDates.map(({ date, dateShifts }) => (
+            <section
+              key={date}
+              className="break-inside-avoid rounded-3xl border border-champagne bg-white/80 p-4 shadow-sm print:rounded-none print:border-black/10 print:bg-transparent print:shadow-none"
+            >
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-bold text-plum">{formatDate(date)}</h3>
+                  <p className="mt-1 text-sm text-ink/60">
+                    {dateShifts.length} 筆班表 · {new Set(dateShifts.map((shift) => shift.staffId)).size} 位員工
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3 text-[11px] font-semibold text-ink/45">
+                  {timelineTicks.slice(0, -1).map((hour) => (
+                    <span key={hour} className="w-8 text-center">
+                      {String(hour).padStart(2, "0")}
+                    </span>
+                  ))}
+                  <span className="w-8 text-center">24</span>
+                </div>
+              </div>
+              <div className="mt-4 space-y-3">
+                {data.staff.map((member) => {
+                  const memberShifts = dateShifts
+                    .filter((shift) => shift.staffId === member.id)
+                    .sort((left, right) => left.startTime.localeCompare(right.startTime));
+                  return (
+                    <div
+                      key={member.id}
+                      className="grid gap-3 md:grid-cols-[11rem_minmax(0,1fr)] md:items-center"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-plum">{member.name}</p>
+                        <p className="text-xs text-ink/60">
+                          {staffRoleSelectLabel(member.role)}
+                          {!member.active ? " · 停用" : ""}
+                        </p>
+                      </div>
+                      <div
+                        className="relative min-h-14 overflow-hidden rounded-2xl border border-champagne bg-blush/30"
+                        style={{
+                          backgroundImage:
+                            "linear-gradient(to right, rgba(77, 53, 86, 0.08) 1px, transparent 1px)",
+                          backgroundSize: "calc(100% / 24) 100%",
+                        }}
+                      >
+                        {memberShifts.length ? (
+                          memberShifts.map((shift) => {
+                            const startMinutes = shiftTimeToMinutes(shift.startTime);
+                            const endMinutes = shift.leave
+                              ? 1440
+                              : Math.min(Math.max(shiftTimeToMinutes(shift.endTime), startMinutes + 30), 1440);
+                            const blockClassName = `absolute inset-y-2 rounded-xl px-3 py-2.5 text-left text-xs font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-plum/30 ${
+                              shift.leave ? "bg-amber text-plum" : "bg-plum text-white"
+                            }`;
+                            const blockStyle = shift.leave
+                              ? { left: "0.5rem", right: "0.5rem" }
+                              : {
+                                  left: shiftMinutesToPercent(startMinutes),
+                                  width: shiftMinutesToPercent(endMinutes - startMinutes),
+                                };
+                            const content = (
+                              <>
+                                <span className="block truncate">
+                                  {shift.leave ? "休假 / 休息" : shiftSummary(shift)}
+                                </span>
+                                <span className={`block truncate ${shift.leave ? "text-plum/70" : "text-white/80"}`}>
+                                  {onEditShift ? "點選編輯" : "可列印 / 檢視"}
+                                </span>
+                              </>
+                            );
+
+                            return onEditShift ? (
+                              <button
+                                key={shift.id}
+                                type="button"
+                                className={blockClassName}
+                                style={blockStyle}
+                                onClick={() => onEditShift(shift.id)}
+                                title={`${member.name} · ${formatDate(date)} · ${shiftSummary(shift)}`}
+                              >
+                                {content}
+                              </button>
+                            ) : (
+                              <div
+                                key={shift.id}
+                                className={blockClassName}
+                                style={blockStyle}
+                                title={`${member.name} · ${formatDate(date)} · ${shiftSummary(shift)}`}
+                              >
+                                {content}
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="flex h-full items-center px-3 text-xs text-ink/45">
+                            未排班
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-5 rounded-3xl border border-dashed border-champagne bg-white/70 p-5 text-sm text-ink/60">
+          目前還沒有班表資料，先新增一筆班表後就會自動出現在這裡。
+        </div>
+      )}
+    </div>
+  );
 }
 
 function namesFromIds(ids: string[], services: ServiceItem[]) {
@@ -102,13 +417,30 @@ function namesFromIds(ids: string[], services: ServiceItem[]) {
   );
 }
 
-function CustomerForm({ customer }: { customer?: Customer }) {
+function CustomerForm({
+  customer,
+  onCancel,
+}: {
+  customer?: Customer;
+  onCancel?: () => void;
+}) {
   return (
     <form action={saveCustomer} className="card p-5">
       <input type="hidden" name="id" value={customer?.id ?? ""} />
-      <h2 className="text-lg font-bold text-plum">
-        {customer ? "編輯客戶" : "新增客戶"}
-      </h2>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h2 className="text-lg font-bold text-plum">
+          {customer ? "編輯客戶" : "新增客戶"}
+        </h2>
+        {customer && onCancel ? (
+          <button
+            type="button"
+            className="mobile-tap w-full rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum sm:w-auto"
+            onClick={onCancel}
+          >
+            取消編輯
+          </button>
+        ) : null}
+      </div>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="text-sm font-semibold text-plum">
           姓名
@@ -205,7 +537,7 @@ function CustomerForm({ customer }: { customer?: Customer }) {
         </label>
       </div>
       <div className="mt-4 flex flex-wrap gap-3">
-        <SubmitButton>{customer ? "更新客戶" : "建立客戶"}</SubmitButton>
+        <SubmitButton className="w-full sm:w-auto">{customer ? "更新客戶" : "建立客戶"}</SubmitButton>
       </div>
     </form>
   );
@@ -214,16 +546,32 @@ function CustomerForm({ customer }: { customer?: Customer }) {
 function ServiceForm({
   service,
   categories,
+  onCancel,
 }: {
   service?: ServiceItem;
   categories: AppData["categories"];
+  onCancel?: () => void;
 }) {
   return (
     <form action={saveService} className="card p-5">
       <input type="hidden" name="id" value={service?.id ?? ""} />
-      <h2 className="text-lg font-bold text-plum">
-        {service ? "編輯服務" : "新增服務"}
-      </h2>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h2 className="text-lg font-bold text-plum">
+          {service ? "編輯服務" : "新增服務"}
+        </h2>
+        {service && onCancel ? (
+          <button
+            type="button"
+            className="mobile-tap w-full rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum sm:w-auto"
+            onClick={onCancel}
+          >
+            取消編輯
+          </button>
+        ) : null}
+      </div>
+      <p className="mt-2 text-sm text-ink/70">
+        分類可留空，或直接輸入新名稱建立新分類。價格、時間與啟用狀態會直接影響報價與預約可見性。
+      </p>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="text-sm font-semibold text-plum">
           服務名稱
@@ -235,22 +583,25 @@ function ServiceForm({
           />
         </label>
         <label className="text-sm font-semibold text-plum">
-          分類
+          分類（可留空）
           <input
-            required
             list="service-categories"
             name="category"
             className={fieldClass()}
-            defaultValue={service?.category ?? categories[0]?.name ?? "美甲"}
+            defaultValue={service?.category ?? ""}
+            placeholder="例如：美甲、SPA、加購"
           />
           <datalist id="service-categories">
             {categories.map((category) => (
               <option key={category.id} value={category.name} />
             ))}
           </datalist>
+          <span className="mt-1 block text-xs font-normal text-ink/60">
+            留空會顯示為未分類；輸入現有名稱會沿用，輸入新名稱會建立新的分類。
+          </span>
         </label>
         <label className="text-sm font-semibold text-plum">
-          價格
+          價格（元）
           <input
             required
             type="number"
@@ -261,7 +612,7 @@ function ServiceForm({
           />
         </label>
         <label className="text-sm font-semibold text-plum">
-          時間（分鐘）
+          所需時間（分鐘）
           <input
             required
             type="number"
@@ -279,25 +630,25 @@ function ServiceForm({
             defaultValue={service?.description}
           />
         </label>
-        <label className="flex items-center gap-3 rounded-2xl bg-blush p-4 font-semibold text-plum">
+        <label className="flex items-start gap-3 rounded-2xl bg-blush p-4 font-semibold text-plum">
           <input
             type="checkbox"
             name="enabled"
             defaultChecked={service?.enabled ?? true}
           />{" "}
-          啟用服務
+          啟用中（可被預約）
         </label>
-        <label className="flex items-center gap-3 rounded-2xl bg-blush p-4 font-semibold text-plum">
+        <label className="flex items-start gap-3 rounded-2xl bg-blush p-4 font-semibold text-plum">
           <input
             type="checkbox"
             name="is_add_on"
             defaultChecked={service?.addOn ?? false}
           />{" "}
-          加購項目
+          加購服務
         </label>
       </div>
       <div className="mt-4">
-        <SubmitButton>{service ? "更新服務" : "建立服務"}</SubmitButton>
+        <SubmitButton className="w-full sm:w-auto">{service ? "更新服務" : "建立服務"}</SubmitButton>
       </div>
     </form>
   );
@@ -306,18 +657,84 @@ function ServiceForm({
 function AppointmentForm({
   data,
   appointment,
+  onCancel,
 }: {
   data: AppData;
   appointment?: Appointment;
+  onCancel?: () => void;
 }) {
   const fallbackStart = compactDateTime(new Date().toISOString());
+  const dependencySummary = summarizeAppointmentDependencies({
+    customers: data.customers,
+    services: data.services,
+    staff: data.staff,
+  });
+  const dependencyCopy = describeAppointmentDependencies(dependencySummary);
+  const activeStaff = data.staff.filter((member) => member.active);
   const selectedServiceIds = new Set(appointment?.serviceIds ?? []);
+  const missingDependencyLabels = [
+    dependencySummary.missingCustomers ? "客戶" : null,
+    dependencySummary.missingServices ? "可用服務" : null,
+    dependencySummary.missingStaff ? "可指派員工" : null,
+  ].filter(Boolean);
   return (
     <form action={saveAppointment} className="card p-5">
       <input type="hidden" name="id" value={appointment?.id ?? ""} />
-      <h2 className="text-lg font-bold text-plum">
-        {appointment ? "編輯預約" : "新增預約"}
-      </h2>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h2 className="text-lg font-bold text-plum">
+          {appointment ? "編輯預約" : "新增預約"}
+        </h2>
+        {appointment && onCancel ? (
+          <button
+            type="button"
+            className="mobile-tap w-full rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum sm:w-auto"
+            onClick={onCancel}
+          >
+            取消編輯
+          </button>
+        ) : null}
+      </div>
+      <div className="mt-4 rounded-3xl bg-champagne/30 p-4 text-sm text-ink/75">
+        <p className="font-semibold text-plum">{dependencyCopy.title}</p>
+        <p className="mt-1">{dependencyCopy.detail}</p>
+        <p className="mt-2">{describeAppointmentConflict()}</p>
+      </div>
+      {!dependencySummary.ready ? (
+        <div className="mt-4 rounded-3xl border border-amber bg-amber/10 p-4">
+          <p className="font-semibold text-plum">{dependencyCopy.title}</p>
+          <p className="mt-1 text-sm text-ink/70">
+            目前缺少：{missingDependencyLabels.join("、")}。先建立這些資料後，前台就能直接建立或更新預約。
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2 text-sm font-semibold">
+            <Link className="mobile-tap w-full rounded-xl bg-white px-3 py-2 text-center text-plum sm:w-auto" href="/customers">
+              前往客戶
+            </Link>
+            <Link className="mobile-tap w-full rounded-xl bg-white px-3 py-2 text-center text-plum sm:w-auto" href="/services">
+              前往服務
+            </Link>
+            <Link className="mobile-tap w-full rounded-xl bg-white px-3 py-2 text-center text-plum sm:w-auto" href="/staff">
+              前往員工
+            </Link>
+          </div>
+          <div className="mt-3 grid gap-2 text-sm text-ink/70 sm:grid-cols-3">
+            {dependencySummary.missingCustomers ? (
+              <p>客戶：先建立 1 位常用客戶，例如「王小美」。</p>
+            ) : (
+              <p>客戶：已有 {dependencySummary.customerCount} 筆。</p>
+            )}
+            {dependencySummary.missingServices ? (
+              <p>服務：先建立 1 個啟用中的服務，例如「單色凝膠美甲」。</p>
+            ) : (
+              <p>服務：已有 {dependencySummary.activeServiceCount} 個可用服務。</p>
+            )}
+            {dependencySummary.missingStaff ? (
+              <p>員工：先建立 1 位可排班員工，才能指派預約。</p>
+            ) : (
+              <p>員工：已有 {dependencySummary.activeStaffCount} 位啟用員工。</p>
+            )}
+          </div>
+        </div>
+      ) : null}
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="text-sm font-semibold text-plum">
           客戶
@@ -326,16 +743,18 @@ function AppointmentForm({
             name="customer_id"
             className={fieldClass()}
             defaultValue={appointment?.customerId ?? ""}
+            disabled={data.customers.length === 0}
           >
             <option value="" disabled>
-              請選擇
+              {data.customers.length === 0 ? "請先建立客戶" : "請選擇"}
             </option>
             {data.customers.map((customer) => (
               <option key={customer.id} value={customer.id}>
-                {customer.name}｜{customer.phone}
+              {customer.name}｜{customer.phone}
               </option>
             ))}
           </select>
+          <p className="mt-1 text-xs font-normal text-ink/60">預約會綁定這位客戶的記錄，方便後續查詢與回訪。</p>
         </label>
         <label className="text-sm font-semibold text-plum">
           技師
@@ -345,19 +764,21 @@ function AppointmentForm({
             className={fieldClass()}
             defaultValue={
               appointment?.technicianId ??
-              data.staff.find((member) => member.role === "technician")?.id ??
-              data.staff[0]?.id ??
+              activeStaff[0]?.id ??
               ""
             }
+            disabled={activeStaff.length === 0}
           >
-            {data.staff
-              .filter((member) => member.active)
-              .map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.name}｜{roleLabel(member.role)}
-                </option>
-              ))}
+            <option value="" disabled>
+              {activeStaff.length === 0 ? "請先建立員工" : "請選擇"}
+            </option>
+            {activeStaff.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}｜{staffRoleSelectLabel(member.role)}
+              </option>
+            ))}
           </select>
+          <p className="mt-1 text-xs font-normal text-ink/60">只能選啟用中的員工，且同一位技師不能有重疊時段。</p>
         </label>
         <label className="text-sm font-semibold text-plum">
           開始時間
@@ -411,32 +832,37 @@ function AppointmentForm({
           <legend className="px-2 text-sm font-bold text-plum">
             服務（可複選）
           </legend>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {data.services
-              .filter((service) => service.enabled || selectedServiceIds.has(service.id))
-              .map((service) => (
-                <label
-                  key={service.id}
-                  className="flex items-center gap-3 rounded-2xl bg-blush p-3"
-                >
-                  <input
-                    type="checkbox"
-                    name="service_ids"
-                    value={service.id}
-                    defaultChecked={appointment?.serviceIds.includes(
-                      service.id,
-                    )}
-                  />{" "}
-                  <span>
-                    {service.name}
-                    <small className="ml-2 text-ink/50">
-                      {currency.format(service.price)}
-                    </small>
-                    {!service.enabled ? <small className="ml-2 text-rose">(已停用)</small> : null}
-                  </span>
-                </label>
-              ))}
-          </div>
+          <p className="mt-1 text-xs text-ink/60">所選服務會一起算進這筆預約，請把實際要做的項目勾選完整。</p>
+          {data.services.some((service) => service.enabled || selectedServiceIds.has(service.id)) ? (
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {data.services
+                .filter((service) => service.enabled || selectedServiceIds.has(service.id))
+                .map((service) => (
+                  <label
+                    key={service.id}
+                    className="flex items-start gap-3 rounded-2xl bg-blush p-3"
+                  >
+                    <input
+                      type="checkbox"
+                      name="service_ids"
+                      value={service.id}
+                      defaultChecked={appointment?.serviceIds.includes(
+                        service.id,
+                      )}
+                    />{" "}
+                    <span>
+                      {service.name}
+                      <small className="ml-2 text-ink/50">
+                        {currency.format(service.price)}
+                      </small>
+                      {!service.enabled ? <small className="ml-2 text-rose">(已停用)</small> : null}
+                    </span>
+                  </label>
+                ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-ink/60">目前沒有可用服務，請先新增至少一項服務，或改用自訂項目開單。</p>
+          )}
         </fieldset>
         <label className="text-sm font-semibold text-plum md:col-span-2">
           備註
@@ -446,9 +872,33 @@ function AppointmentForm({
             defaultValue={appointment?.note}
           />
         </label>
+        <div className="md:col-span-2 rounded-3xl bg-white/80 p-4 text-sm text-ink/70">
+          <p className="font-semibold text-plum">狀態提醒</p>
+          <p className="mt-1">
+            狀態只影響流程標記，不會自動改客戶、技師、時間或服務；要改排程內容請直接編輯預約。
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {appointmentStatuses.map((status) => (
+              <StatusPill key={status} tone={appointmentStatusTone(status)}>
+                {statusLabel(status)}
+              </StatusPill>
+            ))}
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {appointmentStatuses.map((status) => (
+              <p key={status} className="rounded-2xl bg-blush p-3 text-xs text-ink/70">
+                <strong className="text-plum">{statusLabel(status)}</strong>
+                <span className="ml-2">{appointmentStatusDescriptions[status]}</span>
+                <span className="mt-1 block font-semibold text-ink/70">
+                  下一步：{appointmentNextStepLabel(status)}
+                </span>
+              </p>
+            ))}
+          </div>
+        </div>
       </div>
       <div className="mt-4">
-        <SubmitButton>{appointment ? "更新預約" : "建立預約"}</SubmitButton>
+        <SubmitButton className="w-full sm:w-auto" disabled={!dependencySummary.ready}>{appointment ? "更新預約" : "建立預約"}</SubmitButton>
       </div>
     </form>
   );
@@ -461,9 +911,93 @@ function OrderForm({ data }: { data: AppData }) {
       appointment.status !== "cancelled" &&
       appointment.status !== "no_show",
   );
+  const activeStaff = data.staff.filter((member) => member.active);
+  const enabledServices = data.services.filter((service) => service.enabled);
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
+  const [customName, setCustomName] = useState("");
+  const [customPrice, setCustomPrice] = useState(0);
+  const [customQuantity, setCustomQuantity] = useState(1);
+  const [discount, setDiscount] = useState(0);
+  const [tip, setTip] = useState(0);
+  const [paidAmount, setPaidAmount] = useState(0);
+  const [status, setStatus] = useState<"" | "refunded">("");
+
+  const selectedServices = useMemo(
+    () => enabledServices.filter((service) => selectedServiceIds.includes(service.id)),
+    [enabledServices, selectedServiceIds],
+  );
+  const draftLines = useMemo(
+    () => [
+      ...selectedServices.map((service) => ({
+        serviceId: service.id,
+        name: service.name,
+        quantity: 1,
+        unitPrice: service.price,
+      })),
+      ...(customName.trim()
+        ? [
+            {
+              serviceId: "",
+              name: customName.trim(),
+              quantity: customQuantity,
+              unitPrice: customPrice,
+            },
+          ]
+        : []),
+    ],
+    [customName, customPrice, customQuantity, selectedServices],
+  );
+  const draftFinancials = orderFinancialSummary({
+    lines: draftLines,
+    discount,
+    tip,
+    paidAmount,
+  });
+  const draftState = resolveOrderStatus(
+    {
+      lines: draftLines,
+      discount,
+      tip,
+      paidAmount,
+    },
+    status,
+  );
+  const canSubmit = activeStaff.length > 0 && data.customers.length > 0 && draftLines.length > 0;
+
+  function toggleService(serviceId: string) {
+    setSelectedServiceIds((current) =>
+      current.includes(serviceId)
+        ? current.filter((id) => id !== serviceId)
+        : [...current, serviceId],
+    );
+  }
+
+  function resetDraft() {
+    setSelectedServiceIds([]);
+    setCustomName("");
+    setCustomPrice(0);
+    setCustomQuantity(1);
+    setDiscount(0);
+    setTip(0);
+    setPaidAmount(0);
+    setStatus("");
+  }
+
   return (
     <form action={saveOrder} className="card p-5">
-      <h2 className="text-lg font-bold text-plum">新增訂單 / 預約轉結帳</h2>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h2 className="text-lg font-bold text-plum">新增訂單 / 預約轉結帳</h2>
+        <button
+          type="button"
+          className="mobile-tap w-full rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum sm:w-auto"
+          onClick={resetDraft}
+        >
+          清空草稿
+        </button>
+      </div>
+      <p className="mt-1 text-sm text-ink/60">
+        勾選既有服務或填寫自訂項目，就能先看到小計、總額與待收金額，再送出建立訂單。
+      </p>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="text-sm font-semibold text-plum">
           轉換預約（選填）
@@ -507,11 +1041,9 @@ function OrderForm({ data }: { data: AppData }) {
             required
             name="technician_id"
             className={fieldClass()}
-            defaultValue={data.staff[0]?.id ?? ""}
+            defaultValue={activeStaff[0]?.id ?? ""}
           >
-            {data.staff
-              .filter((member) => member.active)
-              .map((member) => (
+            {activeStaff.map((member) => (
                 <option key={member.id} value={member.id}>
                   {member.name}
                 </option>
@@ -527,7 +1059,7 @@ function OrderForm({ data }: { data: AppData }) {
           >
             {paymentMethods.map((method) => (
               <option key={method} value={method}>
-                {method}
+                {paymentMethodLabels[method]}
               </option>
             ))}
           </select>
@@ -535,17 +1067,17 @@ function OrderForm({ data }: { data: AppData }) {
         <fieldset className="md:col-span-2 rounded-3xl border border-champagne p-4">
           <legend className="px-2 text-sm font-bold text-plum">服務明細</legend>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {data.services
-              .filter((service) => service.enabled)
-              .map((service) => (
+              {enabledServices.length ? enabledServices.map((service) => (
                 <label
                   key={service.id}
-                  className="flex items-center gap-3 rounded-2xl bg-blush p-3"
+                  className="flex items-start gap-3 rounded-2xl bg-blush p-3"
                 >
                   <input
                     type="checkbox"
                     name="line_service_ids"
                     value={service.id}
+                    checked={selectedServiceIds.includes(service.id)}
+                    onChange={() => toggleService(service.id)}
                   />{" "}
                   <span>
                     {service.name}
@@ -554,7 +1086,11 @@ function OrderForm({ data }: { data: AppData }) {
                     </small>
                   </span>
                 </label>
-              ))}
+              )) : (
+              <div className="rounded-2xl border border-dashed border-champagne bg-white p-4 text-sm text-ink/60">
+                目前沒有啟用中的服務，請先啟用至少一項服務，或改用自訂項目開單。
+              </div>
+            )}
           </div>
         </fieldset>
         <label className="text-sm font-semibold text-plum">
@@ -563,6 +1099,8 @@ function OrderForm({ data }: { data: AppData }) {
             name="custom_line_name"
             className={fieldClass()}
             placeholder="卸甲 / 產品"
+            value={customName}
+            onChange={(event) => setCustomName(event.target.value)}
           />
         </label>
         <label className="text-sm font-semibold text-plum">
@@ -572,7 +1110,8 @@ function OrderForm({ data }: { data: AppData }) {
             min="0"
             name="custom_line_price"
             className={fieldClass()}
-            defaultValue={0}
+            value={customPrice}
+            onChange={(event) => setCustomPrice(Math.max(0, Number(event.target.value) || 0))}
           />
         </label>
         <label className="text-sm font-semibold text-plum">
@@ -582,7 +1121,8 @@ function OrderForm({ data }: { data: AppData }) {
             min="1"
             name="custom_line_quantity"
             className={fieldClass()}
-            defaultValue={1}
+            value={customQuantity}
+            onChange={(event) => setCustomQuantity(Math.max(1, Number(event.target.value) || 1))}
           />
         </label>
         <label className="text-sm font-semibold text-plum">
@@ -592,7 +1132,8 @@ function OrderForm({ data }: { data: AppData }) {
             min="0"
             name="discount"
             className={fieldClass()}
-            defaultValue={0}
+            value={discount}
+            onChange={(event) => setDiscount(Math.max(0, Number(event.target.value) || 0))}
           />
         </label>
         <label className="text-sm font-semibold text-plum">
@@ -602,7 +1143,8 @@ function OrderForm({ data }: { data: AppData }) {
             min="0"
             name="tip"
             className={fieldClass()}
-            defaultValue={0}
+            value={tip}
+            onChange={(event) => setTip(Math.max(0, Number(event.target.value) || 0))}
           />
         </label>
         <label className="text-sm font-semibold text-plum">
@@ -612,24 +1154,69 @@ function OrderForm({ data }: { data: AppData }) {
             min="0"
             name="paid_amount"
             className={fieldClass()}
-            defaultValue={0}
+            value={paidAmount}
+            onChange={(event) => setPaidAmount(Math.max(0, Number(event.target.value) || 0))}
           />
         </label>
         <label className="text-sm font-semibold text-plum">
-          付款狀態
-          <select name="status" className={fieldClass()} defaultValue="">
+          付款狀態（依已收金額自動判斷；僅退款可手動指定）
+          <select
+            name="status"
+            className={fieldClass()}
+            value={status}
+            onChange={(event) => setStatus(event.target.value as "" | "refunded")}
+          >
             <option value="">自動判斷</option>
-            {orderStatuses.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
+            <option value="refunded">{orderStatusLabel("refunded")}</option>
           </select>
         </label>
+        <div className="md:col-span-2 rounded-3xl border border-champagne bg-blush p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold text-plum">即時預覽</p>
+              <p className="mt-1 text-xs text-ink/60">
+                {draftLines.length ? `${draftLines.length} 筆明細` : "尚未加入明細"}
+              </p>
+            </div>
+            <StatusPill tone={orderStatusTone(draftState)}>{orderStatusLabel(draftState)}</StatusPill>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-2xl bg-white p-3">
+              <p className="text-xs text-ink/55">小計</p>
+              <p className="mt-1 text-lg font-bold text-plum">{currency.format(draftFinancials.subtotal)}</p>
+            </div>
+            <div className="rounded-2xl bg-white p-3">
+              <p className="text-xs text-ink/55">總額</p>
+              <p className="mt-1 text-lg font-bold text-plum">{currency.format(draftFinancials.total)}</p>
+            </div>
+            <div className="rounded-2xl bg-white p-3">
+              <p className="text-xs text-ink/55">實收</p>
+              <p className="mt-1 text-lg font-bold text-plum">{currency.format(draftFinancials.paidAmount)}</p>
+            </div>
+            <div className="rounded-2xl bg-white p-3">
+              <p className="text-xs text-ink/55">尚欠</p>
+              <p className="mt-1 text-lg font-bold text-plum">{currency.format(draftFinancials.outstanding)}</p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs text-ink/60">
+            <span>待收款 = 尚未收到任何款項</span>
+            <span>部分付款 = 已收但仍有尚欠金額</span>
+            <span>已結清 = 實收金額已覆蓋總額</span>
+          </div>
+        </div>
       </div>
       <div className="mt-4">
-        <SubmitButton>建立訂單</SubmitButton>
+        <SubmitButton className="w-full sm:w-auto" disabled={!canSubmit}>建立訂單</SubmitButton>
       </div>
+      {!canSubmit ? (
+        <p className="mt-2 text-sm text-ink/60">
+          {data.customers.length === 0
+            ? "請先建立至少一位客戶。"
+            : activeStaff.length === 0
+              ? "請先建立至少一位可用技師。"
+              : "請先勾選至少一筆服務，或輸入自訂項目後再送出。"}
+        </p>
+      ) : null}
     </form>
   );
 }
@@ -641,6 +1228,10 @@ function AddLineForm({
   order: Order;
   services: ServiceItem[];
 }) {
+  const [selectedServiceId, setSelectedServiceId] = useState("");
+  const [customName, setCustomName] = useState("");
+  const [customPrice, setCustomPrice] = useState(0);
+  const canSubmit = selectedServiceId.length > 0 || customName.trim().length > 0;
   return (
     <form
       action={addOrderLine}
@@ -649,7 +1240,9 @@ function AddLineForm({
       <input type="hidden" name="order_id" value={order.id} />
       <select
         name="line_service_ids"
-        className="rounded-xl border border-champagne p-2"
+        className="mobile-tap w-full rounded-xl border border-champagne p-3"
+        value={selectedServiceId}
+        onChange={(event) => setSelectedServiceId(event.target.value)}
       >
         <option value="">選擇服務</option>
         {services
@@ -662,18 +1255,28 @@ function AddLineForm({
       </select>
       <input
         name="custom_line_name"
-        className="rounded-xl border border-champagne p-2"
+        className="mobile-tap w-full rounded-xl border border-champagne p-3"
         placeholder="或輸入自訂項目"
+        value={customName}
+        onChange={(event) => setCustomName(event.target.value)}
       />
       <input
         type="number"
         min="0"
         name="custom_line_price"
-        className="rounded-xl border border-champagne p-2"
-        defaultValue={0}
+        className="mobile-tap w-full rounded-xl border border-champagne p-3"
+        value={customPrice}
+        onChange={(event) => setCustomPrice(Math.max(0, Number(event.target.value) || 0))}
       />
       <input type="hidden" name="custom_line_quantity" value="1" />
-      <SubmitButton tone="white">新增明細</SubmitButton>
+      <SubmitButton tone="white" className="w-full sm:w-auto" disabled={!canSubmit}>
+        新增明細
+      </SubmitButton>
+      {!canSubmit ? (
+        <p className="sm:col-span-3 text-xs text-ink/55">
+          請先選擇一筆服務或輸入自訂項目，再新增明細。
+        </p>
+      ) : null}
     </form>
   );
 }
@@ -712,7 +1315,7 @@ function InventoryMovementForm({ data }: { data: AppData }) {
           </select>
         </label>
         <label className="text-sm font-semibold text-plum">
-          數量 / 異動量
+          數量 / 異動量（調整可填負數）
           <input
             required
             type="number"
@@ -722,6 +1325,9 @@ function InventoryMovementForm({ data }: { data: AppData }) {
             className={fieldClass()}
             placeholder="3 或 -2"
           />
+          <p className="mt-2 text-xs leading-5 text-ink/60">
+            入庫與出庫請填正數；盤點調整可直接輸入負數修正。
+          </p>
         </label>
         <label className="text-sm font-semibold text-plum md:col-span-2">
           備註
@@ -733,7 +1339,122 @@ function InventoryMovementForm({ data }: { data: AppData }) {
         </label>
       </div>
       <div className="mt-4">
-        <SubmitButton>記錄異動</SubmitButton>
+        <SubmitButton className="w-full sm:w-auto">記錄異動</SubmitButton>
+      </div>
+    </form>
+  );
+}
+
+function InventoryItemForm({
+  item,
+  onCancel,
+}: {
+  item?: InventoryItem;
+  onCancel?: () => void;
+}) {
+  return (
+    <form action={saveInventoryItemAction} className="card p-5">
+      <input type="hidden" name="id" value={item?.id ?? ""} />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-plum">
+            {item ? "編輯庫存品項" : "建立庫存品項"}
+          </h2>
+          <p className="mt-1 text-sm text-ink/65">
+            建立第一筆品項後，就能在右側記錄入庫、出庫與調整；數量與警戒值都以件數計算。
+          </p>
+        </div>
+        {item && onCancel ? (
+          <button
+            type="button"
+            className="mobile-tap w-full rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum sm:w-auto"
+            onClick={onCancel}
+          >
+            取消編輯
+          </button>
+        ) : null}
+      </div>
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <label className="text-sm font-semibold text-plum">
+          品牌
+          <input
+            name="brand"
+            className={fieldClass()}
+            defaultValue={item?.brand ?? ""}
+            placeholder="Leafgel"
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          分類
+          <input
+            required
+            name="category"
+            className={fieldClass()}
+            defaultValue={item?.category ?? ""}
+            placeholder="美甲膠 / 保養品 / 耗材"
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum md:col-span-2">
+          品項名稱
+          <input
+            required
+            name="name"
+            className={fieldClass()}
+            defaultValue={item?.name ?? ""}
+            placeholder="裸玫瑰凝膠 #R12"
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          成本
+          <input
+            required
+            type="number"
+            min="0"
+            step="0.01"
+            name="cost"
+            className={fieldClass()}
+            defaultValue={item?.cost ?? 0}
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          售價
+          <input
+            required
+            type="number"
+            min="0"
+            step="0.01"
+            name="retail_price"
+            className={fieldClass()}
+            defaultValue={item?.retailPrice ?? 0}
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          現有數量（件）
+          <input
+            required
+            type="number"
+            min="0"
+            step="0.01"
+            name="quantity"
+            className={fieldClass()}
+            defaultValue={item?.quantity ?? 0}
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          低庫存警戒（件）
+          <input
+            required
+            type="number"
+            min="0"
+            step="0.01"
+            name="low_stock_threshold"
+            className={fieldClass()}
+            defaultValue={item?.lowStockThreshold ?? 0}
+          />
+        </label>
+      </div>
+      <div className="mt-4">
+        <SubmitButton className="w-full sm:w-auto">{item ? "更新品項" : "建立品項"}</SubmitButton>
       </div>
     </form>
   );
@@ -785,20 +1506,22 @@ function StaffForm({ staff }: { staff?: StaffMember }) {
           <select name="role" className={fieldClass()} defaultValue={staff?.role ?? "technician"}>
             {staffRoles.map((role) => (
               <option key={role} value={role}>
-                {roleLabel(role)}
+                {staffRoleSelectLabel(role)}
               </option>
             ))}
           </select>
+          <p className="mt-2 text-xs leading-5 text-ink/60">{staffRoleHelpText}</p>
         </label>
         <label className="text-sm font-semibold text-plum">
-          抽成（0 到 1）
+          抽成比例（可填 25 或 0.25）
           <input
             name="commissionRate"
             inputMode="decimal"
             className={fieldClass()}
-            defaultValue={staff?.commissionRate ?? 0.25}
-            placeholder="0.25"
+            defaultValue={Math.round((staff?.commissionRate ?? 0.25) * 100)}
+            placeholder="25"
           />
+          <p className="mt-2 text-xs leading-5 text-ink/60">系統會自動換算成 0 到 1 儲存，例如 25 會儲存成 0.25。</p>
         </label>
         <label className="text-sm font-semibold text-plum md:col-span-2">
           專長（逗號或換行分隔）
@@ -817,12 +1540,126 @@ function StaffForm({ staff }: { staff?: StaffMember }) {
               defaultChecked={staff.active}
               className="size-5 accent-plum"
             />
-            在職 / 可被排班與指派
+            在職中，可被排班與指派
           </label>
         ) : null}
       </div>
       <div className="mt-4">
-        <SubmitButton>{staff ? "儲存員工" : "新增並寄送邀請"}</SubmitButton>
+        <SubmitButton className="w-full sm:w-auto">{staff ? "儲存員工" : "新增並寄送邀請"}</SubmitButton>
+      </div>
+    </form>
+  );
+}
+
+function ShiftForm({
+  data,
+  shift,
+  defaultStaffId,
+  onReset,
+}: {
+  data: AppData;
+  shift?: Shift;
+  defaultStaffId: string;
+  onReset: () => void;
+}) {
+  const defaultDate = shift?.date ?? currentDateInput();
+  const defaultStart = shift?.startTime ?? "10:00";
+  const defaultEnd = shift?.endTime ?? "19:00";
+  const activeStaff = data.staff.filter((member) => member.active);
+  const inactiveStaff = data.staff.filter((member) => !member.active);
+
+  return (
+    <form action={saveStaffShiftAction} className="mt-4 rounded-3xl border border-champagne bg-blush/40 p-5">
+      <input type="hidden" name="id" value={shift?.id ?? ""} />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-base font-bold text-plum">{shift ? "編輯班表" : "新增班表"}</h3>
+          <p className="text-sm text-ink/60">新班表會先列出在職員工；停用員工會保留在下方，方便編輯既有班表。</p>
+        </div>
+        {shift ? (
+          <button type="button" className="mobile-tap w-full rounded-2xl bg-white px-4 py-2 font-semibold text-plum sm:w-auto" onClick={onReset}>
+            取消編輯
+          </button>
+        ) : null}
+      </div>
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <label className="text-sm font-semibold text-plum">
+          員工
+          <select
+            required
+            name="staffId"
+            className={fieldClass()}
+            defaultValue={shift?.staffId ?? defaultStaffId}
+          >
+            <option value="" disabled>
+              請選擇在職員工
+            </option>
+            {activeStaff.length ? (
+              <optgroup label="在職員工">
+                {activeStaff.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}｜{staffRoleSelectLabel(member.role)}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+            {inactiveStaff.length ? (
+              <optgroup label="停用員工（僅供編輯既有班表）">
+                {inactiveStaff.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}｜{staffRoleSelectLabel(member.role)}（停用）
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+          </select>
+          <p className="mt-2 text-xs leading-5 text-ink/60">新班表預設只會指向在職員工；如果要回頭修改舊紀錄，才需要選到停用員工。</p>
+          {!activeStaff.length ? (
+            <p className="mt-2 text-xs leading-5 text-rose">目前沒有在職員工，無法直接建立新班表，請先恢復至少一位員工為在職狀態後再新增。</p>
+          ) : null}
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          日期
+          <input
+            required
+            type="date"
+            name="shiftDate"
+            className={fieldClass()}
+            defaultValue={defaultDate}
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          開始時間
+          <input
+            required
+            type="time"
+            name="startTime"
+            className={fieldClass()}
+            defaultValue={defaultStart}
+          />
+        </label>
+        <label className="text-sm font-semibold text-plum">
+          結束時間
+          <input
+            required
+            type="time"
+            name="endTime"
+            className={fieldClass()}
+            defaultValue={defaultEnd}
+          />
+        </label>
+        <label className="flex items-start gap-3 rounded-2xl bg-white p-4 font-semibold text-plum md:col-span-2">
+          <input
+            type="checkbox"
+            name="leave"
+            defaultChecked={shift?.leave ?? false}
+            className="size-5 accent-plum"
+          />
+          休假 / 休息
+        </label>
+      </div>
+      <div className="mt-4">
+        <SubmitButton className="w-full sm:w-auto">{shift ? "儲存班表" : "建立班表"}</SubmitButton>
       </div>
     </form>
   );
@@ -833,9 +1670,39 @@ function shellProps(data: AppData) {
     workspace: data.workspace,
     role: data.currentMember?.role ?? "owner",
     notice: data.needsWorkspace
-      ? "尚未完成 workspace 初始化，請重新登入或聯絡管理員。"
-      : liveNotice,
+      ? "尚未完成店鋪初始化，請先重新登入或聯絡管理員補齊店鋪資料後再操作。"
+      : data.demoMode
+        ? "預覽資料模式：目前顯示的是範例 seed 資料，Supabase 實際資料仍會優先顯示。"
+        : liveNotice,
   };
+}
+
+function SetupGuide({
+  title,
+  action,
+  links,
+}: {
+  title: string;
+  action: string;
+  links: LinkAction[];
+}) {
+  return (
+    <div className="card p-5 print:hidden">
+      <h2 className="text-lg font-bold text-plum">{title}</h2>
+      <p className="mt-1 text-sm text-ink/60">{action}</p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {links.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="mobile-tap w-full rounded-2xl bg-white px-4 py-2 text-center text-sm font-semibold text-plum sm:w-auto"
+          >
+            {link.label}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function DashboardView({ data }: { data: AppData }) {
@@ -847,20 +1714,22 @@ export function DashboardView({ data }: { data: AppData }) {
     data.services,
     data.staff,
   );
+  const workspaceEmpty = isWorkspaceEmpty(data);
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
 
   return (
     <AppShell
       title="營運總覽"
-      subtitle="今日預約、營收、技師業績、熱門服務與風險提醒集中管理。"
+      subtitle="給美業老闆看的今日重點：預約轉換、現金流、技師產能與需要處理的風險。"
       {...shellProps(data)}
     >
       {data.needsWorkspace ? (
         <EmptyState
-          title="尚未完成 workspace 初始化"
+          title="尚未完成店鋪初始化"
           action={
             data.staffInviteFeatureEnabled && data.staffInvites.length > 0
               ? "你有待加入的店鋪邀請，請先開啟邀請卡完成加入。"
-              : "請重新登入，系統會依註冊資料補齊 workspace、owner profile 與 membership。"
+              : "請重新登入，系統會依註冊資料補齊店鋪、owner profile 與 membership。"
           }
         />
       ) : null}
@@ -873,15 +1742,35 @@ export function DashboardView({ data }: { data: AppData }) {
               <div key={invite.id} className="flex flex-col gap-3 rounded-2xl bg-blush p-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <strong className="block text-plum">{invite.displayName}</strong>
-                  <p className="text-sm text-ink/60">{invite.email} ｜ {roleLabel(invite.role)}</p>
+                  <p className="text-sm text-ink/60">{invite.email} ｜ {staffRoleSelectLabel(invite.role)}</p>
                 </div>
-                <Link href={buildStaffInvitePath(invite.token)} className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-center font-semibold text-white">
+                <Link href={buildStaffInvitePath(invite.token)} className="mobile-tap w-full rounded-2xl bg-plum px-4 py-2 text-center font-semibold text-white sm:w-auto">
                   開啟邀請
                 </Link>
               </div>
             ))}
           </div>
         </div>
+      ) : null}
+      {setupGuide ? (
+        <div className="mt-4">
+          <SetupGuide
+            title={setupGuide.title}
+            action={setupGuide.action}
+            links={setupGuide.links}
+          />
+        </div>
+      ) : null}
+      {workspaceEmpty && !setupGuide ? (
+        <SetupGuide
+          title="先建立第一組營運資料"
+          action="完成店鋪設定後，依序新增服務、員工與客戶，今日重點與 KPI 才會開始反映真實營運。"
+          links={[
+            { href: "/settings?message=settings_setup_hint", label: "先去設定" },
+            { href: "/services", label: "建立服務" },
+            { href: "/staff", label: "建立員工" },
+          ]}
+        />
       ) : null}
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
@@ -907,8 +1796,8 @@ export function DashboardView({ data }: { data: AppData }) {
       </section>
       <section className="mt-5 grid gap-5 xl:grid-cols-[1.25fr_.75fr]">
         <div className="card p-5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-plum">即將到店客人</h2>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-lg font-bold text-plum">今日重點：即將到店客人</h2>
             <StatusPill tone="amber">
               取消率 {(metrics.cancellationRate * 100).toFixed(0)}% / 未到率{" "}
               {(metrics.noShowRate * 100).toFixed(0)}%
@@ -928,12 +1817,14 @@ export function DashboardView({ data }: { data: AppData }) {
                     key={appointment.id}
                     className="rounded-3xl bg-blush p-4"
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <strong>
                         {formatTime(appointment.startAt)}{" "}
                         {customer?.name ?? "未命名客戶"}
                       </strong>
-                      <StatusPill>{statusLabel(appointment.status)}</StatusPill>
+                      <StatusPill tone={appointmentStatusTone(appointment.status)}>
+                        {statusLabel(appointment.status)}
+                      </StatusPill>
                     </div>
                     <p className="mt-1 text-sm text-ink/60">
                       技師 {technician?.name ?? "未指派"}｜
@@ -945,7 +1836,7 @@ export function DashboardView({ data }: { data: AppData }) {
             ) : (
               <EmptyState
                 title="目前沒有即將到店預約"
-                action="新增第一筆預約後，這裡會顯示今日與近期排程。"
+                action="下一步行動：新增第一筆預約後，這裡會顯示今日與近期排程。"
               />
             )}
           </div>
@@ -970,34 +1861,48 @@ export function DashboardView({ data }: { data: AppData }) {
         <div className="card p-5">
           <h2 className="text-lg font-bold text-plum">技師業績</h2>
           <div className="mt-4 space-y-3">
-            {metrics.technicianRevenue.map((item, index) => (
-              <div
-                key={`${item.name}-${index}`}
-                className="flex items-center justify-between rounded-2xl bg-white p-4"
-              >
-                <span>
-                  {item.name}
-                  <small className="ml-2 text-ink/45">
-                    服務 {item.services} 次
-                  </small>
-                </span>
-                <strong>{currency.format(item.revenue)}</strong>
-              </div>
-            ))}
+            {metrics.technicianRevenue.length ? (
+              metrics.technicianRevenue.map((item, index) => (
+                <div
+                  key={`${item.name}-${index}`}
+                  className="flex flex-col gap-2 rounded-2xl bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <span className="min-w-0 break-words">
+                    {item.name}
+                    <small className="ml-2 text-ink/45">
+                      服務 {item.services} 次
+                    </small>
+                  </span>
+                  <strong>{currency.format(item.revenue)}</strong>
+                </div>
+              ))
+            ) : (
+              <EmptyState
+                title="目前沒有技師業績資料"
+                action="完成預約與訂單後，這裡會顯示各技師的營收與服務次數。"
+              />
+            )}
           </div>
         </div>
         <div className="card p-5">
           <h2 className="text-lg font-bold text-plum">熱門服務</h2>
           <div className="mt-4 space-y-3">
-            {metrics.serviceRanking.map((item, index) => (
-              <div
-                key={`${item.name}-${index}`}
-                className="flex items-center justify-between rounded-2xl bg-white p-4"
-              >
-                <span>{item.name}</span>
-                <StatusPill tone="plum">{item.count} 筆</StatusPill>
-              </div>
-            ))}
+            {metrics.serviceRanking.length ? (
+              metrics.serviceRanking.map((item, index) => (
+                <div
+                  key={`${item.name}-${index}`}
+                  className="flex flex-col gap-2 rounded-2xl bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <span className="min-w-0 break-words">{item.name}</span>
+                  <StatusPill tone="plum">{item.count} 筆</StatusPill>
+                </div>
+              ))
+            ) : (
+              <EmptyState
+                title="目前沒有熱門服務"
+                action="建立服務與預約後，這裡會自動整理最常被選擇的項目。"
+              />
+            )}
           </div>
         </div>
       </section>
@@ -1016,38 +1921,96 @@ export function AppointmentsView({
   const editing = data.appointments.find(
     (appointment) => appointment.id === editingId,
   );
+  const role = data.currentMember?.role ?? "staff";
+  const appointmentsScope = permissionScope(role, "appointments");
+  const canManageAppointments = appointmentsScope === "manage";
+  const appointmentsAccessMessage = moduleAccessMessage(role, "appointments");
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
+  const workspaceEmpty = isWorkspaceEmpty(data);
+
+  useEffect(() => {
+    if (notice?.kind === "success") {
+      setEditingId(null);
+    }
+  }, [notice?.kind, notice?.message]);
 
   return (
     <AppShell
       title="預約系統"
-      subtitle="新增、修改、取消預約；日曆 / 列表檢視與技師衝突檢查。"
+      subtitle="把電話、LINE 與現場預約整理成清楚流程，協助櫃台確認時段、技師與服務內容。"
       {...shellProps(data)}
     >
+      {setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide title={setupGuide.title} action={setupGuide.action} links={setupGuide.links} />
+        </div>
+      ) : null}
+      {workspaceEmpty && !setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide
+            title="先建立第一組營運資料"
+            action="先補齊店鋪設定、服務、員工與客戶，預約頁才會有可選資料與明確下一步。"
+            links={[
+              { href: "/settings?message=settings_setup_hint", label: "先去設定" },
+              { href: "/services", label: "建立服務" },
+              { href: "/staff", label: "建立員工" },
+            ]}
+          />
+        </div>
+      ) : null}
       <NoticeBanner notice={notice} />
+      <QuickJumpBar
+        title="快速跳轉"
+        links={[
+          { href: "#appointment-form", label: "新增 / 編輯預約" },
+          { href: "#appointment-statuses", label: "狀態摘要" },
+          { href: "#appointment-list", label: "預約清單" },
+        ]}
+      />
       <div className="mb-5 grid gap-3 md:grid-cols-2">
-        <AppointmentForm data={data} appointment={editing} />
-        <div className="card p-5">
-          <h2 className="text-lg font-bold text-plum">預約資料會即時持久化</h2>
+        <div id="appointment-form" className="scroll-mt-28">
+          {canManageAppointments ? (
+            <AppointmentForm
+              key={editing?.id ?? "new"}
+              data={data}
+              appointment={editing}
+              onCancel={editing ? () => setEditingId(null) : undefined}
+            />
+          ) : (
+            <EmptyState
+              title="預約目前僅供查看"
+              action={appointmentsAccessMessage}
+            />
+          )}
+        </div>
+        <div id="appointment-statuses" className="card scroll-mt-28 p-5">
+          <h2 className="text-lg font-bold text-plum">預約資料會即時寫入資料庫</h2>
           <p className="mt-2 text-sm text-ink/65">
             新增或編輯預約會寫入 Supabase，並同步
-            appointment_services。系統會阻擋同一技師重疊時段。
+            appointment_services。系統會阻擋同一技師重疊時段，已取消和未到的預約不會佔用衝突判定。
           </p>
-          {editing ? (
-            <button
-              className="mobile-tap mt-4 rounded-2xl bg-white font-semibold text-plum"
-              onClick={() => setEditingId(null)}
-            >
-              清除編輯狀態
-            </button>
-          ) : null}
+          <p className="mt-2 text-sm text-ink/65">
+            狀態更新只會改流程標記，不會改客戶、技師、時間或服務內容。
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {appointmentStatuses.map((status) => {
+              const count = data.appointments.filter((appointment) => appointment.status === status).length;
+              return (
+                <StatusPill key={status} tone={appointmentStatusTone(status)}>
+                  {statusLabel(status)} {count}
+                </StatusPill>
+              );
+            })}
+          </div>
         </div>
       </div>
-      <ModuleTable
-        rows={data.appointments}
-        searchPlaceholder="搜尋客戶、技師、來源、備註"
-        filterOptions={["pending", "confirmed", "completed", "no_show"]}
-        emptyTitle="目前沒有預約"
-        columns={[
+      <div id="appointment-list" className="scroll-mt-28">
+        <ModuleTable
+          rows={data.appointments}
+          searchPlaceholder="搜尋客戶、技師、來源、備註"
+          filterOptions={["pending", "confirmed", "in_service", "completed", "cancelled", "no_show"]}
+          emptyTitle="目前沒有預約"
+          columns={[
           {
             key: "time",
             label: "日期 / 時間",
@@ -1083,39 +2046,49 @@ export function AppointmentsView({
           {
             key: "status",
             label: "狀態",
-            render: (row) => <StatusPill>{statusLabel(row.status)}</StatusPill>,
-          },
-          {
-            key: "actions",
-            label: "操作",
             render: (row) => (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  className="rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
-                  onClick={() => setEditingId(row.id)}
-                >
-                  編輯
-                </button>
-                <form action={updateAppointmentStatus} className="flex gap-2">
-                  <input type="hidden" name="id" value={row.id} />
-                  <select
-                    name="status"
-                    className="rounded-xl border border-champagne px-2 py-2"
-                    defaultValue={row.status}
-                  >
-                    {appointmentStatuses.map((status) => (
-                      <option key={status} value={status}>
-                        {statusLabel(status)}
-                      </option>
-                    ))}
-                  </select>
-                  <SubmitButton tone="white">更新</SubmitButton>
-                </form>
-              </div>
+              <StatusPill tone={appointmentStatusTone(row.status)}>
+                {statusLabel(row.status)}
+              </StatusPill>
             ),
           },
-        ]}
-      />
+          ...(canManageAppointments
+            ? [
+                {
+                  key: "actions",
+                  label: "操作",
+                  render: (row: Appointment) => (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start">
+                      <button
+                        type="button"
+                        className="mobile-tap w-full rounded-xl bg-champagne px-3 py-2 font-semibold text-plum sm:w-auto"
+                        onClick={() => setEditingId(row.id)}
+                      >
+                        編輯
+                      </button>
+                      <form action={updateAppointmentStatus} className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                        <input type="hidden" name="id" value={row.id} />
+                        <select
+                          name="status"
+                          className="mobile-tap w-full rounded-xl border border-champagne px-2 py-2 sm:w-40"
+                          defaultValue={row.status}
+                        >
+                          {appointmentStatuses.map((status) => (
+                            <option key={status} value={status}>
+                              {statusLabel(status)}
+                            </option>
+                          ))}
+                        </select>
+                        <SubmitButton tone="white" className="w-full sm:w-auto">更新狀態</SubmitButton>
+                      </form>
+                    </div>
+                  ),
+                },
+              ]
+            : []),
+          ]}
+        />
+      </div>
     </AppShell>
   );
 }
@@ -1129,23 +2102,75 @@ export function ServicesView({
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = data.services.find((service) => service.id === editingId);
+  const role = data.currentMember?.role ?? "staff";
+  const servicesScope = permissionScope(role, "services");
+  const canManageServices = servicesScope === "manage";
+  const servicesAccessMessage = moduleAccessMessage(role, "services");
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
+  const workspaceEmpty = isWorkspaceEmpty(data);
+
+  useEffect(() => {
+    if (notice?.kind === "success") {
+      setEditingId(null);
+    }
+  }, [notice?.kind, notice?.message]);
 
   return (
     <AppShell
       title="服務項目管理"
-      subtitle="分類、價格、所需時間、說明、啟用狀態與加購項目管理。"
+      subtitle="價格、時間、啟用狀態與分類可直接管理，分類欄可留空或輸入新名稱。"
       {...shellProps(data)}
     >
+      {setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide title={setupGuide.title} action={setupGuide.action} links={setupGuide.links} />
+        </div>
+      ) : null}
+      {workspaceEmpty && !setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide
+            title="先建立第一組營運資料"
+            action="先設定店鋪資訊並建立服務分類，服務頁才會有清楚的分類與可用項目。"
+            links={[
+              { href: "/settings?message=settings_setup_hint", label: "先去設定" },
+              { href: "/staff", label: "建立員工" },
+              { href: "/customers", label: "建立客戶" },
+            ]}
+          />
+        </div>
+      ) : null}
       <NoticeBanner notice={notice} />
-      <div className="mb-5">
-        <ServiceForm service={editing} categories={data.categories} />
-      </div>
-      <ModuleTable
-        rows={data.services}
-        searchPlaceholder="搜尋服務名稱、分類、說明"
-        filterOptions={["美甲", "美睫", "美容", "SPA", "霧眉", "加購"]}
-        emptyTitle="尚未建立服務項目"
-        columns={[
+      <QuickJumpBar
+        title="快速跳轉"
+        links={[
+          { href: "#service-form", label: "新增 / 編輯服務" },
+          { href: "#service-list", label: "服務清單" },
+        ]}
+      />
+      {canManageServices ? (
+        <div id="service-form" className="mb-5 scroll-mt-28">
+          <ServiceForm
+            key={editing?.id ?? "new"}
+            service={editing}
+            categories={data.categories}
+            onCancel={editing ? () => setEditingId(null) : undefined}
+          />
+        </div>
+      ) : (
+        <div id="service-form" className="mb-5 scroll-mt-28">
+          <EmptyState
+            title={servicesScope === "view" ? "服務目前僅供查看" : "你的角色無法管理服務"}
+            action={servicesAccessMessage}
+          />
+        </div>
+      )}
+      <div id="service-list" className="scroll-mt-28">
+        <ModuleTable
+          rows={data.services}
+          searchPlaceholder="搜尋服務名稱、分類、說明"
+          filterOptions={["美甲", "美睫", "美容", "SPA", "霧眉", "加購"]}
+          emptyTitle="尚未建立服務項目"
+          columns={[
           {
             key: "name",
             label: "服務",
@@ -1169,7 +2194,7 @@ export function ServicesView({
           },
           {
             key: "duration",
-            label: "時間",
+            label: "所需時間",
             sortValue: (row) => row.durationMin,
             render: (row) => `${row.durationMin} 分鐘`,
           },
@@ -1181,41 +2206,47 @@ export function ServicesView({
           },
           {
             key: "enabled",
-            label: "狀態",
+            label: "啟用狀態",
             render: (row) =>
               row.enabled ? (
-                <StatusPill tone="sage">啟用</StatusPill>
+                <StatusPill tone="sage">啟用中</StatusPill>
               ) : (
                 <StatusPill>停用</StatusPill>
               ),
           },
-          {
-            key: "actions",
-            label: "操作",
-            render: (row) => (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  className="rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
-                  onClick={() => setEditingId(row.id)}
-                >
-                  編輯
-                </button>
-                <form action={setServiceEnabled}>
-                  <input type="hidden" name="id" value={row.id} />
-                  <input
-                    type="hidden"
-                    name="enabled"
-                    value={row.enabled ? "false" : "true"}
-                  />
-                  <SubmitButton tone="white">
-                    {row.enabled ? "停用" : "啟用"}
-                  </SubmitButton>
-                </form>
-              </div>
-            ),
-          },
-        ]}
-      />
+          ...(canManageServices
+            ? [
+                {
+                  key: "actions",
+                  label: "操作",
+                  render: (row: ServiceItem) => (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="mobile-tap w-full rounded-xl bg-champagne px-3 py-2 font-semibold text-plum sm:w-auto"
+                        onClick={() => setEditingId(row.id)}
+                      >
+                        編輯
+                      </button>
+                      <form action={setServiceEnabled}>
+                        <input type="hidden" name="id" value={row.id} />
+                        <input
+                          type="hidden"
+                          name="enabled"
+                          value={row.enabled ? "false" : "true"}
+                        />
+                        <SubmitButton tone="white" className="w-full sm:w-auto">
+                          {row.enabled ? "停用" : "啟用"}
+                        </SubmitButton>
+                      </form>
+                    </div>
+                  ),
+                },
+              ]
+            : []),
+          ]}
+        />
+      </div>
     </AppShell>
   );
 }
@@ -1229,16 +2260,54 @@ export function CustomersView({
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = data.customers.find((customer) => customer.id === editingId);
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
+  const workspaceEmpty = isWorkspaceEmpty(data);
+
+  useEffect(() => {
+    if (notice?.kind === "success") {
+      setEditingId(null);
+    }
+  }, [notice?.kind, notice?.message]);
 
   return (
     <AppShell
       title="客戶 CRM"
-      subtitle="電話、生日、LINE、偏好、過敏禁忌、會員等級與回訪提醒。"
+      subtitle="沉澱客戶偏好、禁忌與回訪提醒，讓美甲沙龍更容易做熟客經營。"
       {...shellProps(data)}
     >
+      {setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide title={setupGuide.title} action={setupGuide.action} links={setupGuide.links} />
+        </div>
+      ) : null}
+      {workspaceEmpty && !setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide
+            title="先建立第一位客戶"
+            action="先把店鋪設定與服務準備好，再建立第一位客戶；這樣後續的預約、回訪與收款才會有對象可用。"
+            links={[
+              { href: "/settings?message=settings_setup_hint", label: "先去設定" },
+              { href: "/services", label: "建立服務" },
+              { href: "/appointments", label: "建立預約" },
+            ]}
+          />
+        </div>
+      ) : null}
       <NoticeBanner notice={notice} />
+      {data.customers.length === 0 ? (
+        <div className="mb-5">
+          <EmptyState
+            title="目前還沒有客戶資料"
+            action="先用下方表單建立第一位客戶，之後預約、回訪提醒與標籤才會開始累積。"
+          />
+        </div>
+      ) : null}
       <div className="mb-5">
-        <CustomerForm customer={editing} />
+        <CustomerForm
+          key={editing?.id ?? "new"}
+          customer={editing}
+          onCancel={editing ? () => setEditingId(null) : undefined}
+        />
       </div>
       <ModuleTable
         rows={data.customers}
@@ -1282,7 +2351,14 @@ export function CustomersView({
           {
             key: "reminder",
             label: "回訪提醒",
-            render: (row) => row.nextReminder ?? "-",
+            render: (row) => {
+              const reminder = reminderDisplay(row.nextReminder);
+              return reminder ? (
+                <StatusPill tone={reminder.tone}>{reminder.label}</StatusPill>
+              ) : (
+                "-"
+              );
+            },
           },
           {
             key: "tags",
@@ -1298,16 +2374,17 @@ export function CustomersView({
             key: "actions",
             label: "操作",
             render: (row) => (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                 <button
-                  className="rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
+                  type="button"
+                  className="mobile-tap w-full rounded-xl bg-champagne px-3 py-2 font-semibold text-plum sm:w-auto"
                   onClick={() => setEditingId(row.id)}
                 >
                   編輯
                 </button>
-                <form action={deleteOrArchiveCustomer}>
+                <form action={deleteOrArchiveCustomer} className="w-full sm:w-auto">
                   <input type="hidden" name="id" value={row.id} />
-                  <SubmitButton tone="danger">刪除 / 封存</SubmitButton>
+                  <SubmitButton tone="danger" className="w-full sm:w-auto">刪除 / 封存</SubmitButton>
                 </form>
               </div>
             ),
@@ -1325,7 +2402,28 @@ export function InventoryView({
   data: AppData;
   notice?: Notice;
 }) {
-  const canManageInventory = can(data.currentMember?.role ?? "staff", "inventory");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const role = data.currentMember?.role ?? "staff";
+  const canManageInventory = canManage(role, "inventory");
+  const inventoryScope = permissionScope(role, "inventory");
+  const inventoryAccessMessage = moduleAccessMessage(role, "inventory");
+  const editingItem = data.inventory.find((item) => item.id === editingId);
+  const hasInventory = data.inventory.length > 0;
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
+  const workspaceEmpty = isWorkspaceEmpty(data);
+  const now = new Date();
+  const inventoryRows = [...data.inventory].sort((a, b) => {
+    const aLow = a.quantity <= a.lowStockThreshold;
+    const bLow = b.quantity <= b.lowStockThreshold;
+    if (aLow !== bLow) return aLow ? -1 : 1;
+    const aUrgent = a.quantity <= 1;
+    const bUrgent = b.quantity <= 1;
+    if (aUrgent !== bUrgent) return aUrgent ? -1 : 1;
+    const aGap = Math.max(a.lowStockThreshold - a.quantity, 0);
+    const bGap = Math.max(b.lowStockThreshold - b.quantity, 0);
+    if (aGap !== bGap) return bGap - aGap;
+    return a.quantity - b.quantity || a.name.localeCompare(b.name);
+  });
   const lowStockCount = data.inventory.filter(
     (item) => item.quantity <= item.lowStockThreshold,
   ).length;
@@ -1340,7 +2438,41 @@ export function InventoryView({
   const movementOutflow = data.inventoryMovements
     .filter((movement) => movement.quantity < 0)
     .reduce((sum, movement) => sum + Math.abs(movement.quantity), 0);
-  const recentMovements = data.inventoryMovements.slice(0, 25);
+  const recentMovements = [...data.inventoryMovements]
+    .sort(
+      (left, right) =>
+        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime() ||
+        left.itemId.localeCompare(right.itemId) ||
+        right.quantity - left.quantity,
+    )
+    .slice(0, 25);
+  const lowStockItems = inventoryRows.filter((item) => item.quantity <= item.lowStockThreshold);
+  const urgentLowStockCount = lowStockItems.filter((item) => item.quantity <= 1).length;
+  const inventoryPrintSummary = [
+    `${data.workspace.name}｜${formatDateTime(now.toISOString())} 庫存摘要`,
+    `品項 ${data.inventory.length}、低庫存 ${lowStockCount}、其中 ${urgentLowStockCount} 項只剩 1 件或以下、庫存成本 ${currency.format(totalValue)}、淨異動 ${netMovement.toFixed(2)} 件`,
+    lowStockItems.length
+      ? `補貨優先：${lowStockItems
+          .slice(0, 5)
+          .map((item) => `${item.name} ${formatInventoryStock(item.quantity, item.lowStockThreshold)}`)
+          .join("；")}`
+      : "補貨優先：目前沒有低庫存品項",
+    recentMovements.length
+      ? `最近 5 筆異動：${recentMovements
+          .slice(0, 5)
+          .map((movement) => {
+            const itemName = data.inventory.find((item) => item.id === movement.itemId)?.name ?? movement.itemId;
+            return `${new Date(movement.createdAt).toLocaleString("zh-TW")}｜${itemName}｜${formatInventoryMovementQuantity(movement.quantity)}`;
+          })
+          .join("；")}`
+      : "最近異動：目前沒有紀錄",
+  ].join("\n");
+
+  useEffect(() => {
+    if (notice?.kind === "success") {
+      setEditingId(null);
+    }
+  }, [notice?.kind, notice?.message]);
 
   return (
     <AppShell
@@ -1348,30 +2480,143 @@ export function InventoryView({
       subtitle="用品、耗材、色膠、低庫存提醒與進銷存紀錄。"
       {...shellProps(data)}
     >
+      {setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide title={setupGuide.title} action={setupGuide.action} links={setupGuide.links} />
+        </div>
+      ) : null}
+      {workspaceEmpty && !setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide
+            title="先建立第一組營運資料"
+            action="先補齊店鋪、服務與員工資料，再建立第一筆庫存品項，低庫存與成本估值才會有意義。"
+            links={[
+              { href: "/settings?message=settings_setup_hint", label: "先去設定" },
+              { href: "/services", label: "建立服務" },
+              { href: "/staff", label: "建立員工" },
+            ]}
+          />
+        </div>
+      ) : null}
       {notice ? <NoticeBanner notice={notice} /> : null}
-      <section className="grid gap-4 md:grid-cols-4">
+      <QuickJumpBar
+        title="快速跳轉"
+        links={[
+          { href: "#inventory-summary", label: "庫存摘要" },
+          { href: "#inventory-form", label: "新增 / 編輯品項" },
+          { href: "#inventory-list", label: "庫存清單" },
+          { href: "#inventory-log", label: "異動紀錄" },
+        ]}
+      />
+      <section className="mb-5 hidden rounded-3xl border border-black/10 bg-transparent p-5 print:block">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-plum">庫存列印摘要</h2>
+            <p className="mt-1 text-sm text-ink/60">
+              這段可以直接列印或複製，方便盤點、補貨與交接。
+            </p>
+          </div>
+          <StatusPill tone="amber">{lowStockCount} 項需補貨</StatusPill>
+        </div>
+        <pre className="mt-4 whitespace-pre-wrap rounded-3xl border border-champagne bg-white p-4 text-sm leading-6 text-ink/80 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+          {inventoryPrintSummary}
+        </pre>
+      </section>
+      <section id="inventory-summary" className="scroll-mt-28 grid gap-4 md:grid-cols-4">
         <MetricCard label="品項數" value={`${data.inventory.length}`} hint="所有在庫品項" />
         <MetricCard label="低庫存" value={`${lowStockCount}`} hint="已低於警戒值" />
         <MetricCard label="庫存成本" value={currency.format(totalValue)} hint="依成本估值" />
         <MetricCard label="淨異動" value={netMovement.toFixed(2)} hint={`出庫累計 ${movementOutflow.toFixed(2)}`} />
       </section>
-      <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)]">
-        {canManageInventory ? <InventoryMovementForm data={data} /> : null}
-        <div className="card p-5">
-          <h2 className="text-lg font-bold text-plum">庫存運作</h2>
-          <div className="mt-4 space-y-3 text-sm text-ink/70">
-            <p>入庫、出庫、調整都會寫入 `inventory_movements`，並同步更新品項數量。</p>
-            <p>出庫前會檢查餘量，不允許扣成負數。</p>
-            <p>這裡是後續結算、報表與耗材成本的共同來源。</p>
+      <section className="mt-5 card p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-plum">低庫存優先處理</h2>
+            <p className="mt-1 text-sm text-ink/60">
+              先補只剩 1 件或以下的品項，再依低庫存名單往下處理，避免明天臨時缺料。
+            </p>
+          </div>
+          <StatusPill tone={lowStockCount ? "amber" : "sage"}>
+            {lowStockCount ? `${lowStockCount} 項需補貨` : "目前沒有低庫存"}
+          </StatusPill>
+        </div>
+        {lowStockItems.length ? (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {lowStockItems.slice(0, 6).map((item) => {
+              const urgent = item.quantity <= 1;
+              return (
+                <article key={item.id} className="rounded-3xl border border-champagne bg-white p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-plum">{item.name}</p>
+                      <p className="mt-1 text-xs text-ink/60">
+                        {item.brand}｜{item.category}
+                      </p>
+                    </div>
+                    <StatusPill tone={urgent ? "rose" : "amber"}>
+                      {formatInventoryStock(item.quantity, item.lowStockThreshold)}
+                    </StatusPill>
+                  </div>
+                  <p className="mt-2 text-sm text-ink/70">
+                    {urgent ? "先補貨再排班，避免今天就用完。" : "先安排補貨，明天前補齊會比較穩。"}
+                  </p>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-4">
+            <EmptyState
+              title="目前沒有低庫存品項"
+              action="庫存都在安全範圍內時，這裡會保持簡潔；一旦低於警戒值就會自動列出優先補貨名單。"
+            />
+          </div>
+        )}
+      </section>
+      <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+        {canManageInventory ? (
+          <div id="inventory-form" className="scroll-mt-28">
+            <InventoryItemForm
+              key={editingItem?.id ?? "new"}
+              item={editingItem}
+              onCancel={editingItem ? () => setEditingId(null) : undefined}
+            />
+          </div>
+        ) : null}
+        <div className="space-y-5">
+          {canManageInventory ? (
+            <div id="inventory-movements" className="scroll-mt-28">
+              {hasInventory ? (
+                <InventoryMovementForm data={data} />
+              ) : (
+                <EmptyState
+                  title="先建立第一筆庫存品項"
+                  action="建立品項後，就能直接記錄入庫、出庫與調整；目前異動功能會保持停用。"
+                />
+              )}
+            </div>
+          ) : (
+            <EmptyState
+              title={inventoryScope === "view" ? "庫存目前僅供查看" : "你沒有庫存管理權限"}
+              action={inventoryAccessMessage}
+            />
+          )}
+          <div className="card p-5">
+            <h2 className="text-lg font-bold text-plum">庫存運作</h2>
+            <div className="mt-4 space-y-3 text-sm text-ink/70">
+              <p>入庫、出庫、調整都會寫入 `inventory_movements`，並同步更新品項數量。</p>
+              <p>出庫前會檢查餘量，不允許扣成負數。</p>
+              <p>這裡是後續結算、報表與耗材成本的共同來源。</p>
+            </div>
           </div>
         </div>
       </div>
-      <div className="mt-5">
+      <div id="inventory-list" className="mt-5 scroll-mt-28">
         <ModuleTable
-          rows={data.inventory}
+          rows={inventoryRows}
           searchPlaceholder="搜尋品牌、品項、分類"
           filterOptions={["凝膠", "保養", "耗材", "工具"]}
-          emptyTitle="尚無庫存資料"
+          emptyTitle="尚無庫存品項"
           columns={[
             {
               key: "name",
@@ -1389,11 +2634,19 @@ export function InventoryView({
               key: "qty",
               label: "庫存",
               sortValue: (row) => row.quantity,
-              render: (row) => (
-                <StatusPill tone={row.quantity <= row.lowStockThreshold ? "amber" : "sage"}>
-                  {row.quantity}
-                </StatusPill>
-              ),
+              render: (row) => {
+                const lowStock = row.quantity <= row.lowStockThreshold;
+                return (
+                  <div className="space-y-1">
+                    <StatusPill tone={lowStock ? "amber" : "sage"}>
+                      {formatInventoryStock(row.quantity, row.lowStockThreshold)}
+                    </StatusPill>
+                    {lowStock ? (
+                      <p className="text-xs text-amber-700">低於警戒，會優先出現在清單前面。</p>
+                    ) : null}
+                  </div>
+                );
+              },
             },
             {
               key: "cost",
@@ -1407,15 +2660,41 @@ export function InventoryView({
               sortValue: (row) => row.retailPrice,
               render: (row) => currency.format(row.retailPrice),
             },
+            ...(canManageInventory
+              ? [
+                  {
+                    key: "actions",
+                    label: "操作",
+                    render: (row: InventoryItem) => (
+                      <button
+                        type="button"
+                        className="mobile-tap w-full rounded-xl bg-white px-3 py-2 text-sm font-semibold text-plum sm:w-auto"
+                        onClick={() => setEditingId(row.id)}
+                      >
+                        編輯
+                      </button>
+                    ),
+                  },
+                ]
+              : []),
           ]}
         />
       </div>
-      <div className="mt-5">
+      <div id="inventory-log" className="mt-5 scroll-mt-28">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-plum">異動紀錄</h2>
+            <p className="mt-1 text-sm text-ink/60">
+              預設依最新時間排序，先看出庫與調整，再用搜尋和篩選回查歷史。
+            </p>
+          </div>
+          <StatusPill tone="sage">{recentMovements.length} 筆最近異動</StatusPill>
+        </div>
         <ModuleTable
           rows={recentMovements}
           searchPlaceholder="搜尋異動、備註、品項"
           filterOptions={["purchase", "consume", "adjust"]}
-          emptyTitle="尚無庫存異動"
+          emptyTitle="尚無庫存異動紀錄，先從第一筆入庫開始"
           columns={[
             {
               key: "time",
@@ -1441,7 +2720,7 @@ export function InventoryView({
               key: "qty",
               label: "異動量",
               sortValue: (row) => row.quantity,
-              render: (row) => row.quantity.toFixed(2),
+              render: (row) => formatInventoryMovementQuantity(row.quantity),
             },
             {
               key: "note",
@@ -1462,22 +2741,256 @@ export function CheckoutView({
   data: AppData;
   notice?: Notice;
 }) {
+  const role = data.currentMember?.role ?? "staff";
+  const canManageCheckout = canManage(role, "checkout");
+  const checkoutScope = permissionScope(role, "checkout");
+  const checkoutAccessMessage = moduleAccessMessage(role, "checkout");
+  const activeStaff = data.staff.filter((member) => member.active);
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
+  const totalOutstanding = data.orders.reduce(
+    (sum, order) => sum + outstandingAmount(order),
+    0,
+  );
+  const paidOrders = data.orders.filter((order) => orderPaymentState(order) === "paid").length;
+  const partialOrders = data.orders.filter((order) => orderPaymentState(order) === "partial").length;
+  const unpaidOrders = data.orders.filter((order) => orderPaymentState(order) === "unpaid").length;
+  const refundedOrders = [...data.orders]
+    .filter((order) => orderPaymentState(order) === "refunded")
+    .sort(
+      (left, right) =>
+        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime() ||
+        orderTotal(right) - orderTotal(left) ||
+        left.id.localeCompare(right.id),
+    );
+  const now = new Date();
+  const outstandingOrders = [...data.orders]
+    .filter((order) => outstandingAmount(order) > 0)
+    .sort(
+      (left, right) =>
+        outstandingAmount(right) - outstandingAmount(left) ||
+        new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
+    );
+  const paymentMethodBreakdown = orderPaymentMethodBreakdown(data.orders);
+  const checkoutPrintSummary = [
+    `${data.workspace.name}｜${formatDateTime(now.toISOString())} 訂單結帳摘要`,
+    `訂單 ${data.orders.length}、已結清 ${paidOrders}、部分付款 ${partialOrders}、未收 ${unpaidOrders}、已退款 ${refundedOrders.length}、待收 ${currency.format(totalOutstanding)}`,
+    paymentMethodBreakdown.length
+      ? `付款方式：${paymentMethodBreakdown.map((item) => `${item.label} ${item.count} 筆`).join("／")}`
+      : "付款方式：目前沒有訂單",
+    outstandingOrders.length
+      ? `待收前 ${Math.min(5, outstandingOrders.length)} 筆：${outstandingOrders
+          .slice(0, 5)
+          .map((order) => {
+            const customer = data.customers.find((item) => item.id === order.customerId);
+            const technician = data.staff.find((item) => item.id === order.technicianId);
+            return `${customer?.name ?? "未命名客戶"}／${technician?.name ?? "未指派"}｜${orderExportSummary(order, now)}`;
+          })
+          .join("；")}`
+      : "待收：目前沒有待收款訂單",
+    refundedOrders.length
+      ? `已退款待查：${refundedOrders
+          .slice(0, 5)
+          .map((order) => {
+            const customer = data.customers.find((item) => item.id === order.customerId);
+            const technician = data.staff.find((item) => item.id === order.technicianId);
+            return `${customer?.name ?? "未命名客戶"}／${technician?.name ?? "未指派"}｜${orderExportSummary(order, now)}`;
+          })
+          .join("；")}`
+      : "已退款待查：目前沒有退款單",
+  ].join("\n");
+  const orderFormKey = `${data.orders.length}:${data.orders[0]?.id ?? "none"}`;
   return (
     <AppShell
       title="訂單 / 結帳 / 收款"
-      subtitle="從預約轉訂單，支援折扣、小費、多付款方式、收據明細與每日結帳。"
+      subtitle="從預約轉訂單或直接開單，支援折扣、小費、多付款方式、收據明細與待收金額。"
       {...shellProps(data)}
     >
       <NoticeBanner notice={notice} />
-      <div className="mb-5">
-        <OrderForm data={data} />
+      <QuickJumpBar
+        title="快速跳轉"
+        links={[
+          { href: "#checkout-summary", label: "結帳摘要" },
+          { href: "#checkout-form", label: "開單 / 收款" },
+          { href: "#checkout-list", label: "訂單清單" },
+        ]}
+      />
+      {setupGuide ? (
+        <div className="mb-5 print:hidden">
+          <SetupGuide
+            title={setupGuide.title}
+            action={setupGuide.action}
+            links={setupGuide.links}
+          />
+        </div>
+      ) : null}
+      {canManageCheckout && (!data.customers.length || !activeStaff.length) ? (
+        <div className="mb-5">
+          <EmptyState
+            title={
+              !data.customers.length && !activeStaff.length
+                ? "先建立客戶與在職技師再開單"
+                : !data.customers.length
+                  ? "先建立客戶再開單"
+                  : "先建立可指派技師再開單"
+            }
+            action={
+              !data.customers.length && !activeStaff.length
+                ? "先建立至少一位客戶與一位在職技師，這裡才能建立訂單並正確歸屬收款。"
+                : !data.customers.length
+                  ? "建立至少一位客戶後，這裡才能建立訂單並正確歸屬收款。"
+                  : "建立至少一位在職技師後，這裡才能建立訂單並指派服務人員。"
+            }
+          />
+        </div>
+      ) : null}
+      {!canManageCheckout ? (
+        <div className="mb-5">
+          <EmptyState
+            title={checkoutScope === "view" ? "訂單 / 結帳目前僅供查看" : "你的角色無法使用結帳"}
+            action={checkoutAccessMessage}
+          />
+        </div>
+      ) : null}
+      <section id="checkout-summary" className="mb-5 hidden rounded-3xl border border-black/10 bg-transparent p-5 print:block scroll-mt-28">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-plum">訂單列印摘要</h2>
+            <p className="mt-1 text-sm text-ink/60">
+              印出後可直接給櫃台、老闆或客戶做收款與對帳備查。
+            </p>
+          </div>
+          <StatusPill tone="amber">{currency.format(totalOutstanding)} 待收</StatusPill>
+        </div>
+        <pre className="mt-4 whitespace-pre-wrap rounded-3xl border border-champagne bg-white p-4 text-sm leading-6 text-ink/80 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+          {checkoutPrintSummary}
+        </pre>
+      </section>
+      <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <MetricCard label="訂單總數" value={`${data.orders.length}`} hint="目前工作區的所有訂單" />
+        <MetricCard label="待收金額" value={currency.format(totalOutstanding)} hint="所有未結清訂單的合計欠款" />
+        <MetricCard label="已結清" value={`${paidOrders}`} hint="付款金額已覆蓋總額" />
+        <MetricCard label="部分付款 / 待收款" value={`${partialOrders + unpaidOrders}`} hint="仍有待收金額的訂單" />
+        <MetricCard label="已退款" value={`${refundedOrders.length}`} hint="需要人工複核的退款單" />
       </div>
-      <ModuleTable
-        rows={data.orders}
-        searchPlaceholder="搜尋訂單、客戶、付款方式"
-        filterOptions={["paid", "partial", "unpaid", "card", "line_pay"]}
-        emptyTitle="尚無訂單"
-        columns={[
+      <section className="mb-5 grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <div className="card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-plum">待收款</h2>
+              <p className="mt-1 text-sm text-ink/60">
+                先看部分付款與待收款，金額大的排前面。
+              </p>
+            </div>
+            <StatusPill tone="amber">{outstandingOrders.length} 筆</StatusPill>
+          </div>
+          {outstandingOrders.length ? (
+            <div className="mt-4 space-y-3">
+              {outstandingOrders.slice(0, 5).map((order) => {
+                const customer = data.customers.find((item) => item.id === order.customerId);
+                const technician = data.staff.find((item) => item.id === order.technicianId);
+                const balance = outstandingAmount(order);
+                const state = orderPaymentState(order);
+                return (
+                  <article key={order.id} className="rounded-3xl border border-champagne bg-white p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <strong className="block truncate text-plum">{customer?.name ?? "未命名客戶"}</strong>
+                        <p className="mt-1 text-sm text-ink/60">
+                          {technician?.name ?? "未指派"} · {paymentMethodLabel(order.paymentMethod)} · {order.id.slice(0, 8)}
+                        </p>
+                        <p className="mt-1 text-xs text-ink/50">
+                          {orderCloseoutLabel(order, now)} · 下一步：{orderNextStepLabel(order, now)}
+                        </p>
+                      </div>
+                      <StatusPill tone={orderStatusTone(state)}>{orderStatusLabel(state)}</StatusPill>
+                    </div>
+                    <p className="mt-2 text-sm text-ink/60">
+                      項目：{orderLineSummary(order, 2)}
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+                      <p className="text-sm text-ink/60">
+                        總額 {currency.format(orderTotal(order))} · 已收 {currency.format(order.paidAmount)}
+                      </p>
+                      <p className="text-lg font-bold text-plum">{currency.format(balance)}</p>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState
+              title="目前沒有待收款訂單"
+              action="所有訂單都已結清時，這裡會保持乾淨；一旦出現部分收款或待收款，就會自動列出優先追款名單。"
+            />
+          )}
+        </div>
+        <div className="card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-plum">退款待查與付款方式</h2>
+              <p className="mt-1 text-sm text-ink/60">
+                退款單集中檢查，右側也能直接看到付款方式分布。
+              </p>
+            </div>
+            <StatusPill tone="plum">{refundedOrders.length} 筆退款</StatusPill>
+          </div>
+          {refundedOrders.length ? (
+            <div className="mt-4 space-y-3">
+              {refundedOrders.slice(0, 5).map((order) => {
+                const customer = data.customers.find((item) => item.id === order.customerId);
+                const technician = data.staff.find((item) => item.id === order.technicianId);
+                const state = orderPaymentState(order);
+                return (
+                  <article key={order.id} className="rounded-3xl border border-champagne bg-white p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <strong className="block truncate text-plum">{customer?.name ?? "未命名客戶"}</strong>
+                        <p className="mt-1 text-sm text-ink/60">
+                          {technician?.name ?? "未指派"} · {paymentMethodLabel(order.paymentMethod)} · {order.id.slice(0, 8)}
+                        </p>
+                      </div>
+                      <StatusPill tone={orderStatusTone(state)}>{orderStatusLabel(state)}</StatusPill>
+                    </div>
+                    <p className="mt-2 text-sm text-ink/60">
+                      項目：{orderLineSummary(order, 2)}
+                    </p>
+                    <p className="mt-3 text-sm text-ink/60">
+                      總額 {currency.format(orderTotal(order))} · 實收 {currency.format(order.paidAmount)}
+                    </p>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState
+              title="目前沒有待查退款"
+              action="如果有退款單，這裡會直接列出方便複核。"
+            />
+          )}
+          <div className="mt-5 rounded-3xl border border-champagne bg-blush p-4">
+            <p className="text-sm font-bold text-plum">付款方式分布</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {paymentMethodBreakdown.map((item) => (
+                <StatusPill key={item.method} tone="sage">
+                  {item.label} {item.count}
+                </StatusPill>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+      {canManageCheckout ? (
+        <div id="checkout-form" className="mb-5 scroll-mt-28">
+          <OrderForm key={orderFormKey} data={data} />
+        </div>
+      ) : null}
+      <div id="checkout-list" className="scroll-mt-28">
+        <ModuleTable
+          rows={data.orders}
+          searchPlaceholder="搜尋訂單、客戶、付款方式、退款"
+          filterOptions={["paid", "partial", "unpaid", "refunded", "cash", "card", "transfer", "line_pay"]}
+          emptyTitle="尚無訂單"
+          columns={[
           {
             key: "id",
             label: "訂單",
@@ -1504,21 +3017,28 @@ export function CheckoutView({
                 {row.lines.map((line) => (
                   <div
                     key={line.id ?? `${line.name}-${line.serviceId}`}
-                    className="mb-2 flex items-center justify-between gap-2"
+                    className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <span>
                       {line.name} x{line.quantity}
                     </span>
-                    {line.id ? (
-                      <form action={removeOrderLine}>
+                    {canManageCheckout && line.id ? (
+                      <form action={removeOrderLine} className="self-start sm:self-auto">
                         <input type="hidden" name="order_id" value={row.id} />
                         <input type="hidden" name="line_id" value={line.id} />
-                        <SubmitButton tone="white">移除</SubmitButton>
+                        <SubmitButton tone="white" className="w-full sm:w-auto">移除</SubmitButton>
                       </form>
                     ) : null}
                   </div>
                 ))}
-                <AddLineForm order={row} services={data.services} />
+                {canManageCheckout ? (
+                  <AddLineForm key={`${row.id}:${row.lines.length}`} order={row} services={data.services} />
+                ) : (
+                  <p className="mt-3 text-xs text-ink/60">你目前只能查看明細，新增或移除明細會隱藏。</p>
+                )}
+                <p className="mt-3 text-xs text-ink/60">
+                  小計 {currency.format(orderSubtotal(row))} · 折扣 {currency.format(row.discount)} · 小費 {currency.format(row.tip)}
+                </p>
               </div>
             ),
           },
@@ -1526,24 +3046,46 @@ export function CheckoutView({
             key: "total",
             label: "總額",
             sortValue: (row) => orderTotal(row),
-            render: (row) => currency.format(orderTotal(row)),
+            render: (row) => (
+              <div>
+                <strong>{currency.format(orderTotal(row))}</strong>
+                <p className="text-xs text-ink/60">實收 {currency.format(row.paidAmount)}</p>
+              </div>
+            ),
           },
           {
             key: "paid",
             label: "待收",
-            render: (row) => currency.format(outstandingAmount(row)),
+            render: (row) => {
+              const balance = outstandingAmount(row);
+              return (
+                <div>
+                  <strong>{balance === 0 ? "0" : currency.format(balance)}</strong>
+                  <p className="text-xs text-ink/60">
+                    {balance === 0 ? "已結清" : `尚欠 ${currency.format(balance)}`}
+                  </p>
+                </div>
+              );
+            },
           },
           {
             key: "status",
             label: "狀態",
-            render: (row) => (
-              <StatusPill tone={row.status === "paid" ? "sage" : "amber"}>
-                {row.status}
-              </StatusPill>
-            ),
+            render: (row) => {
+              const state = orderPaymentState(row);
+              return (
+                <div className="space-y-2">
+                  <StatusPill tone={orderStatusTone(state)}>{orderStatusLabel(state)}</StatusPill>
+                  <p className="text-xs text-ink/60">
+                    訂單狀態：{orderStatusLabel(row.status)} · 付款方式：{paymentMethodLabels[row.paymentMethod]}
+                  </p>
+                </div>
+              );
+            },
           },
-        ]}
-      />
+          ]}
+        />
+      </div>
     </AppShell>
   );
 }
@@ -1556,123 +3098,295 @@ export function StaffView({
   notice?: Notice;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
+  const [draftShiftStaffId, setDraftShiftStaffId] = useState<string | null>(null);
   const editing = data.staff.find((staff) => staff.id === editingId);
-  const canManageStaff = can(data.currentMember?.role ?? "staff", "staff");
+  const editingShift = data.shifts.find((shift) => shift.id === editingShiftId);
+  const role = data.currentMember?.role ?? "staff";
+  const defaultShiftStaffId =
+    editingShift?.staffId ??
+    draftShiftStaffId ??
+    editing?.id ??
+    data.staff.find((member) => member.role === "technician" && member.active)?.id ??
+    data.staff.find((member) => member.active)?.id ??
+    "";
+  const canManageStaff = canManage(role, "staff");
+  const staffScope = permissionScope(role, "staff");
+  const staffAccessMessage = moduleAccessMessage(role, "staff");
   const activeStaff = data.staff.filter((staff) => staff.active).length;
+  const inactiveStaff = data.staff.length - activeStaff;
   const technicians = data.staff.filter((staff) => staff.role === "technician" && staff.active).length;
   const admins = data.staff.filter((staff) => (staff.role === "owner" || staff.role === "admin") && staff.active).length;
+  const shifts = [...data.shifts].sort((a, b) => b.date.localeCompare(a.date) || b.startTime.localeCompare(a.startTime));
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
+  const workspaceEmpty = isWorkspaceEmpty(data);
+  const now = new Date();
+  const staffPrintSummary = [
+    `${data.workspace.name}｜${formatDateTime(now.toISOString())} 員工與班表摘要`,
+    `在職 ${activeStaff}、停用 ${inactiveStaff}、可排技師 ${technicians}、管理權限 ${admins}`,
+    shifts.length
+      ? `近期班表：${shifts
+          .slice(0, 6)
+          .map((shift) => {
+            const memberName = data.staff.find((member) => member.id === shift.staffId)?.name ?? "未命名員工";
+            return `${formatDate(shift.date)}｜${memberName}｜${shiftSummary(shift)}`;
+          })
+          .join("；")}`
+      : "近期班表：目前沒有班表",
+  ].join("\n");
+
+  useEffect(() => {
+    if (notice?.kind === "success") {
+      setEditingId(null);
+      setEditingShiftId(null);
+      setDraftShiftStaffId(null);
+    }
+  }, [notice?.kind, notice?.message]);
 
   return (
     <AppShell
       title="員工 / 技師管理"
-      subtitle="新增邀請、角色權限、班表、抽成、專長與在職狀態。"
+      subtitle="新增邀請、角色、在職狀態、班表與抽成設定。"
       {...shellProps(data)}
     >
-      <NoticeBanner notice={notice} />
-      {canManageStaff && data.staffInviteFeatureEnabled ? (
-        <form action={createStaffInviteAction} className="card p-5">
-          <h2 className="text-lg font-bold text-plum">新增員工邀請</h2>
-          <p className="mt-1 text-sm text-ink/60">輸入對方 email 後會產生可分享的加入連結。對方登入並接受後，會成為目前店鋪成員。</p>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <label className="block text-sm font-semibold text-plum">
-              顯示名稱
-              <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="displayName" required />
-            </label>
-            <label className="block text-sm font-semibold text-plum">
-              Email
-              <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="email" type="email" autoComplete="email" required />
-            </label>
-            <label className="block text-sm font-semibold text-plum">
-              電話
-              <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="phone" autoComplete="tel" />
-            </label>
-            <label className="block text-sm font-semibold text-plum">
-              角色
-              <select className="mt-2 w-full rounded-2xl border border-champagne p-3" name="role" defaultValue="staff">
-                <option value="staff">一般員工</option>
-                <option value="front_desk">櫃台</option>
-                <option value="technician">技師</option>
-                <option value="admin">管理員</option>
-                <option value="owner">店主</option>
-              </select>
-            </label>
-            <label className="block text-sm font-semibold text-plum">
-              抽成
-              <input className="mt-2 w-full rounded-2xl border border-champagne p-3" name="commissionRate" type="number" min="0" max="1" step="0.01" defaultValue="0" />
-            </label>
-            <label className="block text-sm font-semibold text-plum">
-              專長
-              <textarea className="mt-2 min-h-24 w-full rounded-2xl border border-champagne p-3" name="specialties" placeholder="例如：凝膠美甲, 眉型設計" />
-            </label>
-          </div>
-          <button type="submit" className="mobile-tap mt-5 rounded-2xl bg-plum font-semibold text-white">
-            建立邀請連結
-          </button>
-        </form>
-      ) : canManageStaff ? (
-        <div className="card p-5">
-          <h2 className="text-lg font-bold text-plum">員工邀請</h2>
-          <p className="mt-1 text-sm text-ink/60">目前資料庫尚未啟用邀請表，請先完成 schema 更新。</p>
+      {setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide title={setupGuide.title} action={setupGuide.action} links={setupGuide.links} />
         </div>
       ) : null}
-      {data.staffInviteFeatureEnabled && data.staffInvites.some((invite) => invite.status === "pending") ? (
-        <div className="card p-5">
-          <h2 className="text-lg font-bold text-plum">待處理邀請</h2>
-          <div className="mt-4 space-y-3">
-            {data.staffInvites.filter((invite) => invite.status === "pending").map((invite) => (
-              <div key={invite.id} className="rounded-2xl bg-blush p-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <strong className="block text-plum">{invite.displayName}</strong>
-                    <p className="text-sm text-ink/60">{invite.email} ｜ {roleLabel(invite.role)}</p>
-                  </div>
-                  <StatusPill tone="amber">待接受</StatusPill>
-                </div>
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <code className="break-all rounded-2xl bg-white px-3 py-2 text-xs text-ink/70">{buildStaffInvitePath(invite.token)}</code>
-                  <Link href={buildStaffInvitePath(invite.token)} className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-center font-semibold text-white">
-                    開啟邀請
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
+      {workspaceEmpty && !setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide
+            title="先建立第一組營運資料"
+            action="先把店鋪設定、服務與客戶建立起來，再新增員工與班表會更順。"
+            links={[
+              { href: "/settings?message=settings_setup_hint", label: "先去設定" },
+              { href: "/services", label: "建立服務" },
+              { href: "/customers", label: "建立客戶" },
+            ]}
+          />
         </div>
       ) : null}
-      <div className="mb-5 grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
-        {canManageStaff ? <StaffForm staff={editing} /> : null}
-        <div className="card p-5">
-          <h2 className="text-lg font-bold text-plum">人事概況</h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-            <div className="rounded-2xl bg-blush p-4">
-              <p className="text-xs font-semibold text-ink/55">在職人數</p>
-              <p className="mt-1 text-2xl font-bold text-plum">{activeStaff}</p>
-            </div>
-            <div className="rounded-2xl bg-blush p-4">
-              <p className="text-xs font-semibold text-ink/55">可排技師</p>
-              <p className="mt-1 text-2xl font-bold text-plum">{technicians}</p>
-            </div>
-            <div className="rounded-2xl bg-blush p-4">
-              <p className="text-xs font-semibold text-ink/55">管理權限</p>
-              <p className="mt-1 text-2xl font-bold text-plum">{admins}</p>
-            </div>
-          </div>
-          {canManageStaff && editing ? (
-            <button
-              className="mobile-tap mt-4 rounded-2xl bg-white font-semibold text-plum"
-              onClick={() => setEditingId(null)}
-            >
-              清除編輯狀態
-            </button>
-          ) : null}
-        </div>
+      <div className="print:hidden">
+        <NoticeBanner notice={notice} />
       </div>
-      <ModuleTable
-        rows={data.staff}
-        searchPlaceholder="搜尋員工、角色、專長"
-        filterOptions={["owner", "admin", "technician", "front_desk", "staff"]}
-        emptyTitle="尚無員工資料"
-        columns={[
+      <section className="mb-5 hidden rounded-3xl border border-black/10 bg-transparent p-5 print:block">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-plum">班表列印摘要</h2>
+            <p className="mt-1 text-sm text-ink/60">
+              直接張貼或交接都可用，印出後不需要再看畫面操作。
+            </p>
+          </div>
+          <StatusPill tone="sage">{shifts.length} 筆班表</StatusPill>
+        </div>
+        <pre className="mt-4 whitespace-pre-wrap rounded-3xl border border-champagne bg-white p-4 text-sm leading-6 text-ink/80 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+          {staffPrintSummary}
+        </pre>
+      </section>
+      {staffScope !== "none" ? (
+        <>
+          {staffScope === "view" ? (
+            <div className="mb-5 rounded-3xl border border-champagne bg-champagne/30 p-4 text-sm text-ink/70">
+              <p className="font-semibold text-plum">檢視模式</p>
+              <p className="mt-1">
+                你可以看班表圖表和列印摘要；只有店主與管理員能新增、編輯或調整排班。
+              </p>
+            </div>
+          ) : null}
+          <StaffScheduleChart
+            data={data}
+            shifts={shifts}
+            onEditShift={
+              canManageStaff
+                ? (shiftId) => {
+                    setDraftShiftStaffId(null);
+                    setEditingShiftId(shiftId);
+                  }
+                : undefined
+            }
+          />
+        </>
+      ) : (
+        <div className="mb-5">
+          <EmptyState
+            title="你的角色無法管理員工"
+            action={staffAccessMessage}
+          />
+        </div>
+      )}
+      <div className="print:hidden">
+        {canManageStaff && data.staffInviteFeatureEnabled ? (
+          <form action={createStaffInviteAction} className="card p-5">
+            <h2 className="text-lg font-bold text-plum">新增員工邀請</h2>
+            <p className="mt-1 text-sm text-ink/60">輸入對方 email 後會產生可分享的加入連結。對方登入並接受後，會成為目前店鋪成員。</p>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <label className="block text-sm font-semibold text-plum">
+                顯示名稱
+                <input className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="displayName" required />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                Email
+                <input className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="email" type="email" autoComplete="email" required />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                電話
+                <input className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="phone" autoComplete="tel" />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                角色
+                <select className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="role" defaultValue="staff">
+                  {staffRoles.map((role) => (
+                    <option key={role} value={role}>
+                      {staffRoleSelectLabel(role)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                抽成比例（可填 25 或 0.25）
+                <input className="mobile-tap mt-2 w-full rounded-2xl border border-champagne p-3" name="commissionRate" type="number" min="0" max="100" step="0.01" defaultValue="25" />
+              </label>
+              <label className="block text-sm font-semibold text-plum">
+                專長
+                <textarea className="mobile-tap mt-2 min-h-24 w-full rounded-2xl border border-champagne p-3" name="specialties" placeholder="例如：凝膠美甲, 眉型設計" />
+              </label>
+            </div>
+            <button type="submit" className="mobile-tap mt-5 rounded-2xl bg-plum px-4 py-3 font-semibold text-white">
+              建立邀請連結
+            </button>
+          </form>
+        ) : canManageStaff ? (
+          <div className="card p-5">
+            <h2 className="text-lg font-bold text-plum">員工邀請</h2>
+            <p className="mt-1 text-sm text-ink/60">目前尚未啟用員工邀請功能；請先完成資料庫更新再開啟邀請，或先直接新增員工資料。</p>
+          </div>
+        ) : null}
+        {data.staffInviteFeatureEnabled && data.staffInvites.some((invite) => invite.status === "pending") ? (
+          <div className="card p-5">
+            <h2 className="text-lg font-bold text-plum">待處理邀請</h2>
+            <div className="mt-4 space-y-3">
+              {data.staffInvites.filter((invite) => invite.status === "pending").map((invite) => (
+                <div key={invite.id} className="rounded-2xl bg-blush p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <strong className="block text-plum">{invite.displayName}</strong>
+                      <p className="text-sm text-ink/60">{invite.email} ｜ {staffRoleSelectLabel(invite.role)}</p>
+                    </div>
+                    <StatusPill tone="amber">待接受</StatusPill>
+                  </div>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <code className="break-all rounded-2xl bg-white px-3 py-2 text-xs text-ink/70">{buildStaffInvitePath(invite.token)}</code>
+                    <Link href={buildStaffInvitePath(invite.token)} className="mobile-tap w-full rounded-2xl bg-plum px-4 py-2 text-center font-semibold text-white sm:w-auto">
+                      開啟邀請
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <div className="mb-5 grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
+          {canManageStaff ? <StaffForm key={editing?.id ?? "new"} staff={editing} /> : null}
+          <div className="card p-5">
+            <h2 className="text-lg font-bold text-plum">人事概況</h2>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl bg-blush p-4">
+                <p className="text-xs font-semibold text-ink/55">在職人數</p>
+                <p className="mt-1 text-2xl font-bold text-plum">{activeStaff}</p>
+              </div>
+              <div className="rounded-2xl bg-blush p-4">
+                <p className="text-xs font-semibold text-ink/55">停用人數</p>
+                <p className="mt-1 text-2xl font-bold text-plum">{inactiveStaff}</p>
+              </div>
+              <div className="rounded-2xl bg-blush p-4">
+                <p className="text-xs font-semibold text-ink/55">可排技師</p>
+                <p className="mt-1 text-2xl font-bold text-plum">{technicians}</p>
+              </div>
+              <div className="rounded-2xl bg-blush p-4">
+                <p className="text-xs font-semibold text-ink/55">管理權限</p>
+                <p className="mt-1 text-2xl font-bold text-plum">{admins}</p>
+              </div>
+            </div>
+            {canManageStaff && editing ? (
+              <button
+                type="button"
+                className="mobile-tap mt-4 rounded-2xl bg-white px-4 py-2 font-semibold text-plum"
+                onClick={() => setEditingId(null)}
+              >
+                清除編輯狀態
+              </button>
+            ) : null}
+          </div>
+        </div>
+        {canManageStaff ? (
+          <div className="mb-5 card p-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-plum">班表 / 休息</h2>
+                <p className="mt-1 text-sm text-ink/60">新增或編輯當日班表，勾選休假 / 休息會把該筆班表視為離班狀態；停用員工會被標示並留在清單下方。</p>
+              </div>
+              {editingShift ? (
+                <button
+                  type="button"
+                  className="mobile-tap rounded-2xl bg-white px-4 py-2 font-semibold text-plum"
+                  onClick={() => {
+                    setEditingShiftId(null);
+                    setDraftShiftStaffId(null);
+                  }}
+                >
+                  改為新增
+                </button>
+              ) : null}
+            </div>
+            <ShiftForm
+              key={editingShift?.id ?? draftShiftStaffId ?? "new"}
+              data={data}
+              shift={editingShift}
+              defaultStaffId={defaultShiftStaffId}
+              onReset={() => {
+                setEditingShiftId(null);
+                setDraftShiftStaffId(null);
+              }}
+            />
+            <div className="mt-5 grid gap-3 xl:grid-cols-2">
+              {shifts.length ? (
+                shifts.map((shift) => {
+                  const memberName = data.staff.find((member) => member.id === shift.staffId)?.name ?? "未命名員工";
+                  return (
+                    <div key={shift.id} className="flex flex-col gap-3 rounded-2xl bg-blush p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <strong className="block text-plum">{memberName}</strong>
+                        <p className="text-sm text-ink/60">{formatDate(shift.date)} ｜ {shiftSummary(shift)}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {shift.leave ? <StatusPill tone="amber">休息</StatusPill> : <StatusPill tone="sage">排班中</StatusPill>}
+                        <button
+                          type="button"
+                          className="mobile-tap w-full rounded-xl bg-white px-3 py-2 font-semibold text-plum sm:w-auto"
+                          onClick={() => {
+                            setDraftShiftStaffId(null);
+                            setEditingShiftId(shift.id);
+                          }}
+                        >
+                          編輯
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="rounded-2xl bg-blush p-4 text-sm text-ink/60">尚無班表，先建立一筆排班或休息紀錄。</p>
+              )}
+            </div>
+          </div>
+        ) : null}
+        <ModuleTable
+          rows={data.staff}
+          searchPlaceholder="搜尋員工、角色、專長"
+          filterOptions={["owner", "admin", "technician", "front_desk", "staff"]}
+          emptyTitle="尚無員工資料"
+          columns={[
           {
             key: "name",
             label: "員工",
@@ -1686,7 +3400,7 @@ export function StaffView({
           {
             key: "role",
             label: "角色",
-            render: (row) => <StatusPill>{roleLabel(row.role)}</StatusPill>,
+            render: (row) => <StatusPill>{staffRoleSelectLabel(row.role)}</StatusPill>,
           },
           {
             key: "specialty",
@@ -1697,14 +3411,22 @@ export function StaffView({
             key: "commission",
             label: "抽成",
             sortValue: (row) => row.commissionRate,
-            render: (row) => `${Math.round(row.commissionRate * 100)}%`,
+            render: (row) => formatCommissionRate(row.commissionRate),
           },
           {
             key: "shift",
-            label: "今日班表",
+            label: "班表",
             render: (row) => {
-              const shift = data.shifts.find((item) => item.staffId === row.id);
-              return shift ? `${shift.startTime}–${shift.endTime}` : "休息";
+              const shift = shifts.find((item) => item.staffId === row.id);
+              if (!shift) {
+                return "未排班";
+              }
+              return (
+                <div>
+                  <p>{formatDate(shift.date)}</p>
+                  <p className="text-ink/60">{shiftSummary(shift)}</p>
+                </div>
+              );
             },
           },
           {
@@ -1712,9 +3434,9 @@ export function StaffView({
             label: "狀態",
             render: (row) =>
               row.active ? (
-                <StatusPill tone="sage">在職</StatusPill>
+                <StatusPill tone="sage">在職中</StatusPill>
               ) : (
-                <StatusPill>停用</StatusPill>
+                <StatusPill tone="rose">已停用</StatusPill>
               ),
           },
           ...(canManageStaff
@@ -1723,18 +3445,36 @@ export function StaffView({
                   key: "actions",
                   label: "操作",
                   render: (row: StaffMember) => (
-                    <button
-                      className="rounded-xl bg-champagne px-3 py-2 font-semibold text-plum"
-                      onClick={() => setEditingId(row.id)}
-                    >
-                      編輯
-                    </button>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                      <button
+                        type="button"
+                        className="mobile-tap w-full rounded-xl bg-champagne px-3 py-2 font-semibold text-plum sm:w-auto"
+                        onClick={() => {
+                          setDraftShiftStaffId(null);
+                          setEditingId(row.id);
+                        }}
+                      >
+                        編輯
+                      </button>
+                      <button
+                        type="button"
+                        className="mobile-tap w-full rounded-xl bg-white px-3 py-2 font-semibold text-plum sm:w-auto"
+                        onClick={() => {
+                          setEditingId(null);
+                          setEditingShiftId(null);
+                          setDraftShiftStaffId(row.id);
+                        }}
+                      >
+                        新增班表
+                      </button>
+                    </div>
                   ),
                 },
-              ]
-            : []),
+            ]
+          : []),
         ]}
       />
+      </div>
     </AppShell>
   );
 }
@@ -1747,12 +3487,32 @@ export function TechnicianView({ data }: { data: AppData }) {
   const mine = technicianId
     ? data.appointments.filter((item) => item.technicianId === technicianId)
     : [];
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
+  const workspaceEmpty = isWorkspaceEmpty(data);
   return (
     <AppShell
       title="技師工作台"
       subtitle="技師只看自己的今日預約、客戶注意事項、服務紀錄與服務前後照片欄位。"
       {...shellProps(data)}
     >
+      {setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide title={setupGuide.title} action={setupGuide.action} links={setupGuide.links} />
+        </div>
+      ) : null}
+      {workspaceEmpty && !setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide
+            title="先建立可指派的預約"
+            action="先完成店鋪設定、服務與客戶資料，再建立第一筆預約並指派到技師，這裡才會開始顯示今日工作清單。"
+            links={[
+              { href: "/settings?message=settings_setup_hint", label: "先去設定" },
+              { href: "/services", label: "建立服務" },
+              { href: "/appointments", label: "建立預約" },
+            ]}
+          />
+        </div>
+      ) : null}
       <div className="grid gap-4">
         {mine.length ? (
           mine.map((appointment) => {
@@ -1795,9 +3555,16 @@ export function TechnicianView({ data }: { data: AppData }) {
   );
 }
 
-export function ReportsView({ data }: { data: AppData }) {
+export function ReportsView({
+  data,
+  closeout: providedCloseout,
+}: {
+  data: AppData;
+  closeout?: ReturnType<typeof buildDailyCloseoutSummary>;
+}) {
+  const now = new Date();
   const metrics = dashboardMetrics(
-    new Date(),
+    now,
     data.appointments,
     data.orders,
     data.customers,
@@ -1807,26 +3574,197 @@ export function ReportsView({ data }: { data: AppData }) {
   const avg = data.orders.length
     ? metrics.monthRevenue / data.orders.length
     : 0;
-  const returningRate = data.customers.length
-    ? Math.round((metrics.returningCustomers / data.customers.length) * 100)
-    : 0;
-  const lowStockCount = data.inventory.filter(
-    (item) => item.quantity <= item.lowStockThreshold,
-  ).length;
-  const inventoryNet = data.inventoryMovements.reduce(
-    (sum, movement) => sum + movement.quantity,
-    0,
-  );
-  const inventoryOutflow = data.inventoryMovements
-    .filter((movement) => movement.quantity < 0)
-    .reduce((sum, movement) => sum + Math.abs(movement.quantity), 0);
+  const topService = metrics.serviceRanking[0];
+  const closeout = providedCloseout ?? buildDailyCloseoutSummary(data, now);
+  const outstandingOrders = closeout.unpaidOrders;
+  const refundedOrders = closeout.refundedOrders;
+  const paymentMethodBreakdown = closeout.paymentMethodBreakdown;
+  const followUpCustomers = data.customers
+    .map<FollowUpCustomer | null>((customer) => {
+      const reminder = reminderDisplay(customer.nextReminder, now);
+      const reminderDays = daysSince(customer.nextReminder, now);
+      if (reminder) {
+        return {
+          customer,
+          tone: reminder.tone,
+          label: reminder.label,
+          detail: `提醒日 ${formatDate(customer.nextReminder!)}`,
+          priority: 0,
+          sortKey: customer.nextReminder ?? "",
+          ageDays: reminderDays ?? 0,
+        };
+      }
+
+      const visitDaysRaw = daysSince(customer.lastVisit, now);
+      if (visitDaysRaw === null) {
+        return null;
+      }
+      const visitDays = Math.max(0, visitDaysRaw);
+
+      const tone =
+        visitDays >= 90 ? ("rose" as const) : visitDays >= 60 ? ("amber" as const) : ("sage" as const);
+      return {
+        customer,
+        tone,
+        label: `${formatDate(customer.lastVisit!)}（最後到店）`,
+        detail: visitDays === 0 ? "今天有回訪紀錄" : `距上次到店 ${visitDays} 天`,
+        priority: 1,
+        sortKey: customer.lastVisit ?? "",
+        ageDays: visitDays ?? 0,
+      };
+    })
+    .filter((item): item is FollowUpCustomer => item !== null)
+    .sort(
+      (a, b) =>
+        a.priority - b.priority ||
+        b.ageDays - a.ageDays ||
+        a.sortKey.localeCompare(b.sortKey),
+    )
+    .slice(0, 5);
+  const followUpCount = outstandingOrders.length + followUpCustomers.length;
+  const paidOrders = data.orders.filter((order) => orderPaymentState(order) === "paid").length;
+  const partialOrders = data.orders.filter((order) => orderPaymentState(order) === "partial").length;
+  const unpaidOrders = data.orders.filter((order) => orderPaymentState(order) === "unpaid").length;
+  const handoffSummaryText = closeout.handoffItems.length
+    ? closeout.handoffItems
+        .slice(0, 4)
+        .map((item) => `${item.handoffFor}｜${handoffKindLabels[item.kind]} ${item.title}｜${item.detail}`)
+        .join("；")
+    : "目前沒有需要交接的項目";
+  const urgentLowStockCount = closeout.lowStockItems.filter((item) => item.quantity <= 1).length;
+  const lowStockPreview = closeout.lowStockItems
+    .slice(0, 3)
+    .map((item) => `${item.name}｜剩 ${item.quantity}/${item.lowStockThreshold}`)
+    .join("；");
+  const reportMonthLabel = new Intl.DateTimeFormat("zh-TW", {
+    year: "numeric",
+    month: "long",
+  }).format(now);
+  const reportSummaryText = [
+    `${data.workspace.name}｜${reportMonthLabel}報表摘要`,
+    `產出時間：${formatDateTime(now.toISOString())}`,
+    `月營收：${currency.format(metrics.monthRevenue)} · 客單價：${currency.format(avg)}`,
+    `待收金額：${currency.format(closeout.totalOutstanding)} · 待跟進：${followUpCount} 筆`,
+    `今天優先處理：未完成預約 ${closeout.unfinishedAppointments.length} / 待收訂單 ${outstandingOrders.length} / 低庫存 ${closeout.lowStockItems.length}${urgentLowStockCount ? `（${urgentLowStockCount} 項只剩 1 件或以下）` : ""}`,
+    `已退款：${refundedOrders.length} 筆`,
+    paymentMethodBreakdown.length
+      ? `付款方式：${paymentMethodBreakdown.map((item) => `${item.label} ${item.count} 筆`).join("／")}`
+      : "付款方式：目前沒有訂單",
+    `可以排後面：回訪提醒 ${followUpCustomers.length} 位 / 明日預約 ${closeout.tomorrowAppointments.length} 筆 / 明日班表 ${closeout.tomorrowShifts.length} 筆`,
+    `訂單狀態：已結清 ${paidOrders} / 部分付款 ${partialOrders} / 待收款 ${unpaidOrders}`,
+    topService
+      ? `主力服務：${topService.name}（${topService.count} 次）`
+      : "主力服務：暫無排行",
+    `交接給下一班：${handoffSummaryText}`,
+    `今日檢查：${closeout.auditLines.join("；")}`,
+    outstandingOrders.length
+      ? `待收款前 ${Math.min(3, outstandingOrders.length)} 筆：${outstandingOrders
+          .slice(0, 3)
+          .map(({ order }) => {
+            const customer = data.customers.find((item) => item.id === order.customerId);
+            const technician = data.staff.find((item) => item.id === order.technicianId);
+            return `${customer?.name ?? "未命名客戶"}／${technician?.name ?? "未指派"}｜${orderExportSummary(order, now)}`;
+          })
+          .join("；")}`
+      : "待收款前 0 筆：目前沒有待收款訂單",
+    closeout.lowStockItems.length
+      ? `低庫存優先補貨：${lowStockPreview}`
+      : "低庫存優先補貨：目前沒有品項低於安全庫存",
+    closeout.tomorrowAppointments.length
+      ? `明日預約：${closeout.tomorrowAppointments
+          .slice(0, 3)
+          .map((appointment) => {
+            const customer = data.customers.find((item) => item.id === appointment.customerId);
+            return `${appointmentCloseoutLabel(appointment, now)}｜${customer?.name ?? "未命名客戶"}`;
+          })
+          .join("；")}`
+      : "明日預約：目前沒有待確認的明日預約",
+    followUpCustomers.length
+      ? `回訪與提醒：${followUpCustomers
+          .slice(0, 3)
+          .map(({ customer, label, detail }) => `${customer.name}｜${label}｜${detail}`)
+          .join("；")}`
+      : "回訪與提醒：目前沒有需要回訪的客戶",
+  ].join("\n");
+  const workspaceEmpty = isWorkspaceEmpty(data);
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
   return (
     <AppShell
       title="報表分析"
-      subtitle="日 / 月營收、服務排行、技師排行、回訪率、客單價、來源與庫存消耗分析。"
+      subtitle="先看今天優先處理、可以排後面、要交接的事，再看本月營收與追款回訪名單。"
       {...shellProps(data)}
     >
-      <section className="grid gap-4 md:grid-cols-4">
+      {setupGuide ? (
+        <div className="mb-5 print:hidden">
+          <SetupGuide
+            title={setupGuide.title}
+            action={setupGuide.action}
+            links={setupGuide.links}
+          />
+        </div>
+      ) : null}
+      {workspaceEmpty && !setupGuide ? (
+        <div className="mb-5 print:hidden">
+          <SetupGuide
+            title="報表會在第一筆營運資料後開始有內容"
+            action="先建立服務、客戶與第一筆預約或訂單，這裡就會開始出現營收、排行與來源分析。"
+            links={[
+              { href: "/settings?message=settings_setup_hint", label: "先去設定" },
+              { href: "/appointments", label: "建立預約" },
+              { href: "/customers", label: "建立客戶" },
+            ]}
+          />
+        </div>
+      ) : null}
+      <section className="card p-5 print:border-0 print:bg-transparent print:p-0">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-plum">主管摘要 / 可列印版</h2>
+            <p className="mt-1 text-sm text-ink/60">
+              這一段可以直接列印或複製給店長、老闆或合夥人，保留今天要優先處理、可以排後面和要交接的重點。
+            </p>
+          </div>
+          <button
+            type="button"
+            className="mobile-tap rounded-2xl bg-plum px-4 py-2 font-semibold text-white print:hidden"
+            onClick={() => window.print()}
+          >
+            列印 / 匯出
+          </button>
+        </div>
+        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-3xl border border-champagne bg-white p-4 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/45">已結清</p>
+              <p className="mt-2 text-2xl font-bold text-plum">{paidOrders}</p>
+              <p className="mt-1 text-xs text-ink/60">今天不用再追款</p>
+            </div>
+            <div className="rounded-3xl border border-champagne bg-white p-4 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/45">部分付款</p>
+              <p className="mt-2 text-2xl font-bold text-plum">{partialOrders}</p>
+              <p className="mt-1 text-xs text-ink/60">今天要補收的單</p>
+            </div>
+            <div className="rounded-3xl border border-champagne bg-white p-4 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/45">待收款</p>
+              <p className="mt-2 text-2xl font-bold text-plum">{unpaidOrders}</p>
+              <p className="mt-1 text-xs text-ink/60">今天優先處理</p>
+            </div>
+            <div className="rounded-3xl border border-champagne bg-white p-4 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/45">主力服務</p>
+              <p className="mt-2 truncate text-lg font-bold text-plum">
+                {topService ? topService.name : "暫無排行"}
+              </p>
+              <p className="mt-1 text-xs text-ink/60">
+                {topService ? `${topService.count} 次最多` : "建立訂單後會自動出現"}
+              </p>
+            </div>
+          </div>
+          <pre className="overflow-x-auto rounded-3xl border border-champagne bg-white p-4 text-sm leading-6 text-ink/80 whitespace-pre-wrap shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+            {reportSummaryText}
+          </pre>
+        </div>
+      </section>
+      <section className="mt-5 grid gap-4 md:grid-cols-5 print:grid-cols-2">
         <MetricCard
           label="月營收"
           value={currency.format(metrics.monthRevenue)}
@@ -1835,67 +3773,309 @@ export function ReportsView({ data }: { data: AppData }) {
         <MetricCard
           label="客單價"
           value={currency.format(avg)}
-          hint="訂單平均金額"
+          hint="本月每張訂單平均金額"
         />
         <MetricCard
-          label="回訪率"
-          value={`${returningRate}%`}
-          hint="有 lastVisit 的客戶比例"
+          label="待收金額"
+          value={currency.format(closeout.totalOutstanding)}
+          hint="所有未結清訂單的合計欠款"
         />
         <MetricCard
-          label="低庫存"
-          value={`${lowStockCount}`}
-          hint="目前低於警戒值的品項"
+          label="待跟進"
+          value={`${followUpCount}`}
+          hint="待收款與回訪名單合計"
+        />
+        <MetricCard
+          label="已退款"
+          value={`${refundedOrders.length}`}
+          hint="需人工複核的退款單"
         />
       </section>
-      <section className="mt-5 grid gap-5 lg:grid-cols-2">
+      <section className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
         <div className="card p-5">
-          <h2 className="font-bold text-plum">預約來源</h2>
-          {sources.map((source) => (
-            <div
-              key={source}
-              className="mt-3 flex justify-between rounded-2xl bg-white p-4"
-            >
-              <span>{source}</span>
-              <StatusPill>
-                {
-                  data.appointments.filter((item) => item.source === source)
-                    .length
-                }{" "}
-                筆
-              </StatusPill>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-plum">今天要交接</h2>
+              <p className="mt-1 text-sm text-ink/60">
+                直接給店長、主管或晚班接手的重點項目，按優先順序整理好了。
+              </p>
             </div>
-          ))}
+            <StatusPill tone="amber">{closeout.handoffItems.length} 項</StatusPill>
+          </div>
+          {closeout.handoffItems.length ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {closeout.handoffItems.slice(0, 6).map((item) => (
+                <article key={`${item.kind}-${item.title}-${item.href}`} className="rounded-3xl border border-champagne bg-white p-4 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">
+                        {handoffKindLabels[item.kind]}
+                      </p>
+                      <strong className="mt-1 block text-plum">{item.title}</strong>
+                    </div>
+                    <StatusPill tone={item.tone}>{handoffKindLabels[item.kind]}</StatusPill>
+                  </div>
+                  <p className="mt-2 text-sm text-ink/60">{item.detail}</p>
+                  <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">
+                    交給：{item.handoffFor}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link
+                      href={item.href}
+                      className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-sm font-semibold text-white"
+                    >
+                      {item.kind === "order"
+                        ? "追收款項"
+                        : item.kind === "appointment"
+                          ? "處理預約"
+                          : item.kind === "reminder"
+                            ? "聯絡客戶"
+                            : "檢查庫存"}
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="今天沒有需要交接的項目"
+              action="當有未完成預約、待收訂單、回訪提醒或低庫存時，這裡會自動整理成今天要交接的清單。"
+            />
+          )}
         </div>
         <div className="card p-5">
-          <h2 className="font-bold text-plum">服務銷售排行</h2>
-          {metrics.serviceRanking.map((item, index) => (
-            <div
-              key={`${item.name}-${index}`}
-              className="mt-3 flex justify-between rounded-2xl bg-white p-4"
-            >
-              <span>{item.name}</span>
-              <strong>{item.count}</strong>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-plum">交接摘要</h2>
+              <p className="mt-1 text-sm text-ink/60">
+                可直接複製給店長、櫃台、技師或下一班，保留今天要處理、可以等和要交接的狀態。
+              </p>
             </div>
-          ))}
+          </div>
+          <pre className="mt-4 whitespace-pre-wrap rounded-3xl border border-champagne bg-white p-4 text-sm leading-6 text-ink/80 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+            {closeout.auditLines.join("\n")}
+          </pre>
         </div>
       </section>
-      <section className="mt-5 grid gap-4 md:grid-cols-3">
-        <MetricCard
-          label="庫存淨異動"
-          value={inventoryNet.toFixed(2)}
-          hint="入庫與出庫、調整的淨變化"
+      <section className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4 print:grid-cols-2">
+        <CloseoutCard
+          title="今天要收尾的預約"
+          value={`${closeout.unfinishedAppointments.length}`}
+          detail="今天還沒結束的預約，先收完再關帳。"
+          links={[
+            { href: "/appointments", label: "處理預約" },
+          ]}
         />
-        <MetricCard
-          label="庫存出庫"
-          value={inventoryOutflow.toFixed(2)}
-          hint="扣料與報廢合計"
+        <CloseoutCard
+          title="今天要收的款"
+          value={`${outstandingOrders.length}`}
+          detail={`尚欠 ${currency.format(closeout.totalOutstanding)}，先把現金流收回來。`}
+          links={[
+            { href: "/checkout", label: "追收款項" },
+          ]}
         />
-        <MetricCard
-          label="庫存品項"
-          value={`${data.inventory.length}`}
-          hint="現有在庫品項數"
+        <CloseoutCard
+          title="今天要補的庫存"
+          value={`${closeout.lowStockItems.length}`}
+          detail={
+            closeout.lowStockItems.length
+              ? `先補 ${closeout.lowStockItems
+                  .slice(0, 2)
+                  .map((item) => `${item.name}（剩 ${item.quantity}/${item.lowStockThreshold}）`)
+                  .join("、")}，避免明天缺料。`
+              : "目前沒有低庫存品項，補貨清單保持乾淨。"
+          }
+          links={[
+            { href: "/inventory", label: "去補貨" },
+          ]}
         />
+        <CloseoutCard
+          title="明天先備妥"
+          value={`${closeout.tomorrowAppointments.length} / ${closeout.tomorrowShifts.length}`}
+          detail="明天的預約與班表，先確認人力和備品。"
+          links={[
+            { href: "/appointments", label: "確認預約" },
+            { href: "/staff", label: "看班表" },
+          ]}
+        />
+      </section>
+      <section className="mt-5 grid gap-5 lg:grid-cols-3 print:grid-cols-1">
+        <div className="card p-5 lg:col-span-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-plum">今天先收款</h2>
+              <p className="mt-1 text-sm text-ink/60">
+                先處理金額高、時間又久的欠款，最快回收現金流。
+              </p>
+            </div>
+            <StatusPill tone="amber">{outstandingOrders.length} 筆</StatusPill>
+          </div>
+          {outstandingOrders.length ? (
+            <div className="mt-4 divide-y divide-champagne overflow-hidden rounded-3xl border border-champagne bg-white">
+              {outstandingOrders.slice(0, 5).map(({ order, outstanding, ageDays }, index) => {
+                const customer = data.customers.find((item) => item.id === order.customerId);
+                const technician = data.staff.find((item) => item.id === order.technicianId);
+                const state = orderPaymentState(order);
+                return (
+                  <div
+                    key={order.id}
+                    className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold text-plum">
+                          #{index + 1} {customer?.name ?? "未命名客戶"}
+                        </span>
+                        <StatusPill tone={orderStatusTone(state)}>
+                          {orderStatusLabel(state)}
+                        </StatusPill>
+                      </div>
+                      <p className="mt-1 text-sm text-ink/60">
+                        {technician?.name ?? "未指派"} · {order.id.slice(0, 8)} · 建立 {formatDate(order.createdAt)}
+                      </p>
+                      <p className="mt-1 text-xs text-ink/50">
+                        {ageDays === 0 ? "今天新增，先追蹤付款狀態" : `已建立 ${ageDays} 天，建議優先聯絡`}
+                      </p>
+                      <p className="mt-2 text-xs text-ink/60">
+                        項目：{orderLineSummary(order, 3)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-bold text-plum">
+                        {currency.format(outstanding)}
+                      </div>
+                      <div className="text-xs text-ink/60">尚欠金額</div>
+                      <div className="mt-2 text-xs text-ink/50">
+                        總額 {currency.format(orderTotal(order))}
+                      </div>
+                      <div className="text-xs text-ink/50">
+                        已收 {currency.format(order.paidAmount)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-4">
+              <EmptyState
+                title="目前沒有待收款訂單"
+                action="所有訂單都已結清時，這裡會保持乾淨；一旦出現部分收款或待收款，就會自動列出優先追款名單。"
+              />
+            </div>
+          )}
+          {refundedOrders.length ? (
+            <div className="mt-5 rounded-3xl border border-champagne bg-blush/30 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-bold text-plum">已退款待查</h3>
+                  <p className="mt-1 text-sm text-ink/60">退款單也會列在這裡，方便櫃台一起核對付款方式與內容。</p>
+                </div>
+                <StatusPill tone="plum">{refundedOrders.length} 筆</StatusPill>
+              </div>
+              <div className="mt-4 space-y-3">
+                {refundedOrders.slice(0, 5).map(({ order }) => {
+                  const customer = data.customers.find((item) => item.id === order.customerId);
+                  const technician = data.staff.find((item) => item.id === order.technicianId);
+                  return (
+                    <article key={order.id} className="rounded-2xl border border-champagne bg-white p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <strong className="block text-plum">{customer?.name ?? "未命名客戶"}</strong>
+                          <p className="mt-1 text-sm text-ink/60">
+                            {technician?.name ?? "未指派"} · {order.id.slice(0, 8)} · {paymentMethodLabel(order.paymentMethod)}
+                          </p>
+                        </div>
+                        <StatusPill tone={orderStatusTone("refunded")}>{orderStatusLabel("refunded")}</StatusPill>
+                      </div>
+                      <p className="mt-2 text-sm text-ink/60">
+                        總額 {currency.format(orderTotal(order))} · 實收 {currency.format(order.paidAmount)}
+                      </p>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
+        <div className="card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-plum">回訪與提醒</h2>
+              <p className="mt-1 text-sm text-ink/60">
+                先看逾期提醒，再看長時間未回訪的客戶。
+              </p>
+            </div>
+            <StatusPill tone="sage">{followUpCustomers.length} 人</StatusPill>
+          </div>
+          {followUpCustomers.length ? (
+            <div className="mt-4 space-y-3">
+              {followUpCustomers.map(({ customer, tone, label, detail }) => {
+                const reminder = reminderDisplay(customer.nextReminder, now);
+                return (
+                <div key={customer.id} className="rounded-2xl border border-champagne bg-white p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-plum">{customer.name}</p>
+                      <p className="mt-1 text-xs text-ink/60">
+                        {customer.phone} · {customer.tier}
+                      </p>
+                    </div>
+                    <StatusPill tone={tone}>{label}</StatusPill>
+                  </div>
+                  <p className="mt-2 text-sm text-ink/60">{detail}</p>
+                  <p className="mt-1 text-xs font-semibold text-ink/50">
+                    下一步：{reminder?.nextStep ?? "聯絡客戶"}
+                  </p>
+                </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-4">
+              <EmptyState
+                title="目前沒有需要回訪的客戶"
+                action="當客戶設定了下次提醒或累積到需要追蹤的回訪紀錄時，這裡會自動列出。"
+              />
+            </div>
+          )}
+        </div>
+      </section>
+      <section className="mt-5 card p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-plum">服務銷售排行</h2>
+            <p className="mt-1 text-sm text-ink/60">
+              先看最常被選擇的項目，方便安排備貨、排班與主打活動。
+            </p>
+          </div>
+          <StatusPill tone="plum">{topService ? `${topService.count} 次最多` : "暫無排行"}</StatusPill>
+        </div>
+        {metrics.serviceRanking.length ? (
+          <div className="mt-4 divide-y divide-champagne overflow-hidden rounded-3xl border border-champagne bg-white">
+            {metrics.serviceRanking.slice(0, 5).map((item, index) => (
+              <div
+                key={`${item.name}-${index}`}
+                className="flex flex-col gap-2 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-plum">{index + 1}. {item.name}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-ink/60">被預約 {item.count} 次</p>
+                </div>
+                <StatusPill tone={index === 0 ? "sage" : "amber"}>{item.count} 次</StatusPill>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-4">
+            <EmptyState
+              title="目前還沒有服務排行"
+              action="建立服務並安排預約或訂單後，這裡會自動整理出最常被選擇的項目。"
+            />
+          </div>
+        )}
       </section>
     </AppShell>
   );
@@ -1919,75 +4099,149 @@ export function SettingsView({
       return data.workspace.businessHours || "{}";
     }
   }, [data.workspace.businessHours]);
+  const brandColor = data.workspace.brandColor || "#C87486";
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
 
   return (
     <AppShell
-      title="設定頁"
-      subtitle="店鋪基本資料、預約規則、收款、稅務、品牌外觀與多店設定。"
+      title="店鋪設定"
+      subtitle="先把店鋪基本資料、營業規則與品牌外觀補齊，後續頁面才會接得上。"
       {...shellProps(data)}
     >
       <NoticeBanner notice={notice} />
-      <form action={updateWorkspaceSettings} className="card p-5">
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="block text-sm font-semibold text-plum">
-            店鋪名稱
-            <input
-              required
-              name="name"
-              className={fieldClass()}
-              defaultValue={data.workspace.name}
-            />
-          </label>
-          <label className="block text-sm font-semibold text-plum">
-            電話
-            <input
-              name="phone"
-              className={fieldClass()}
-              defaultValue={data.workspace.phone}
-            />
-          </label>
-          <label className="block text-sm font-semibold text-plum md:col-span-2">
-            地址
-            <input
-              name="address"
-              className={fieldClass()}
-              defaultValue={data.workspace.address}
-            />
-          </label>
-          <label className="block text-sm font-semibold text-plum">
-            品牌色
-            <input
-              name="brand_color"
-              type="color"
-              className="mt-2 h-12 w-full rounded-2xl border border-champagne p-1"
-              defaultValue={data.workspace.brandColor}
-            />
-          </label>
-          <label className="block text-sm font-semibold text-plum md:col-span-2">
-            營業時間 JSON
-            <textarea
-              name="business_hours"
-              className={`${fieldClass()} min-h-40 font-mono text-xs`}
-              defaultValue={parsedHours}
-            />
-          </label>
+      {setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide
+            title={setupGuide.title}
+            action={setupGuide.action}
+            links={setupGuide.links}
+          />
         </div>
-        <div className="mt-6 grid gap-3 md:grid-cols-2">
-          {data.categories.map((category) => (
-            <div
-              key={category.id}
-              className="rounded-2xl bg-blush p-4 font-medium"
-            >
-              服務分類：{category.name}
+      ) : null}
+      {isWorkspaceEmpty(data) && !setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide
+            title="先把店鋪骨架補齊"
+            action="設定店名與營業資訊後，下一步請建立服務分類、員工與客戶，後續頁面才不會是空的。"
+            links={[
+              { href: "/services", label: "建立服務" },
+              { href: "/staff", label: "建立員工" },
+              { href: "/customers", label: "建立客戶" },
+            ]}
+          />
+        </div>
+      ) : null}
+      <form action={updateWorkspaceSettings} className="card p-5">
+        <div className="rounded-3xl border border-champagne/70 bg-blush/40 p-4">
+          <p className="text-sm font-semibold text-plum">先完成店鋪骨架</p>
+          <p className="mt-1 text-sm leading-6 text-ink/80">
+            這些設定會影響前台顯示、預約可用時段與後續報表的基礎資料。建議先把店名、聯絡方式、營業規則與品牌色補齊。
+          </p>
+        </div>
+        <fieldset className="mt-5 rounded-3xl border border-champagne/70 p-4">
+          <legend className="px-2 text-sm font-semibold text-plum">
+            店鋪基本資料
+          </legend>
+          <div className="mt-3 grid gap-4 md:grid-cols-2">
+            <label className="block text-sm font-semibold text-plum">
+              店鋪名稱
+              <input
+                required
+                name="name"
+                className={fieldClass()}
+                defaultValue={data.workspace.name}
+              />
+            </label>
+            <label className="block text-sm font-semibold text-plum">
+              電話
+              <input
+                name="phone"
+                className={fieldClass()}
+                defaultValue={data.workspace.phone}
+                placeholder="預約或客服專線"
+              />
+            </label>
+            <label className="block text-sm font-semibold text-plum md:col-span-2">
+              地址
+              <input
+                name="address"
+                className={fieldClass()}
+                defaultValue={data.workspace.address}
+                placeholder="門市地址"
+              />
+            </label>
+          </div>
+        </fieldset>
+        <fieldset className="mt-5 rounded-3xl border border-champagne/70 p-4">
+          <legend className="px-2 text-sm font-semibold text-plum">
+            營業與預約規則
+          </legend>
+          <div className="mt-3 grid gap-4">
+            <label className="block text-sm font-semibold text-plum">
+              營業時間 JSON
+              <textarea
+                name="business_hours"
+                className={`${fieldClass()} min-h-40 font-mono text-xs`}
+                defaultValue={parsedHours}
+                placeholder='{"mon":"10:00-20:00","tue":"10:00-20:00"}'
+              />
+            </label>
+            <p className="text-xs leading-6 text-ink/70">
+              請輸入有效 JSON。這裡會影響預約時段與營業資訊的顯示。可先保留 <code>{`{}`}</code>，再逐日補上，例如
+              <code>{`{"mon":"10:00-20:00","sat":"11:00-18:00"}`}</code>。
+            </p>
+          </div>
+        </fieldset>
+        <fieldset className="mt-5 rounded-3xl border border-champagne/70 p-4">
+          <legend className="px-2 text-sm font-semibold text-plum">
+            品牌外觀
+          </legend>
+          <div className="mt-3 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+            <label className="block text-sm font-semibold text-plum">
+              品牌色
+              <input
+                name="brand_color"
+                type="color"
+                className="mobile-tap mt-2 h-12 w-full rounded-2xl border border-champagne p-1"
+                defaultValue={brandColor}
+              />
+            </label>
+            <div className="rounded-2xl border border-champagne bg-white p-3">
+              <div
+                className="h-10 w-24 rounded-xl border border-black/10"
+                style={{ backgroundColor: brandColor }}
+                aria-hidden="true"
+              />
+              <p className="mt-2 text-xs font-semibold text-plum">{brandColor}</p>
             </div>
-          ))}
+          </div>
+          <p className="mt-3 text-xs leading-6 text-ink/70">
+            這個顏色會套用到按鈕、標籤與品牌識別，先選最接近現場招牌或官網的主色即可。
+          </p>
+        </fieldset>
+        <div className="mt-6 grid gap-3 md:grid-cols-2">
+          {data.categories.length ? (
+            data.categories.map((category) => (
+              <div
+                key={category.id}
+                className="rounded-2xl bg-blush p-4 font-medium"
+              >
+                服務分類：{category.name}
+              </div>
+            ))
+          ) : (
+            <EmptyState
+              title="尚未建立服務分類"
+              action="先到服務頁建立第一個服務分類，再回來確認報表與排程會依分類自動整理。"
+            />
+          )}
           <div className="rounded-2xl bg-blush p-4 font-medium">
             設定會直接更新目前 workspace，並受 Supabase RLS 與 owner/admin
             policy 保護。
           </div>
         </div>
         <div className="mt-5">
-          <SubmitButton>儲存設定</SubmitButton>
+          <SubmitButton className="w-full sm:w-auto">儲存設定</SubmitButton>
         </div>
       </form>
     </AppShell>

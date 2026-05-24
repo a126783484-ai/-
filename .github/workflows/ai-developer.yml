@@ -30,7 +30,6 @@ permissions:
 jobs:
   ai-develop:
     runs-on: ubuntu-latest
-    if: ${{ false }}
     steps:
       - name: Automation paused
         run: echo "Legacy AI Developer workflow is paused for safety."
