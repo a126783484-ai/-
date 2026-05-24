@@ -58,21 +58,40 @@ export function dateKey(value: string | Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function parseValidDate(value: string) {
+  const date = parseISO(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export function appointmentDuration(serviceIds: string[], services: AppointmentService[]) {
   return serviceIds.reduce((total, id) => total + (services.find((service) => service.id === id)?.durationMin ?? 0), 0);
 }
 
 export function buildAppointmentEnd(startAt: string, serviceIds: string[], services: AppointmentService[]) {
-  return addMinutes(parseISO(startAt), appointmentDuration(serviceIds, services)).toISOString();
+  const start = parseValidDate(startAt);
+  if (!start) {
+    return "";
+  }
+
+  return addMinutes(start, appointmentDuration(serviceIds, services)).toISOString();
 }
 
 export function hasTechnicianConflict(candidate: Pick<ConflictAppointment, "technicianId" | "startAt" | "endAt">, appointments: ConflictAppointment[], ignoreId?: string) {
+  const candidateStart = parseValidDate(candidate.startAt);
+  const candidateEnd = parseValidDate(candidate.endAt);
+  if (!candidateStart || !candidateEnd) {
+    return false;
+  }
+
   return appointments.some((appointment) => {
     if (appointment.id === ignoreId || appointment.technicianId !== candidate.technicianId) return false;
     if (["cancelled", "no_show"].includes(appointment.status)) return false;
+    const appointmentStart = parseValidDate(appointment.startAt);
+    const appointmentEnd = parseValidDate(appointment.endAt);
+    if (!appointmentStart || !appointmentEnd) return false;
     return areIntervalsOverlapping(
-      { start: parseISO(candidate.startAt), end: parseISO(candidate.endAt) },
-      { start: parseISO(appointment.startAt), end: parseISO(appointment.endAt) },
+      { start: candidateStart, end: candidateEnd },
+      { start: appointmentStart, end: appointmentEnd },
       { inclusive: false }
     );
   });

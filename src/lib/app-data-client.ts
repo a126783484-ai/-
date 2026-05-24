@@ -1,16 +1,20 @@
 import {
   appointmentHandoffSummary,
+  dateKey,
   daysSince,
   isUnfinishedAppointment,
   reminderDisplay,
 } from "./appointments";
 import {
   orderCloseoutSummary,
+  orderAgeInDays,
   orderHandoffSummary,
   orderPaymentMethodBreakdown,
   orderStatusTone,
 } from "./orders";
 import { currency, formatDate, formatTime } from "./utils";
+export { dateKey } from "./appointments";
+
 import type {
   Appointment,
   Customer,
@@ -83,15 +87,6 @@ export interface DailyCloseoutSummary {
   totalOutstanding: number;
 }
 
-export function dateKey(value: string | Date) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
 export function buildDailyCloseoutSummary(
   data: Pick<AppData, "appointments" | "orders" | "inventory" | "shifts" | "customers" | "staff">,
   now = new Date(),
@@ -122,7 +117,7 @@ export function buildDailyCloseoutSummary(
     .filter((order) => order.status === "refunded")
     .map((order) => ({
       order,
-      ageDays: Math.max(0, Math.floor((now.getTime() - new Date(order.createdAt).getTime()) / 86_400_000)),
+      ageDays: orderAgeInDays({ createdAt: order.createdAt }, now),
     }))
     .sort(
       (left, right) =>

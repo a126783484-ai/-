@@ -22,6 +22,32 @@ describe("appointment scheduling", () => {
     expect(hasTechnicianConflict({ technicianId: "st_ava", startAt: "2026-05-15T20:00:00+08:00", endAt: "2026-05-15T21:00:00+08:00" }, appointments)).toBe(false);
   });
 
+  it("fails closed when appointment timestamps are malformed", () => {
+    expect(
+      buildAppointmentEnd("not-a-date", ["svc_art", "addon_remove"], services),
+    ).toBe("");
+    expect(
+      hasTechnicianConflict(
+        { technicianId: "st_ava", startAt: "not-a-date", endAt: "still-not-a-date" },
+        appointments,
+      ),
+    ).toBe(false);
+    expect(
+      hasTechnicianConflict(
+        { technicianId: "st_ava", startAt: "2026-05-15T12:00:00+08:00", endAt: "2026-05-15T13:00:00+08:00" },
+        [
+          {
+            id: "appt_bad",
+            technicianId: "st_ava",
+            startAt: "bad",
+            endAt: "data",
+            status: "confirmed",
+          },
+        ],
+      ),
+    ).toBe(false);
+  });
+
   it("ignores cancelled and no-show appointments when checking conflicts", () => {
     const candidate = {
       technicianId: "st_temp",

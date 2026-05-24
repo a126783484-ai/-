@@ -73,20 +73,14 @@ export function orderFinancialSummary(
   const subtotal = orderSubtotal(order);
   const total = orderTotal(order);
   const paidAmount = Math.max(0, normalizeAmount(order.paidAmount));
-  const outstanding = order.status === "refunded" ? 0 : Math.max(0, total - paidAmount);
+  const outstanding = outstandingAmount(order);
 
   return {
     subtotal,
     total,
     paidAmount,
     outstanding,
-    state: (order.status === "refunded"
-      ? "refunded"
-      : outstanding <= 0
-        ? "paid"
-        : paidAmount > 0
-          ? "partial"
-          : "unpaid") as OrderStatus,
+    state: orderPaymentState(order),
   };
 }
 
