@@ -172,6 +172,22 @@ export function orderCloseoutLabel(
   return `${currency.format(summary.outstanding)} · ${ageLabel}`;
 }
 
+export function orderNextStepLabel(
+  order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount" | "createdAt"> & Partial<Pick<Order, "status">>,
+  now = new Date(),
+) {
+  const summary = orderCloseoutSummary(order, now);
+  if (summary.paymentState === "paid") {
+    return "已結清，可直接歸檔";
+  }
+
+  if (summary.paymentState === "partial") {
+    return summary.ageDays === 0 ? "先補尾款" : `已欠 ${summary.ageDays} 天，先追尾款`;
+  }
+
+  return summary.ageDays === 0 ? "今天先收款" : `已欠 ${summary.ageDays} 天，先聯絡客戶`;
+}
+
 export function orderHandoffSummary(
   order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount" | "createdAt" | "paymentMethod"> &
     Partial<Pick<Order, "status">>,
@@ -182,11 +198,12 @@ export function orderHandoffSummary(
   const summary = orderCloseoutSummary(order, now);
   const ageLabel = summary.ageDays === 0 ? "今天新增" : `已建立 ${summary.ageDays} 天`;
   return [
-    "收款待辦",
+    "追款待辦",
     orderStatusLabel(summary.paymentState),
     paymentMethodLabel(order.paymentMethod),
     `${customerName ?? "未命名客戶"}／${technicianName ?? "未指派"}`,
     `${currency.format(summary.outstanding)} 尚欠`,
+    `下一步：${orderNextStepLabel(order, now)}`,
     ageLabel,
     orderLineSummary(order, 2),
   ].join(" · ");

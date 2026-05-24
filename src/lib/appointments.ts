@@ -129,12 +129,36 @@ export function reminderDisplay(value?: string, now = new Date()) {
   if (!reminderKey) return null;
 
   if (reminderKey < todayKey) {
-    return { tone: "rose" as const, label: `${formatDate(value)}（逾期）`, due: true };
+    return {
+      tone: "rose" as const,
+      label: `${formatDate(value)}（逾期）`,
+      due: true,
+      nextStep: "今天先聯絡客戶",
+    };
   }
   if (reminderKey === todayKey) {
-    return { tone: "amber" as const, label: `${formatDate(value)}（今天）`, due: true };
+    return {
+      tone: "amber" as const,
+      label: `${formatDate(value)}（今天）`,
+      due: true,
+      nextStep: "今天先回訪",
+    };
   }
-  return { tone: "sage" as const, label: formatDate(value), due: false };
+  return {
+    tone: "sage" as const,
+    label: formatDate(value),
+    due: false,
+    nextStep: "到期前再提醒",
+  };
+}
+
+export function appointmentNextStepLabel(status: AppointmentStatus) {
+  if (status === "pending") return "先確認客戶與時段";
+  if (status === "confirmed") return "提醒技師與客戶準備";
+  if (status === "in_service") return "服務中，留意收尾與交接";
+  if (status === "completed") return "已完成，可直接結案";
+  if (status === "cancelled") return "已取消，保留紀錄即可";
+  return "未到，視需要補約";
 }
 
 export function describeAppointmentDependencies(summary: AppointmentDependencySummary): AppointmentDependencyCopy {
@@ -198,6 +222,7 @@ export function appointmentHandoffSummary(
     `${customerName ?? "未命名客戶"}／${technicianName ?? "未指派"}`,
     `來源 ${appointment.source}`,
     `${appointment.serviceIds.length} 項服務`,
+    `下一步：${appointmentNextStepLabel(appointment.status)}`,
     appointment.note?.trim() ? "有備註" : null,
   ].filter((part): part is string => Boolean(part));
 

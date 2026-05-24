@@ -24,6 +24,7 @@ import { MetricCard, StatusPill, EmptyState } from "@/components/ui";
 import {
   appointmentCloseoutLabel,
   appointmentStatusDescriptions,
+  appointmentNextStepLabel,
   describeAppointmentConflict,
   describeAppointmentDependencies,
   daysSince,
@@ -33,11 +34,13 @@ import {
 } from "@/lib/appointments";
 import { dashboardMetrics } from "@/lib/analytics";
 import {
+  orderCloseoutLabel,
   orderFinancialSummary,
   orderExportSummary,
   orderLineSummary,
   orderPaymentMethodBreakdown,
   orderPaymentState,
+  orderNextStepLabel,
   orderStatusLabel,
   orderStatusTone,
   orderSubtotal,
@@ -886,6 +889,9 @@ function AppointmentForm({
               <p key={status} className="rounded-2xl bg-blush p-3 text-xs text-ink/70">
                 <strong className="text-plum">{statusLabel(status)}</strong>
                 <span className="ml-2">{appointmentStatusDescriptions[status]}</span>
+                <span className="mt-1 block font-semibold text-ink/70">
+                  下一步：{appointmentNextStepLabel(status)}
+                </span>
               </p>
             ))}
           </div>
@@ -2892,6 +2898,9 @@ export function CheckoutView({
                         <p className="mt-1 text-sm text-ink/60">
                           {technician?.name ?? "未指派"} · {paymentMethodLabel(order.paymentMethod)} · {order.id.slice(0, 8)}
                         </p>
+                        <p className="mt-1 text-xs text-ink/50">
+                          {orderCloseoutLabel(order, now)} · 下一步：{orderNextStepLabel(order, now)}
+                        </p>
                       </div>
                       <StatusPill tone={orderStatusTone(state)}>{orderStatusLabel(state)}</StatusPill>
                     </div>
@@ -3815,7 +3824,13 @@ export function ReportsView({
                       href={item.href}
                       className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-sm font-semibold text-white"
                     >
-                      打開{handoffKindLabels[item.kind]}
+                      {item.kind === "order"
+                        ? "追收款項"
+                        : item.kind === "appointment"
+                          ? "處理預約"
+                          : item.kind === "reminder"
+                            ? "聯絡客戶"
+                            : "檢查庫存"}
                     </Link>
                   </div>
                 </article>
@@ -3848,7 +3863,7 @@ export function ReportsView({
           value={`${closeout.unfinishedAppointments.length}`}
           detail="今天還沒結束的預約，先收完再關帳。"
           links={[
-            { href: "/appointments", label: "查看預約" },
+            { href: "/appointments", label: "處理預約" },
           ]}
         />
         <CloseoutCard
@@ -3856,7 +3871,7 @@ export function ReportsView({
           value={`${outstandingOrders.length}`}
           detail={`尚欠 ${currency.format(closeout.totalOutstanding)}，先把現金流收回來。`}
           links={[
-            { href: "/checkout", label: "前往結帳" },
+            { href: "/checkout", label: "追收款項" },
           ]}
         />
         <CloseoutCard
@@ -3871,7 +3886,7 @@ export function ReportsView({
               : "目前沒有低庫存品項，補貨清單保持乾淨。"
           }
           links={[
-            { href: "/inventory", label: "管理庫存" },
+            { href: "/inventory", label: "去補貨" },
           ]}
         />
         <CloseoutCard
@@ -3879,7 +3894,7 @@ export function ReportsView({
           value={`${closeout.tomorrowAppointments.length} / ${closeout.tomorrowShifts.length}`}
           detail="明天的預約與班表，先確認人力和備品。"
           links={[
-            { href: "/appointments", label: "看預約" },
+            { href: "/appointments", label: "確認預約" },
             { href: "/staff", label: "看班表" },
           ]}
         />
@@ -3995,7 +4010,9 @@ export function ReportsView({
           </div>
           {followUpCustomers.length ? (
             <div className="mt-4 space-y-3">
-              {followUpCustomers.map(({ customer, tone, label, detail }) => (
+              {followUpCustomers.map(({ customer, tone, label, detail }) => {
+                const reminder = reminderDisplay(customer.nextReminder, now);
+                return (
                 <div key={customer.id} className="rounded-2xl border border-champagne bg-white p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -4007,8 +4024,12 @@ export function ReportsView({
                     <StatusPill tone={tone}>{label}</StatusPill>
                   </div>
                   <p className="mt-2 text-sm text-ink/60">{detail}</p>
+                  <p className="mt-1 text-xs font-semibold text-ink/50">
+                    下一步：{reminder?.nextStep ?? "聯絡客戶"}
+                  </p>
                 </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="mt-4">

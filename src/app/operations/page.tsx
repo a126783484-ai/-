@@ -2,10 +2,11 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState, MetricCard, StatusPill } from "@/components/ui";
 import { buildDailyCloseoutSummary, getWorkspaceSetupGuide, isWorkspaceEmpty, loadAppData } from "@/lib/app-data";
-import { appointmentCloseoutLabel, reminderDisplay, statusLabel } from "@/lib/appointments";
+import { appointmentCloseoutLabel, appointmentNextStepLabel, reminderDisplay, statusLabel } from "@/lib/appointments";
 import {
   orderCloseoutLabel,
   orderPaymentState,
+  orderNextStepLabel,
   orderStatusLabel,
   orderStatusTone,
   orderTotal,
@@ -220,7 +221,13 @@ export default async function OperationsCommandCenterPage() {
                       href={item.href}
                       className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-sm font-semibold text-white"
                     >
-                      打開{handoffKindLabels[item.kind]}
+                      {item.kind === "order"
+                        ? "追收款項"
+                        : item.kind === "appointment"
+                          ? "處理預約"
+                          : item.kind === "reminder"
+                            ? "聯絡客戶"
+                            : "檢查庫存"}
                     </Link>
                   </div>
                 </article>
@@ -231,8 +238,8 @@ export default async function OperationsCommandCenterPage() {
               title="今天沒有需要交接的項目"
               action="當有未完成預約、待收訂單、回訪提醒或低庫存時，這裡會自動整理成今天要交接的清單。"
               links={[
-                { href: "/appointments", label: "查看預約" },
-                { href: "/checkout", label: "查看收款" },
+                { href: "/appointments", label: "處理預約" },
+                { href: "/checkout", label: "追收款項" },
               ]}
             />
           )}
@@ -262,7 +269,7 @@ export default async function OperationsCommandCenterPage() {
               </p>
             </div>
             <Link href="/appointments" className="mobile-tap rounded-2xl bg-plum px-4 py-2 font-semibold text-white">
-              {closeout.unfinishedAppointments.length ? "查看預約" : "建立預約"}
+              {closeout.unfinishedAppointments.length ? "處理預約" : "建立預約"}
             </Link>
           </div>
           <div className="mt-4 space-y-3">
@@ -279,6 +286,9 @@ export default async function OperationsCommandCenterPage() {
                       <p className="mt-1 text-sm text-ink/60">
                         {appointmentCloseoutLabel(appointment, now)} · 技師 {technician?.name ?? "未指派"}
                       </p>
+                      <p className="mt-1 text-xs font-semibold text-ink/50">
+                        下一步：{appointmentNextStepLabel(appointment.status)}
+                      </p>
                     </div>
                     <StatusPill>{statusLabel(appointment.status)}</StatusPill>
                   </div>
@@ -287,7 +297,7 @@ export default async function OperationsCommandCenterPage() {
                       href="/appointments"
                       className="mobile-tap rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum"
                     >
-                      開啟預約
+                      去處理
                     </Link>
                   </div>
                 </article>
@@ -299,7 +309,7 @@ export default async function OperationsCommandCenterPage() {
                 action="建立第一筆今天的預約後，這裡會自動列出客戶、時間和技師。"
                 links={[
                   { href: "/appointments", label: "建立預約" },
-                  { href: "/customers", label: "查看客戶" },
+                  { href: "/customers", label: "聯絡客戶" },
                 ]}
               />
             ) : null}
@@ -315,7 +325,7 @@ export default async function OperationsCommandCenterPage() {
               </p>
             </div>
             <Link href="/checkout" className="mobile-tap rounded-2xl bg-plum px-4 py-2 font-semibold text-white">
-              前往結帳
+              追收款項
             </Link>
           </div>
           <div className="mt-4 space-y-3">
@@ -323,15 +333,18 @@ export default async function OperationsCommandCenterPage() {
               const customer = data.customers.find((item) => item.id === order.customerId);
               return (
                 <article key={order.id} className="rounded-3xl border border-champagne bg-white p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <strong className="block text-plum">{customer?.name ?? "未命名客戶"}</strong>
-                      <p className="mt-1 text-sm text-ink/60">
-                        訂單 {order.id.slice(0, 8)} · {orderCloseoutLabel(order, now)}
-                      </p>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <strong className="block text-plum">{customer?.name ?? "未命名客戶"}</strong>
+                        <p className="mt-1 text-sm text-ink/60">
+                          訂單 {order.id.slice(0, 8)} · {orderCloseoutLabel(order, now)}
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-ink/50">
+                          下一步：{orderNextStepLabel(order, now)}
+                        </p>
+                      </div>
+                      <StatusPill tone={orderStatusTone(paymentState)}>{orderStatusLabel(paymentState)}</StatusPill>
                     </div>
-                    <StatusPill tone={orderStatusTone(paymentState)}>{orderStatusLabel(paymentState)}</StatusPill>
-                  </div>
                   <p className="mt-2 text-sm text-ink/60">
                     訂單總額 {currency.format(orderTotal(order))} · 待收 {currency.format(outstanding)}
                   </p>
@@ -340,7 +353,7 @@ export default async function OperationsCommandCenterPage() {
                       href="/checkout"
                       className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-sm font-semibold text-white"
                     >
-                      開啟結帳
+                      去收款
                     </Link>
                   </div>
                 </article>
@@ -350,7 +363,7 @@ export default async function OperationsCommandCenterPage() {
               <ActionCard
                 title="今天沒有要收的款"
                 action="若要建立新訂單或檢查收款，直接到結帳頁即可。"
-                links={[{ href: "/checkout", label: "前往結帳" }]}
+                links={[{ href: "/checkout", label: "追收款項" }]}
               />
             ) : null}
           </div>
@@ -367,7 +380,7 @@ export default async function OperationsCommandCenterPage() {
               </p>
             </div>
             <Link href="/inventory" className="mobile-tap rounded-2xl bg-plum px-4 py-2 font-semibold text-white">
-              管理庫存
+              去補貨
             </Link>
           </div>
           <div className="mt-4 space-y-3">
@@ -387,7 +400,7 @@ export default async function OperationsCommandCenterPage() {
                     href="/inventory"
                     className="mobile-tap rounded-2xl bg-blush px-4 py-2 text-sm font-semibold text-plum"
                   >
-                    開啟庫存
+                    檢查庫存
                   </Link>
                 </div>
               </article>
@@ -396,7 +409,7 @@ export default async function OperationsCommandCenterPage() {
               <ActionCard
                 title="今天沒有需要補貨的品項"
                 action="先把常用品項的安全庫存補齊，低於門檻時會自動跳到這裡。"
-                links={[{ href: "/inventory", label: "查看庫存" }]}
+                links={[{ href: "/inventory", label: "去補貨" }]}
               />
             ) : null}
           </div>
@@ -448,7 +461,7 @@ export default async function OperationsCommandCenterPage() {
               </p>
             </div>
             <Link href="/appointments" className="mobile-tap rounded-2xl bg-plum px-4 py-2 font-semibold text-white">
-              查看預約
+              確認預約
             </Link>
           </div>
           <div className="mt-4 space-y-3">
@@ -471,7 +484,7 @@ export default async function OperationsCommandCenterPage() {
                       href="/appointments"
                       className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-sm font-semibold text-white"
                     >
-                      打開預約
+                      確認預約
                     </Link>
                   </div>
                 </article>
@@ -500,7 +513,7 @@ export default async function OperationsCommandCenterPage() {
                 title="明天沒有待準備項目"
                 action="當明天有預約或班表時，這裡會直接列出需要先確認的內容。"
                 links={[
-                  { href: "/appointments", label: "查看預約" },
+                  { href: "/appointments", label: "確認預約" },
                   { href: "/staff", label: "查看班表" },
                 ]}
               />
@@ -519,7 +532,7 @@ export default async function OperationsCommandCenterPage() {
               </p>
             </div>
             <Link href="/customers" className="mobile-tap rounded-2xl bg-plum px-4 py-2 font-semibold text-white">
-              查看客戶
+              聯絡客戶
             </Link>
           </div>
           <div className="mt-4 space-y-3">
@@ -549,7 +562,7 @@ export default async function OperationsCommandCenterPage() {
               <ActionCard
                 title="目前沒有到期回訪提醒"
                 action="到客戶頁設定下次提醒後，今天到期或逾期的名單就會顯示在這裡。"
-                links={[{ href: "/customers", label: "查看客戶" }]}
+                links={[{ href: "/customers", label: "聯絡客戶" }]}
               />
             ) : null}
           </div>
