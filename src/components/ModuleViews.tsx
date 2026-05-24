@@ -103,6 +103,12 @@ type FollowUpCustomer = {
   ageDays: number;
 };
 type QuickJumpLink = { href: string; label: string };
+const handoffKindLabels = {
+  appointment: "預約",
+  order: "收款",
+  reminder: "回訪",
+  inventory: "庫存",
+} as const;
 
 function appointmentStatusTone(status: (typeof appointmentStatuses)[number]) {
   if (status === "confirmed") return "sage" as const;
@@ -3325,6 +3331,12 @@ export function ReportsView({
   const paidOrders = data.orders.filter((order) => orderPaymentState(order) === "paid").length;
   const partialOrders = data.orders.filter((order) => orderPaymentState(order) === "partial").length;
   const unpaidOrders = data.orders.filter((order) => orderPaymentState(order) === "unpaid").length;
+  const handoffSummaryText = closeout.handoffItems.length
+    ? closeout.handoffItems
+        .slice(0, 4)
+        .map((item) => `${handoffKindLabels[item.kind]} ${item.title}｜${item.detail}`)
+        .join("；")
+    : "目前沒有待交接項目";
   const reportMonthLabel = new Intl.DateTimeFormat("zh-TW", {
     year: "numeric",
     month: "long",
@@ -3339,6 +3351,8 @@ export function ReportsView({
     topService
       ? `主力服務：${topService.name}（${topService.count} 次）`
       : "主力服務：暫無排行",
+    `今日交接：${handoffSummaryText}`,
+    `稽核摘要：${closeout.auditLines.join("；")}`,
     outstandingOrders.length
       ? `待收款前 ${Math.min(3, outstandingOrders.length)} 筆：${outstandingOrders
           .slice(0, 3)
@@ -3376,7 +3390,7 @@ export function ReportsView({
   return (
     <AppShell
       title="報表分析"
-      subtitle="先看本月營收與待收，再看今日收工與需要追款、回訪的名單。"
+      subtitle="先看本月營收與待收，再看今日交接與需要追款、回訪的名單。"
       {...shellProps(data)}
     >
       {setupGuide ? (
@@ -3470,6 +3484,63 @@ export function ReportsView({
           value={`${followUpCount}`}
           hint="待收款與回訪名單合計"
         />
+      </section>
+      <section className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
+        <div className="card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-plum">今日交接清單</h2>
+              <p className="mt-1 text-sm text-ink/60">
+                直接給店長、主管或晚班接手的重點項目，按優先順序整理好了。
+              </p>
+            </div>
+            <StatusPill tone="amber">{closeout.handoffItems.length} 項</StatusPill>
+          </div>
+          {closeout.handoffItems.length ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {closeout.handoffItems.slice(0, 6).map((item) => (
+                <article key={`${item.kind}-${item.title}-${item.href}`} className="rounded-3xl border border-champagne bg-white p-4 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">
+                        {handoffKindLabels[item.kind]}
+                      </p>
+                      <strong className="mt-1 block text-plum">{item.title}</strong>
+                    </div>
+                    <StatusPill tone={item.tone}>{handoffKindLabels[item.kind]}</StatusPill>
+                  </div>
+                  <p className="mt-2 text-sm text-ink/60">{item.detail}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link
+                      href={item.href}
+                      className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-sm font-semibold text-white"
+                    >
+                      打開{handoffKindLabels[item.kind]}
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="目前沒有待交接項目"
+              action="當有未完成預約、待收訂單、回訪提醒或低庫存時，這裡會自動整理成交接清單。"
+            />
+          )}
+        </div>
+        <div className="card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-plum">交接摘要</h2>
+              <p className="mt-1 text-sm text-ink/60">
+                可直接複製給店長、主管或下一班，保留當下狀態與優先順序。
+              </p>
+            </div>
+          </div>
+          <pre className="mt-4 whitespace-pre-wrap rounded-3xl border border-champagne bg-white p-4 text-sm leading-6 text-ink/80 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+            {closeout.auditLines.join("\n")}
+          </pre>
+        </div>
       </section>
       <section className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4 print:grid-cols-2">
         <CloseoutCard

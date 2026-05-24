@@ -13,6 +13,12 @@ import type { Customer } from "@/lib/types";
 import { currency, formatDate, formatTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+const handoffKindLabels = {
+  appointment: "預約",
+  order: "收款",
+  reminder: "回訪",
+  inventory: "庫存",
+} as const;
 
 function SetupGuide({
   title,
@@ -133,7 +139,7 @@ export default async function OperationsCommandCenterPage() {
   return (
     <AppShell
       title="營運指揮中心"
-      subtitle="把今天要處理的預約、收款、庫存與回訪集中在一頁。"
+      subtitle="把今天要交接的人、事、帳集中在一頁，方便晚班或店長接手。"
       {...shellProps}
     >
       {data.needsWorkspace ? (
@@ -177,6 +183,68 @@ export default async function OperationsCommandCenterPage() {
           value={`${closeout.tomorrowAppointments.length} / ${closeout.tomorrowShifts.length}`}
           hint={`預約 ${closeout.tomorrowAppointments.length} · 班表 ${closeout.tomorrowShifts.length}`}
         />
+      </section>
+
+      <section className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
+        <div className="card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-plum">今日交接清單</h2>
+              <p className="mt-1 text-sm text-ink/60">
+                這些項目最適合直接交給下一班、店長或櫃台先接手處理。
+              </p>
+            </div>
+            <StatusPill tone="amber">{closeout.handoffItems.length} 項</StatusPill>
+          </div>
+          {closeout.handoffItems.length ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {closeout.handoffItems.slice(0, 6).map((item) => (
+                <article key={`${item.kind}-${item.title}-${item.href}`} className="rounded-3xl border border-champagne bg-white p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">
+                        {handoffKindLabels[item.kind]}
+                      </p>
+                      <strong className="mt-1 block text-plum">{item.title}</strong>
+                    </div>
+                    <StatusPill tone={item.tone}>{handoffKindLabels[item.kind]}</StatusPill>
+                  </div>
+                  <p className="mt-2 text-sm text-ink/60">{item.detail}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link
+                      href={item.href}
+                      className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-sm font-semibold text-white"
+                    >
+                      打開{handoffKindLabels[item.kind]}
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <ActionCard
+              title="目前沒有待交接項目"
+              action="當有未完成預約、待收訂單、回訪提醒或低庫存時，這裡會自動整理成交接清單。"
+              links={[
+                { href: "/appointments", label: "查看預約" },
+                { href: "/checkout", label: "查看收款" },
+              ]}
+            />
+          )}
+        </div>
+        <div className="card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-plum">交接摘要</h2>
+              <p className="mt-1 text-sm text-ink/60">
+                可以直接複製給店長、主管或晚班同事。
+              </p>
+            </div>
+          </div>
+          <pre className="mt-4 whitespace-pre-wrap rounded-3xl border border-champagne bg-white p-4 text-sm leading-6 text-ink/80 shadow-sm">
+            {closeout.auditLines.join("\n")}
+          </pre>
+        </div>
       </section>
 
       <section className="mt-5 grid gap-5 lg:grid-cols-2">

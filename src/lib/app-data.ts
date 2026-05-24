@@ -14,8 +14,17 @@ import type {
   StaffMember,
   Workspace,
 } from "@/lib/types";
-import { isUnfinishedAppointment } from "@/lib/appointments";
-import { orderCloseoutSummary } from "@/lib/orders";
+import {
+  appointmentHandoffSummary,
+  isUnfinishedAppointment,
+  daysSince,
+  reminderDisplay,
+} from "@/lib/appointments";
+import {
+  orderCloseoutSummary,
+  orderHandoffSummary,
+  orderStatusTone,
+} from "@/lib/orders";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseConfig } from "@/lib/supabase";
 import {
@@ -25,6 +34,7 @@ import {
 } from "@/lib/staff-invites";
 import { ensureOwnerWorkspaceForUser } from "@/lib/workspace";
 import { buildSeedAppData, seedWorkspaceSetupSteps } from "@/lib/seed";
+import { currency, formatDate, formatTime } from "@/lib/utils";
 
 type WorkspaceRow = Database["public"]["Tables"]["workspaces"]["Row"];
 type WorkspaceSummaryRow = Pick<
@@ -76,6 +86,14 @@ type ShiftSummaryRow = Pick<
   "id" | "workspace_id" | "staff_id" | "shift_date" | "start_time" | "end_time" | "leave"
 >;
 
+export type CloseoutAttentionItem = {
+  kind: "appointment" | "order" | "reminder" | "inventory";
+  title: string;
+  detail: string;
+  tone: "rose" | "sage" | "amber" | "plum";
+  href: string;
+};
+
 export interface AppData {
   user: { id: string; email: string | null };
   workspace: Workspace;
@@ -114,6 +132,8 @@ export interface DailyCloseoutSummary {
   lowStockItems: InventoryItem[];
   tomorrowAppointments: Appointment[];
   tomorrowShifts: Shift[];
+  handoffItems: CloseoutAttentionItem[];
+  auditLines: string[];
   totalOutstanding: number;
 }
 
@@ -127,7 +147,7 @@ export function dateKey(value: string | Date) {
 }
 
 export function buildDailyCloseoutSummary(
-  data: Pick<AppData, "appointments" | "orders" | "inventory" | "shifts">,
+  data: Pick<AppData, "appointments" | "orders" | "inventory" | "shifts" | "customers" | "staff">,
   now = new Date(),
 ): DailyCloseoutSummary {
   const todayKey = dateKey(now);
@@ -162,6 +182,103 @@ export function buildDailyCloseoutSummary(
         left.name.localeCompare(right.name),
     );
 
+  const followUpCustomers = data.customers
+    .map((customer) => {
+      const reminder = reminderDisplay(customer.nextReminder, now);
+      const reminderDays = customer.nextReminder ? daysSince(customer.nextReminder, now) : null;
+
+      if (reminder?.due) {
+        return {
+          customer,
+          tone: reminder.tone,
+          label: reminder.label,
+          detail: `提醒日 ${formatDate(customer.nextReminder!)}`,
+          sortKey: customer.nextReminder ?? "",
+          ageDays: reminderDays ?? 0,
+        };
+      }
+
+      const visitDaysRaw = customer.lastVisit ? daysSince(customer.lastVisit, now) : null;
+      if (visitDaysRaw === null) {
+        return null;
+      }
+
+      const visitDays = Math.max(0, visitDaysRaw);
+      if (visitDays < 60) {
+        return null;
+      }
+
+      return {
+        customer,
+        tone: visitDays >= 90 ? ("rose" as const) : ("amber" as const),
+        label: `${formatDate(customer.lastVisit!)}（最後到店）`,
+        detail: visitDays === 0 ? "今天有回訪紀錄" : `距上次到店 ${visitDays} 天`,
+        sortKey: customer.lastVisit ?? "",
+        ageDays: visitDays,
+      };
+    })
+    .filter((item): item is {
+      customer: Customer;
+      tone: "rose" | "amber" | "sage";
+      label: string;
+      detail: string;
+      sortKey: string;
+      ageDays: number;
+    } => item !== null)
+    .sort(
+      (left, right) =>
+        (left.customer.nextReminder ?? left.sortKey).localeCompare(right.customer.nextReminder ?? right.sortKey) ||
+        right.ageDays - left.ageDays ||
+        left.customer.name.localeCompare(right.customer.name),
+    )
+    .slice(0, 3);
+
+  const handoffItems: CloseoutAttentionItem[] = [
+    ...unfinishedAppointments.slice(0, 2).map((appointment) => {
+      const customer = data.customers.find((item) => item.id === appointment.customerId);
+      const technician = data.staff.find((item) => item.id === appointment.technicianId);
+
+      return {
+        kind: "appointment" as const,
+        title: `${formatTime(appointment.startAt)} · ${customer?.name ?? "未命名客戶"}`,
+        detail: appointmentHandoffSummary(appointment, customer?.name, technician?.name, now),
+        tone:
+          appointment.status === "in_service"
+            ? ("plum" as const)
+            : appointment.status === "confirmed"
+              ? ("amber" as const)
+              : ("rose" as const),
+        href: "/appointments",
+      };
+    }),
+    ...unpaidOrders.slice(0, 2).map(({ order, outstanding, paymentState }) => {
+      const customer = data.customers.find((item) => item.id === order.customerId);
+      const technician = data.staff.find((item) => item.id === order.technicianId);
+
+      return {
+        kind: "order" as const,
+        title: `${customer?.name ?? "未命名客戶"} · ${currency.format(outstanding)} 待收`,
+        detail: orderHandoffSummary(order, customer?.name, technician?.name, now),
+        tone: orderStatusTone(paymentState),
+        href: "/checkout",
+      };
+    }),
+    ...followUpCustomers.slice(0, 2).map(({ customer, tone, label, detail }) => ({
+      kind: "reminder" as const,
+      title: customer.name,
+      detail: `${label} · ${detail}${customer.phone ? ` · ${customer.phone}` : ""}`,
+      tone,
+      href: "/customers",
+    })),
+    ...lowStockItems.slice(0, 2).map((item) => ({
+      kind: "inventory" as const,
+      title: item.name,
+      detail: `剩 ${item.quantity}/${item.lowStockThreshold}，${item.quantity <= 1 ? "需要立即補貨" : "請安排補貨"}`,
+      tone: "amber" as const,
+      href: "/inventory",
+    })),
+  ];
+
   const tomorrowAppointments = data.appointments
     .filter(
       (appointment) =>
@@ -174,6 +291,19 @@ export function buildDailyCloseoutSummary(
     .filter((shift) => shift.date === tomorrowKey)
     .sort((left, right) => left.startTime.localeCompare(right.startTime));
 
+  const auditLines = [
+    `今天未完成預約 ${unfinishedAppointments.length} 筆，待收訂單 ${unpaidOrders.length} 筆（${currency.format(
+      unpaidOrders.reduce((sum, item) => sum + item.outstanding, 0),
+    )}）`,
+    `回訪提醒 ${followUpCustomers.length} 位，低庫存 ${lowStockItems.length} 項，明日預約 ${tomorrowAppointments.length} 筆 / 班表 ${tomorrowShifts.length} 筆`,
+    handoffItems.length
+      ? `優先交接：${handoffItems
+          .slice(0, 4)
+          .map((item) => `${item.title}｜${item.detail}`)
+          .join("；")}`
+      : "優先交接：目前沒有待交接項目",
+  ];
+
   return {
     todayKey,
     tomorrowKey,
@@ -182,6 +312,8 @@ export function buildDailyCloseoutSummary(
     lowStockItems,
     tomorrowAppointments,
     tomorrowShifts,
+    handoffItems,
+    auditLines,
     totalOutstanding: unpaidOrders.reduce((sum, item) => sum + item.outstanding, 0),
   };
 }

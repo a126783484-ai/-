@@ -5,6 +5,7 @@ import { buildDailyCloseoutSummary, loadAppData } from "@/lib/app-data";
 
 export default async function ReportsPage() {
   const data = await loadAppData();
-  const closeout = buildDailyCloseoutSummary(data, new Date());
+  const now = new Date();
+  const closeout = buildDailyCloseoutSummary(data, now);
   return <ReportsView data={data} closeout={closeout} />;
 }

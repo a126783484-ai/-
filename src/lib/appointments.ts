@@ -166,3 +166,20 @@ export function appointmentCloseoutLabel(appointment: Pick<Appointment, "startAt
 
   return `${dayLabel} ${formatTime(appointment.startAt)} · ${statusLabel(appointment.status)}`;
 }
+
+export function appointmentHandoffSummary(
+  appointment: Pick<Appointment, "serviceIds" | "startAt" | "status" | "source" | "note">,
+  customerName?: string,
+  technicianName?: string,
+  now = new Date(),
+) {
+  const parts = [
+    appointmentCloseoutLabel(appointment, now),
+    `${customerName ?? "未命名客戶"}／${technicianName ?? "未指派"}`,
+    `來源 ${appointment.source}`,
+    `${appointment.serviceIds.length} 項服務`,
+    appointment.note?.trim() ? "有備註" : null,
+  ].filter((part): part is string => Boolean(part));
+
+  return parts.join(" · ");
+}

@@ -117,6 +117,23 @@ export function orderCloseoutLabel(
   return `${currency.format(summary.outstanding)} · ${ageLabel}`;
 }
 
+export function orderHandoffSummary(
+  order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount" | "createdAt">,
+  customerName?: string,
+  technicianName?: string,
+  now = new Date(),
+) {
+  const summary = orderCloseoutSummary(order, now);
+  const ageLabel = summary.ageDays === 0 ? "今天新增" : `已建立 ${summary.ageDays} 天`;
+  return [
+    orderStatusLabel(summary.paymentState),
+    `${customerName ?? "未命名客戶"}／${technicianName ?? "未指派"}`,
+    `${currency.format(summary.outstanding)} 尚欠`,
+    ageLabel,
+    orderLineSummary(order, 2),
+  ].join(" · ");
+}
+
 export function orderExportSummary(
   order: Pick<Order, "id" | "lines" | "discount" | "tip" | "paidAmount" | "createdAt">,
   now = new Date(),
