@@ -83,14 +83,14 @@ const paymentMethodLabels: Record<(typeof paymentMethods)[number], string> = {
 const tiers = ["新客", "一般", "VIP", "VVIP"];
 const staffRoles = ["owner", "admin", "technician", "front_desk", "staff"] as const;
 const staffRoleLabels: Record<(typeof staffRoles)[number], string> = {
-  owner: "店主（全權管理）",
-  admin: "管理員（店務管理）",
-  technician: "技師（排班 / 服務）",
-  front_desk: "櫃台（接待 / 預約）",
+  owner: "店主（全權管理 / 交接）",
+  admin: "管理員（店務管理 / 排班）",
+  technician: "技師（排班 / 服務 / 查看班表）",
+  front_desk: "櫃台（接待 / 預約 / 查看班表）",
   staff: "支援員工（備援 / 行政）",
 };
 const staffRoleHelpText =
-  "技師主要處理服務與班表，櫃台負責接待、預約與收款，支援員工適合備援與行政；管理員與店主可管理所有設定。";
+  "店主與管理員可新增員工、調整角色與班表；櫃台與技師可查看班表圖表與列印摘要，適合接班與交接；支援員工適合備援與行政。";
 const inventoryMovementTypes = ["purchase", "consume", "adjust"] as const;
 type Notice = { kind: "error" | "success"; message: string };
 type LinkAction = { href: string; label: string };
@@ -247,7 +247,7 @@ function StaffScheduleChart({
 }: {
   data: AppData;
   shifts: Shift[];
-  onEditShift: (shiftId: string) => void;
+  onEditShift?: (shiftId: string) => void;
 }) {
   const timelineTicks = [0, 4, 8, 12, 16, 20, 24];
   const chartDates = useMemo(() => {
@@ -312,12 +312,9 @@ function StaffScheduleChart({
               </div>
               <div className="mt-4 space-y-3">
                 {data.staff.map((member) => {
-                  const memberShifts = dateShifts.filter((shift) => shift.staffId === member.id);
-                  const shift = memberShifts[0];
-                  const startMinutes = shift ? shiftTimeToMinutes(shift.startTime) : 0;
-                  const endMinutes = shift
-                    ? Math.min(Math.max(shiftTimeToMinutes(shift.endTime), startMinutes + 30), 1440)
-                    : 0;
+                  const memberShifts = dateShifts
+                    .filter((shift) => shift.staffId === member.id)
+                    .sort((left, right) => left.startTime.localeCompare(right.startTime));
                   return (
                     <div
                       key={member.id}
@@ -331,37 +328,61 @@ function StaffScheduleChart({
                         </p>
                       </div>
                       <div
-                        className="relative h-14 overflow-hidden rounded-2xl border border-champagne bg-blush/30"
+                        className="relative min-h-14 overflow-hidden rounded-2xl border border-champagne bg-blush/30"
                         style={{
                           backgroundImage:
                             "linear-gradient(to right, rgba(77, 53, 86, 0.08) 1px, transparent 1px)",
                           backgroundSize: "calc(100% / 24) 100%",
                         }}
                       >
-                        {shift ? (
-                          <button
-                            type="button"
-                            className={`mobile-tap absolute inset-y-2 rounded-xl px-3 py-2.5 text-left text-xs font-semibold shadow-sm transition hover:scale-[1.01] focus:outline-none focus:ring-2 focus:ring-plum/30 ${
+                        {memberShifts.length ? (
+                          memberShifts.map((shift) => {
+                            const startMinutes = shiftTimeToMinutes(shift.startTime);
+                            const endMinutes = shift.leave
+                              ? 1440
+                              : Math.min(Math.max(shiftTimeToMinutes(shift.endTime), startMinutes + 30), 1440);
+                            const blockClassName = `absolute inset-y-2 rounded-xl px-3 py-2.5 text-left text-xs font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-plum/30 ${
                               shift.leave ? "bg-amber text-plum" : "bg-plum text-white"
-                            }`}
-                            style={
-                              shift.leave
-                                ? { left: "0.5rem", right: "0.5rem" }
-                                : {
-                                    left: shiftMinutesToPercent(startMinutes),
-                                    width: shiftMinutesToPercent(endMinutes - startMinutes),
-                                  }
-                            }
-                            onClick={() => onEditShift(shift.id)}
-                            title={`${member.name} · ${formatDate(date)} · ${shiftSummary(shift)}`}
-                          >
-                            <span className="block truncate">
-                              {shift.leave ? "休假 / 休息" : shiftSummary(shift)}
-                            </span>
-                            <span className={`block truncate ${shift.leave ? "text-plum/70" : "text-white/80"}`}>
-                              點選編輯
-                            </span>
-                          </button>
+                            }`;
+                            const blockStyle = shift.leave
+                              ? { left: "0.5rem", right: "0.5rem" }
+                              : {
+                                  left: shiftMinutesToPercent(startMinutes),
+                                  width: shiftMinutesToPercent(endMinutes - startMinutes),
+                                };
+                            const content = (
+                              <>
+                                <span className="block truncate">
+                                  {shift.leave ? "休假 / 休息" : shiftSummary(shift)}
+                                </span>
+                                <span className={`block truncate ${shift.leave ? "text-plum/70" : "text-white/80"}`}>
+                                  {onEditShift ? "點選編輯" : "可列印 / 檢視"}
+                                </span>
+                              </>
+                            );
+
+                            return onEditShift ? (
+                              <button
+                                key={shift.id}
+                                type="button"
+                                className={blockClassName}
+                                style={blockStyle}
+                                onClick={() => onEditShift(shift.id)}
+                                title={`${member.name} · ${formatDate(date)} · ${shiftSummary(shift)}`}
+                              >
+                                {content}
+                              </button>
+                            ) : (
+                              <div
+                                key={shift.id}
+                                className={blockClassName}
+                                style={blockStyle}
+                                title={`${member.name} · ${formatDate(date)} · ${shiftSummary(shift)}`}
+                              >
+                                {content}
+                              </div>
+                            );
+                          })
                         ) : (
                           <div className="flex h-full items-center px-3 text-xs text-ink/45">
                             未排班
@@ -3150,19 +3171,33 @@ export function StaffView({
           {staffPrintSummary}
         </pre>
       </section>
-      {canManageStaff ? (
-        <StaffScheduleChart
-          data={data}
-          shifts={shifts}
-          onEditShift={(shiftId) => {
-            setDraftShiftStaffId(null);
-            setEditingShiftId(shiftId);
-          }}
-        />
+      {staffScope !== "none" ? (
+        <>
+          {staffScope === "view" ? (
+            <div className="mb-5 rounded-3xl border border-champagne bg-champagne/30 p-4 text-sm text-ink/70">
+              <p className="font-semibold text-plum">檢視模式</p>
+              <p className="mt-1">
+                你可以看班表圖表和列印摘要；只有店主與管理員能新增、編輯或調整排班。
+              </p>
+            </div>
+          ) : null}
+          <StaffScheduleChart
+            data={data}
+            shifts={shifts}
+            onEditShift={
+              canManageStaff
+                ? (shiftId) => {
+                    setDraftShiftStaffId(null);
+                    setEditingShiftId(shiftId);
+                  }
+                : undefined
+            }
+          />
+        </>
       ) : (
         <div className="mb-5">
           <EmptyState
-            title={staffScope === "view" ? "員工目前僅供查看" : "你的角色無法管理員工"}
+            title="你的角色無法管理員工"
             action={staffAccessMessage}
           />
         </div>
@@ -3580,7 +3615,7 @@ export function ReportsView({
   const handoffSummaryText = closeout.handoffItems.length
     ? closeout.handoffItems
         .slice(0, 4)
-        .map((item) => `${handoffKindLabels[item.kind]} ${item.title}｜${item.detail}`)
+        .map((item) => `${item.handoffFor}｜${handoffKindLabels[item.kind]} ${item.title}｜${item.detail}`)
         .join("；")
     : "目前沒有需要交接的項目";
   const urgentLowStockCount = closeout.lowStockItems.filter((item) => item.quantity <= 1).length;
@@ -3607,7 +3642,7 @@ export function ReportsView({
     topService
       ? `主力服務：${topService.name}（${topService.count} 次）`
       : "主力服務：暫無排行",
-    `要交接/列印：${handoffSummaryText}`,
+    `交接給下一班：${handoffSummaryText}`,
     `今日檢查：${closeout.auditLines.join("；")}`,
     outstandingOrders.length
       ? `待收款前 ${Math.min(3, outstandingOrders.length)} 筆：${outstandingOrders
@@ -3768,6 +3803,9 @@ export function ReportsView({
                     <StatusPill tone={item.tone}>{handoffKindLabels[item.kind]}</StatusPill>
                   </div>
                   <p className="mt-2 text-sm text-ink/60">{item.detail}</p>
+                  <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">
+                    交給：{item.handoffFor}
+                  </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Link
                       href={item.href}
@@ -3791,7 +3829,7 @@ export function ReportsView({
             <div>
               <h2 className="text-lg font-bold text-plum">交接摘要</h2>
               <p className="mt-1 text-sm text-ink/60">
-                可直接複製給店長、主管或下一班，保留今天要處理、可以等和要交接的狀態。
+                可直接複製給店長、櫃台、技師或下一班，保留今天要處理、可以等和要交接的狀態。
               </p>
             </div>
           </div>

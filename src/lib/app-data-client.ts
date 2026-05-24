@@ -57,6 +57,7 @@ export type CloseoutAttentionItem = {
   detail: string;
   tone: "rose" | "sage" | "amber" | "plum";
   href: string;
+  handoffFor: string;
 };
 
 export interface DailyCloseoutSummary {
@@ -211,6 +212,7 @@ export function buildDailyCloseoutSummary(
         kind: "appointment" as const,
         title: `${formatTime(appointment.startAt)} · ${customer?.name ?? "未命名客戶"}`,
         detail: appointmentHandoffSummary(appointment, customer?.name, technician?.name, now),
+        handoffFor: "櫃台 / 下一班技師",
         tone:
           appointment.status === "in_service"
             ? ("plum" as const)
@@ -228,6 +230,7 @@ export function buildDailyCloseoutSummary(
         kind: "order" as const,
         title: `${customer?.name ?? "未命名客戶"} · ${currency.format(outstanding)} 待收`,
         detail: orderHandoffSummary(order, customer?.name, technician?.name, now),
+        handoffFor: "櫃台 / 店長",
         tone: orderStatusTone(paymentState),
         href: "/checkout",
       };
@@ -236,6 +239,7 @@ export function buildDailyCloseoutSummary(
       kind: "reminder" as const,
       title: customer.name,
       detail: `${label} · ${detail}${customer.phone ? ` · ${customer.phone}` : ""}`,
+      handoffFor: "櫃台 / 前台",
       tone,
       href: "/customers",
     })),
@@ -243,6 +247,7 @@ export function buildDailyCloseoutSummary(
       kind: "inventory" as const,
       title: item.name,
       detail: `剩 ${item.quantity}/${item.lowStockThreshold}${item.quantity <= 1 ? "，需要立即補貨" : "，請安排補貨"}`,
+      handoffFor: "店長 / 管理員",
       tone: "amber" as const,
       href: "/inventory",
     })),
@@ -271,11 +276,11 @@ export function buildDailyCloseoutSummary(
       : "付款方式：目前沒有訂單",
     `可以稍後：回訪提醒 ${followUpCustomers.length} 位、明日預約 ${tomorrowAppointments.length} 筆、明日班表 ${tomorrowShifts.length} 筆`,
     handoffItems.length
-      ? `要交接/列印：${handoffItems
+      ? `交接給下一班：${handoffItems
           .slice(0, 4)
-          .map((item) => `${item.title}｜${item.detail}`)
+          .map((item) => `${item.handoffFor}｜${item.title}｜${item.detail}`)
           .join("；")}`
-      : "要交接/列印：目前沒有待交接項目",
+      : "交接給下一班：目前沒有待交接項目",
   ];
 
   return {

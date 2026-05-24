@@ -3,8 +3,8 @@ import type { Role } from "./types";
 const permissions = {
   owner: ["*"],
   admin: ["dashboard", "appointments", "customers", "services", "checkout", "inventory", "staff", "reports", "settings"],
-  technician: ["technician", "appointments:own", "customers:read", "services:read"],
-  front_desk: ["dashboard", "appointments", "customers", "checkout", "services:read"],
+  technician: ["technician", "appointments:own", "customers:read", "services:read", "staff"],
+  front_desk: ["dashboard", "appointments", "customers", "checkout", "services:read", "staff"],
   staff: ["technician", "appointments:own"]
 } satisfies Record<Role, string[]>;
 
@@ -48,7 +48,7 @@ const moduleViewCopy = {
   customers: "你目前只能查看客戶資料，但新增、編輯與刪除會隱藏。",
   inventory: "你目前只能查看庫存與異動紀錄，但新增品項與記錄異動會隱藏。",
   services: "你目前只能查看服務清單與價格，但新增、編輯與停用會隱藏。",
-  staff: "你目前只能查看員工資料與班表，但新增員工、調整角色與排班會隱藏。",
+  staff: "你目前只能查看員工資料、班表圖表與列印摘要，但新增員工、調整角色與排班會隱藏。",
 } as const satisfies Record<ModuleKey, string>;
 
 const moduleNoneCopy = {
@@ -57,7 +57,7 @@ const moduleNoneCopy = {
   customers: "這個區塊仍保留客戶摘要，但新增、編輯與刪除控制會隱藏。",
   inventory: "這個區塊仍保留庫存摘要，但新增品項與記錄異動控制會隱藏。",
   services: "這個區塊仍保留服務摘要，但新增、編輯與停用控制會隱藏。",
-  staff: "這個區塊仍保留員工摘要，但新增員工、調整角色與排班控制會隱藏。",
+  staff: "這個區塊仍保留員工摘要與班表圖表，但新增員工、調整角色與排班控制會隱藏。",
 } as const satisfies Record<ModuleKey, string>;
 
 export function permissionScope(role: Role, module: ModuleKey) {

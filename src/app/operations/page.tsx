@@ -212,6 +212,9 @@ export default async function OperationsCommandCenterPage() {
                     <StatusPill tone={item.tone}>{handoffKindLabels[item.kind]}</StatusPill>
                   </div>
                   <p className="mt-2 text-sm text-ink/60">{item.detail}</p>
+                  <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-ink/45">
+                    交給：{item.handoffFor}
+                  </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Link
                       href={item.href}
@@ -239,7 +242,7 @@ export default async function OperationsCommandCenterPage() {
             <div>
               <h2 className="text-lg font-bold text-plum">交接摘要</h2>
               <p className="mt-1 text-sm text-ink/60">
-                可以直接複製給店長、主管或晚班同事，保留今天要處理、可以等和要交接的重點。
+                可以直接複製給店長、櫃台、技師或晚班同事，保留今天要處理、可以等和要交接的重點。
               </p>
             </div>
           </div>
