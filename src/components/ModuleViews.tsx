@@ -4180,7 +4180,7 @@ export function SettingsView({
             <label className="block text-sm font-semibold text-plum">
               營業時間 JSON
               <textarea
-                name="business_hours"
+                name="businessHours"
                 className={`${fieldClass()} min-h-40 font-mono text-xs`}
                 defaultValue={parsedHours}
                 placeholder='{"mon":"10:00-20:00","tue":"10:00-20:00"}'
@@ -4200,7 +4200,7 @@ export function SettingsView({
             <label className="block text-sm font-semibold text-plum">
               品牌色
               <input
-                name="brand_color"
+                name="brandColor"
                 type="color"
                 className="mobile-tap mt-2 h-12 w-full rounded-2xl border border-champagne p-1"
                 defaultValue={brandColor}

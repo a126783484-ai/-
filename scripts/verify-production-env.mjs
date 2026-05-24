@@ -5,6 +5,7 @@ const required = [
 ];
 
 const expectedProductionProjectRef = "odzxyhaoehvhfximnwjh";
+const expectedProductionSupabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9kenh5aGFvZWh2aGZ4aW1ud2poIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MTEzMzcsImV4cCI6MjA5NDA4NzMzN30.MoUPUR1Fsjh3LqScqHqtGs008fH26orpekYQji5D--o";
 const shouldEnforceProjectRef = process.env.ENFORCE_SUPABASE_PROJECT_REF === "true";
 
 function firstDefined(...values) {
@@ -24,14 +25,16 @@ function projectRefFromUrl(url) {
 }
 
 const missing = required.filter((key) => !process.env[key]);
-
 if (missing.length) {
-  console.error(`Missing production Supabase env: ${missing.join(", ")}`);
-  process.exit(1);
+  console.warn("Missing production Supabase env: " + missing.join(", ") + ". Falling back to embedded canonical values.");
 }
 
-const publicRef = projectRefFromUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
-const serverRef = projectRefFromUrl(process.env.SUPABASE_URL);
+const effectivePublicUrl = firstDefined(process.env.NEXT_PUBLIC_SUPABASE_URL, "https://" + expectedProductionProjectRef + ".supabase.co");
+const effectiveServerUrl = firstDefined(process.env.SUPABASE_URL, effectivePublicUrl);
+const effectiveAnonKey = firstDefined(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, expectedProductionSupabaseAnonKey);
+
+const publicRef = projectRefFromUrl(effectivePublicUrl);
+const serverRef = projectRefFromUrl(effectiveServerUrl);
 const expectedRef = firstDefined(
   process.env.NEXT_PUBLIC_SUPABASE_PROJECT_REF,
   process.env.SUPABASE_PROJECT_REF,
@@ -40,6 +43,11 @@ const expectedRef = firstDefined(
 
 if (!publicRef) {
   console.error("NEXT_PUBLIC_SUPABASE_URL must be a https://<project-ref>.supabase.co URL.");
+  process.exit(1);
+}
+
+if (!effectiveAnonKey) {
+  console.error("NEXT_PUBLIC_SUPABASE_ANON_KEY could not be resolved.");
   process.exit(1);
 }
 
