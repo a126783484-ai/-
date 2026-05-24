@@ -133,13 +133,13 @@ export function describeAppointmentDependencies(summary: AppointmentDependencySu
   ].filter(Boolean);
 
   return {
-    title: "先補齊預約基礎資料",
-    detail: `目前缺少：${missing.join("、")}。建立這些資料後，才可以建立或更新預約。`,
+    title: "先補齊預約需要的資料",
+    detail: `目前缺少：${missing.join("、")}。先建好這些資料，前台才可以直接建立或更新預約。`,
   };
 }
 
 export function describeAppointmentConflict() {
-  return "同一位技師在重疊時段只能有一筆有效預約；已取消與未到的預約不算衝突。";
+  return "同一位技師同一時段只能有一筆有效預約；已取消與未到的預約不會占用衝突判定。";
 }
 
 export function isUnfinishedAppointment(appointment: Pick<Appointment, "status">) {
@@ -174,7 +174,7 @@ export function appointmentHandoffSummary(
   now = new Date(),
 ) {
   const parts = [
-    "今天要處理",
+    "預約待辦",
     appointmentCloseoutLabel(appointment, now),
     `${customerName ?? "未命名客戶"}／${technicianName ?? "未指派"}`,
     `來源 ${appointment.source}`,

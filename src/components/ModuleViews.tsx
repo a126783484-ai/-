@@ -698,9 +698,9 @@ function AppointmentForm({
       </div>
       {!dependencySummary.ready ? (
         <div className="mt-4 rounded-3xl border border-amber bg-amber/10 p-4">
-          <p className="font-semibold text-plum">先補齊預約基礎資料</p>
+          <p className="font-semibold text-plum">{dependencyCopy.title}</p>
           <p className="mt-1 text-sm text-ink/70">
-            目前缺少：{missingDependencyLabels.join("、")}。先建立這些資料後，才能建立或更新預約。
+            目前缺少：{missingDependencyLabels.join("、")}。先建立這些資料後，前台就能直接建立或更新預約。
           </p>
           <div className="mt-3 flex flex-wrap gap-2 text-sm font-semibold">
             <Link className="mobile-tap w-full rounded-xl bg-white px-3 py-2 text-center text-plum sm:w-auto" href="/customers">
@@ -720,7 +720,7 @@ function AppointmentForm({
               <p>客戶：已有 {dependencySummary.customerCount} 筆。</p>
             )}
             {dependencySummary.missingServices ? (
-              <p>服務：先建立 1 個可用服務，例如「單色凝膠美甲」。</p>
+              <p>服務：先建立 1 個啟用中的服務，例如「單色凝膠美甲」。</p>
             ) : (
               <p>服務：已有 {dependencySummary.activeServiceCount} 個可用服務。</p>
             )}
@@ -1193,8 +1193,8 @@ function OrderForm({ data }: { data: AppData }) {
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2 text-xs text-ink/60">
-            <span>未收 = 尚未收到任何款項</span>
-            <span>部分 = 已收但仍有尚欠金額</span>
+            <span>待收款 = 尚未收到任何款項</span>
+            <span>部分付款 = 已收但仍有尚欠金額</span>
             <span>已結清 = 實收金額已覆蓋總額</span>
           </div>
         </div>
@@ -1208,7 +1208,7 @@ function OrderForm({ data }: { data: AppData }) {
             ? "請先建立至少一位客戶。"
             : activeStaff.length === 0
               ? "請先建立至少一位可用技師。"
-              : "請勾選至少一筆服務或輸入自訂項目。"}
+              : "請先勾選至少一筆服務，或輸入自訂項目後再送出。"}
         </p>
       ) : null}
     </form>
@@ -1664,7 +1664,7 @@ function shellProps(data: AppData) {
     workspace: data.workspace,
     role: data.currentMember?.role ?? "owner",
     notice: data.needsWorkspace
-      ? "尚未完成 workspace 初始化，請重新登入或聯絡管理員，先補齊 workspace 再操作。"
+      ? "尚未完成店鋪初始化，請先重新登入或聯絡管理員補齊店鋪資料後再操作。"
       : data.demoMode
         ? "預覽資料模式：目前顯示的是範例 seed 資料，Supabase 實際資料仍會優先顯示。"
         : liveNotice,
@@ -1719,11 +1719,11 @@ export function DashboardView({ data }: { data: AppData }) {
     >
       {data.needsWorkspace ? (
         <EmptyState
-          title="尚未完成 workspace 初始化"
+          title="尚未完成店鋪初始化"
           action={
             data.staffInviteFeatureEnabled && data.staffInvites.length > 0
               ? "你有待加入的店鋪邀請，請先開啟邀請卡完成加入。"
-              : "請重新登入，系統會依註冊資料補齊 workspace、owner profile 與 membership。"
+              : "請重新登入，系統會依註冊資料補齊店鋪、owner profile 與 membership。"
           }
         />
       ) : null}
@@ -1758,7 +1758,7 @@ export function DashboardView({ data }: { data: AppData }) {
       {workspaceEmpty && !setupGuide ? (
         <SetupGuide
           title="先建立第一組營運資料"
-          action="完成店鋪設定後，依序新增服務、員工與客戶，今日重點與 KPI 才會開始有意義。"
+          action="完成店鋪設定後，依序新增服務、員工與客戶，今日重點與 KPI 才會開始反映真實營運。"
           links={[
             { href: "/settings?message=settings_setup_hint", label: "先去設定" },
             { href: "/services", label: "建立服務" },
@@ -2821,14 +2821,18 @@ export function CheckoutView({
         <div className="mb-5">
           <EmptyState
             title={
-              !data.customers.length
-                ? "先建立客戶再開單"
-                : "先建立可指派技師再開單"
+              !data.customers.length && !activeStaff.length
+                ? "先建立客戶與在職技師再開單"
+                : !data.customers.length
+                  ? "先建立客戶再開單"
+                  : "先建立可指派技師再開單"
             }
             action={
-              !data.customers.length
-                ? "建立至少一位客戶後，這裡才能建立訂單並正確歸屬收款。"
-                : "建立至少一位在職技師後，這裡才能建立訂單並指派服務人員。"
+              !data.customers.length && !activeStaff.length
+                ? "先建立至少一位客戶與一位在職技師，這裡才能建立訂單並正確歸屬收款。"
+                : !data.customers.length
+                  ? "建立至少一位客戶後，這裡才能建立訂單並正確歸屬收款。"
+                  : "建立至少一位在職技師後，這裡才能建立訂單並指派服務人員。"
             }
           />
         </div>
@@ -2859,7 +2863,7 @@ export function CheckoutView({
         <MetricCard label="訂單總數" value={`${data.orders.length}`} hint="目前工作區的所有訂單" />
         <MetricCard label="待收金額" value={currency.format(totalOutstanding)} hint="所有未結清訂單的合計欠款" />
         <MetricCard label="已結清" value={`${paidOrders}`} hint="付款金額已覆蓋總額" />
-        <MetricCard label="部分付款 / 未收" value={`${partialOrders + unpaidOrders}`} hint="仍有待收金額的訂單" />
+        <MetricCard label="部分付款 / 待收款" value={`${partialOrders + unpaidOrders}`} hint="仍有待收金額的訂單" />
         <MetricCard label="已退款" value={`${refundedOrders.length}`} hint="需要人工複核的退款單" />
       </div>
       <section className="mb-5 grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
@@ -2868,7 +2872,7 @@ export function CheckoutView({
             <div>
               <h2 className="text-lg font-bold text-plum">待收款</h2>
               <p className="mt-1 text-sm text-ink/60">
-                先看部分付款與未收款，金額大的排前面。
+                先看部分付款與待收款，金額大的排前面。
               </p>
             </div>
             <StatusPill tone="amber">{outstandingOrders.length} 筆</StatusPill>
@@ -2907,7 +2911,7 @@ export function CheckoutView({
           ) : (
             <EmptyState
               title="目前沒有待收款訂單"
-              action="所有訂單都已結清時，這裡會保持乾淨；一旦出現部分收款或未收款，就會自動列出優先追款名單。"
+              action="所有訂單都已結清時，這裡會保持乾淨；一旦出現部分收款或待收款，就會自動列出優先追款名單。"
             />
           )}
         </div>
@@ -3632,13 +3636,13 @@ export function ReportsView({
     `產出時間：${formatDateTime(now.toISOString())}`,
     `月營收：${currency.format(metrics.monthRevenue)} · 客單價：${currency.format(avg)}`,
     `待收金額：${currency.format(closeout.totalOutstanding)} · 待跟進：${followUpCount} 筆`,
-    `今天先處理：未完成預約 ${closeout.unfinishedAppointments.length} / 待收訂單 ${outstandingOrders.length} / 低庫存 ${closeout.lowStockItems.length}${urgentLowStockCount ? `（${urgentLowStockCount} 項只剩 1 件或以下）` : ""}`,
+    `今天優先處理：未完成預約 ${closeout.unfinishedAppointments.length} / 待收訂單 ${outstandingOrders.length} / 低庫存 ${closeout.lowStockItems.length}${urgentLowStockCount ? `（${urgentLowStockCount} 項只剩 1 件或以下）` : ""}`,
     `已退款：${refundedOrders.length} 筆`,
     paymentMethodBreakdown.length
       ? `付款方式：${paymentMethodBreakdown.map((item) => `${item.label} ${item.count} 筆`).join("／")}`
       : "付款方式：目前沒有訂單",
-    `可以稍後：回訪提醒 ${followUpCustomers.length} 位 / 明日預約 ${closeout.tomorrowAppointments.length} 筆 / 明日班表 ${closeout.tomorrowShifts.length} 筆`,
-    `訂單狀態：已結清 ${paidOrders} / 部分付款 ${partialOrders} / 未收款 ${unpaidOrders}`,
+    `可以排後面：回訪提醒 ${followUpCustomers.length} 位 / 明日預約 ${closeout.tomorrowAppointments.length} 筆 / 明日班表 ${closeout.tomorrowShifts.length} 筆`,
+    `訂單狀態：已結清 ${paidOrders} / 部分付款 ${partialOrders} / 待收款 ${unpaidOrders}`,
     topService
       ? `主力服務：${topService.name}（${topService.count} 次）`
       : "主力服務：暫無排行",
@@ -3678,7 +3682,7 @@ export function ReportsView({
   return (
     <AppShell
       title="報表分析"
-      subtitle="先看今天要處理、可以稍後、要交接的事，再看本月營收與追款回訪名單。"
+      subtitle="先看今天優先處理、可以排後面、要交接的事，再看本月營收與追款回訪名單。"
       {...shellProps(data)}
     >
       {setupGuide ? (
@@ -3708,7 +3712,7 @@ export function ReportsView({
           <div>
             <h2 className="text-lg font-bold text-plum">主管摘要 / 可列印版</h2>
             <p className="mt-1 text-sm text-ink/60">
-              這一段可以直接列印或複製給店長、老闆或合夥人，保留今天要處理、可以稍後和要交接的重點。
+              這一段可以直接列印或複製給店長、老闆或合夥人，保留今天要優先處理、可以排後面和要交接的重點。
             </p>
           </div>
           <button
@@ -3732,7 +3736,7 @@ export function ReportsView({
               <p className="mt-1 text-xs text-ink/60">今天要補收的單</p>
             </div>
             <div className="rounded-3xl border border-champagne bg-white p-4 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/45">未收款</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/45">待收款</p>
               <p className="mt-2 text-2xl font-bold text-plum">{unpaidOrders}</p>
               <p className="mt-1 text-xs text-ink/60">今天優先處理</p>
             </div>
@@ -3941,7 +3945,7 @@ export function ReportsView({
             <div className="mt-4">
               <EmptyState
                 title="目前沒有待收款訂單"
-                action="所有訂單都已結清時，這裡會保持乾淨；一旦出現部分收款或未收款，就會自動列出優先追款名單。"
+                action="所有訂單都已結清時，這裡會保持乾淨；一旦出現部分收款或待收款，就會自動列出優先追款名單。"
               />
             </div>
           )}

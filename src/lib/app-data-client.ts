@@ -266,7 +266,7 @@ export function buildDailyCloseoutSummary(
     .sort((left, right) => left.startTime.localeCompare(right.startTime));
 
   const auditLines = [
-    `今天先處理：未完成預約 ${unfinishedAppointments.length} 筆、待收訂單 ${unpaidOrders.length} 筆（${currency.format(
+    `今天優先處理：未完成預約 ${unfinishedAppointments.length} 筆、待收訂單 ${unpaidOrders.length} 筆（${currency.format(
       unpaidOrders.reduce((sum, item) => sum + item.outstanding, 0),
     )}）、已退款 ${refundedOrders.length} 筆、低庫存 ${lowStockItems.length} 項${urgentLowStockCount ? `（${urgentLowStockCount} 項只剩 1 件或以下）` : ""}`,
     paymentMethodBreakdown.length
@@ -274,7 +274,7 @@ export function buildDailyCloseoutSummary(
           .map((item) => `${item.label} ${item.count} 筆`)
           .join("、")}`
       : "付款方式：目前沒有訂單",
-    `可以稍後：回訪提醒 ${followUpCustomers.length} 位、明日預約 ${tomorrowAppointments.length} 筆、明日班表 ${tomorrowShifts.length} 筆`,
+    `可以排後面：回訪提醒 ${followUpCustomers.length} 位、明日預約 ${tomorrowAppointments.length} 筆、明日班表 ${tomorrowShifts.length} 筆`,
     handoffItems.length
       ? `交接給下一班：${handoffItems
           .slice(0, 4)
@@ -372,11 +372,11 @@ export function getWorkspaceSetupGuide(
     .map((step) => step.area);
 
   return {
-    title: data.needsWorkspace ? "尚未完成 workspace 初始化" : "這個工作區還有幾個核心設定缺口",
+    title: data.needsWorkspace ? "先完成店鋪初始化" : "這個工作區還有幾個核心設定缺口",
     action:
       missingAreas.length === 1
-        ? `先補 ${missingAreas[0]}，後續頁面就會更完整。`
-        : `先補 ${missingAreas.slice(0, 2).join("、")}，其他項目可以後補；完成這些核心設定後，其他頁面就會更快開始有可操作內容。`,
+        ? `先補 ${missingAreas[0]}，完成後其他頁面就會開始有可操作內容。`
+        : `先補 ${missingAreas.slice(0, 2).join("、")}，其他項目可以後補；完成這些核心設定後，預約、收款與報表才會開始可靠。`,
     links,
   };
 }
