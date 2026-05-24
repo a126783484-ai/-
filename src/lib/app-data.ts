@@ -12,6 +12,7 @@ import type {
   ServiceCategory,
   ServiceItem,
   Shift,
+  ShiftLeaveType,
   StaffInvite,
   StaffMember,
   Workspace,
@@ -73,7 +74,7 @@ type InventoryMovementSummaryRow = Pick<
 >;
 type ShiftSummaryRow = Pick<
   Database["public"]["Tables"]["shifts"]["Row"],
-  "id" | "workspace_id" | "staff_id" | "shift_date" | "start_time" | "end_time" | "leave"
+  "id" | "workspace_id" | "staff_id" | "shift_date" | "start_time" | "end_time" | "leave" | "leave_type"
 >;
 
 export interface AppData {
@@ -360,6 +361,7 @@ function toInventoryMovement(row: InventoryMovementSummaryRow): InventoryMovemen
 }
 
 function toShift(row: ShiftSummaryRow): Shift {
+  const leaveType = (row.leave_type ?? (row.leave ? "rest" : "work")) as ShiftLeaveType;
   return {
     id: row.id,
     workspaceId: row.workspace_id,
@@ -367,7 +369,8 @@ function toShift(row: ShiftSummaryRow): Shift {
     date: row.shift_date,
     startTime: row.start_time,
     endTime: row.end_time,
-    leave: row.leave,
+    leave: leaveType !== "work",
+    leaveType,
   };
 }
 
@@ -515,7 +518,7 @@ export async function loadAppData(): Promise<AppData> {
       .limit(100),
     supabase
       .from("shifts")
-      .select("id, workspace_id, staff_id, shift_date, start_time, end_time, leave")
+      .select("id, workspace_id, staff_id, shift_date, start_time, end_time, leave, leave_type")
       .eq("workspace_id", workspaceId)
       .order("shift_date", { ascending: false })
       .order("start_time", { ascending: false }),

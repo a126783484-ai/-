@@ -441,6 +441,7 @@ export type Database = {
           start_time: string;
           end_time: string;
           leave: boolean;
+          leave_type: string;
         };
         Insert: {
           id?: string;
@@ -450,6 +451,7 @@ export type Database = {
           start_time: string;
           end_time: string;
           leave?: boolean;
+          leave_type?: string;
         };
         Update: {
           id?: string;
@@ -459,6 +461,7 @@ export type Database = {
           start_time?: string;
           end_time?: string;
           leave?: boolean;
+          leave_type?: string;
         };
         Relationships: [];
       };

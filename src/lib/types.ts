@@ -9,6 +9,14 @@ export type AppointmentStatus =
 export type OrderStatus = "unpaid" | "partial" | "paid" | "refunded";
 export type PaymentMethod = "cash" | "card" | "transfer" | "line_pay" | "other";
 export type StaffInviteStatus = "pending" | "accepted" | "revoked";
+export type ShiftLeaveType =
+  | "work"
+  | "rest"
+  | "personal"
+  | "sick"
+  | "comp_time"
+  | "national_holiday"
+  | "annual";
 
 export interface Workspace {
   id: string;
@@ -151,4 +159,5 @@ export interface Shift {
   startTime: string;
   endTime: string;
   leave: boolean;
+  leaveType: ShiftLeaveType;
 }

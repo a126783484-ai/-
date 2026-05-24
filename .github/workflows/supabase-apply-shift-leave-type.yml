@@ -1,0 +1,36 @@
+name: Apply Supabase Shift Leave Type Migration
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - supabase/migrations/0009_shift_leave_type.sql
+
+concurrency:
+  group: supabase-apply-shift-leave-type-main
+  cancel-in-progress: false
+
+jobs:
+  apply-migration:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Apply migration
+        run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/0009_shift_leave_type.sql
+
+      - name: Verify column exists
+        run: |
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -Atc "select column_name from information_schema.columns where table_schema = 'public' and table_name = 'shifts' and column_name = 'leave_type';"
