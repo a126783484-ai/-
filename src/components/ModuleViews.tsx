@@ -89,7 +89,7 @@ const staffRoleLabels: Record<(typeof staffRoles)[number], string> = {
   staff: "一般員工（支援與協作）",
 };
 const staffRoleHelpText =
-  "技師可排班與指派服務，櫃台負責接待與預約，一般員工適合支援與行政，管理員與店主可管理所有設定。";
+  "技師負責排班與接單，櫃台負責接待、預約與收款，一般員工適合支援與行政；管理員與店主可管理所有設定。";
 const inventoryMovementTypes = ["purchase", "consume", "adjust"] as const;
 type Notice = { kind: "error" | "success"; message: string };
 type LinkAction = { href: string; label: string };
@@ -563,7 +563,7 @@ function ServiceForm({
             list="service-categories"
             name="category"
             className={fieldClass()}
-            defaultValue={service?.categoryId ? service.category : ""}
+            defaultValue={service?.category ?? ""}
             placeholder="例如：美甲、SPA、加購"
           />
           <datalist id="service-categories">
