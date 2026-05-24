@@ -126,6 +126,7 @@ export function orderHandoffSummary(
   const summary = orderCloseoutSummary(order, now);
   const ageLabel = summary.ageDays === 0 ? "今天新增" : `已建立 ${summary.ageDays} 天`;
   return [
+    "今天要收",
     orderStatusLabel(summary.paymentState),
     `${customerName ?? "未命名客戶"}／${technicianName ?? "未指派"}`,
     `${currency.format(summary.outstanding)} 尚欠`,

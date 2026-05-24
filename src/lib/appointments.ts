@@ -174,6 +174,7 @@ export function appointmentHandoffSummary(
   now = new Date(),
 ) {
   const parts = [
+    "今天要處理",
     appointmentCloseoutLabel(appointment, now),
     `${customerName ?? "未命名客戶"}／${technicianName ?? "未指派"}`,
     `來源 ${appointment.source}`,

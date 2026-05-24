@@ -3335,7 +3335,7 @@ export function ReportsView({
         .slice(0, 4)
         .map((item) => `${handoffKindLabels[item.kind]} ${item.title}｜${item.detail}`)
         .join("；")
-    : "目前沒有待交接項目";
+    : "目前沒有需要交接的項目";
   const reportMonthLabel = new Intl.DateTimeFormat("zh-TW", {
     year: "numeric",
     month: "long",
@@ -3345,13 +3345,14 @@ export function ReportsView({
     `產出時間：${formatDateTime(now.toISOString())}`,
     `月營收：${currency.format(metrics.monthRevenue)} · 客單價：${currency.format(avg)}`,
     `待收金額：${currency.format(metrics.pendingPayment)} · 待跟進：${followUpCount} 筆`,
-    `今日收工：未完成預約 ${closeout.unfinishedAppointments.length} / 待收訂單 ${outstandingOrders.length} / 低庫存 ${closeout.lowStockItems.length} / 明日預備 ${closeout.tomorrowAppointments.length} 筆預約、${closeout.tomorrowShifts.length} 筆班表`,
+    `今天先處理：未完成預約 ${closeout.unfinishedAppointments.length} / 待收訂單 ${outstandingOrders.length} / 低庫存 ${closeout.lowStockItems.length}`,
+    `可以稍後：回訪提醒 ${followUpCustomers.length} 位 / 明日預約 ${closeout.tomorrowAppointments.length} 筆 / 明日班表 ${closeout.tomorrowShifts.length} 筆`,
     `訂單狀態：已結清 ${paidOrders} / 部分付款 ${partialOrders} / 未收款 ${unpaidOrders}`,
     topService
       ? `主力服務：${topService.name}（${topService.count} 次）`
       : "主力服務：暫無排行",
-    `今日交接：${handoffSummaryText}`,
-    `稽核摘要：${closeout.auditLines.join("；")}`,
+    `要交接/列印：${handoffSummaryText}`,
+    `今日檢查：${closeout.auditLines.join("；")}`,
     outstandingOrders.length
       ? `待收款前 ${Math.min(3, outstandingOrders.length)} 筆：${outstandingOrders
           .slice(0, 3)
@@ -3389,7 +3390,7 @@ export function ReportsView({
   return (
     <AppShell
       title="報表分析"
-      subtitle="先看本月營收與待收，再看今日交接與需要追款、回訪的名單。"
+      subtitle="先看今天要處理、可以稍後、要交接的事，再看本月營收與追款回訪名單。"
       {...shellProps(data)}
     >
       {setupGuide ? (
@@ -3419,7 +3420,7 @@ export function ReportsView({
           <div>
             <h2 className="text-lg font-bold text-plum">主管摘要 / 可列印版</h2>
             <p className="mt-1 text-sm text-ink/60">
-              這一段可以直接列印或複製給店長、老闆或合夥人，保留本月重點與待辦清單。
+              這一段可以直接列印或複製給店長、老闆或合夥人，保留今天要做、可以等和要交接的重點。
             </p>
           </div>
           <button
@@ -3427,7 +3428,7 @@ export function ReportsView({
             className="mobile-tap rounded-2xl bg-plum px-4 py-2 font-semibold text-white print:hidden"
             onClick={() => window.print()}
           >
-            列印報表
+            列印 / 交接
           </button>
         </div>
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -3435,17 +3436,17 @@ export function ReportsView({
             <div className="rounded-3xl border border-champagne bg-white p-4 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/45">已結清</p>
               <p className="mt-2 text-2xl font-bold text-plum">{paidOrders}</p>
-              <p className="mt-1 text-xs text-ink/60">付款金額足以覆蓋總額</p>
+              <p className="mt-1 text-xs text-ink/60">今天不用再追款</p>
             </div>
             <div className="rounded-3xl border border-champagne bg-white p-4 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/45">部分付款</p>
               <p className="mt-2 text-2xl font-bold text-plum">{partialOrders}</p>
-              <p className="mt-1 text-xs text-ink/60">已有收款，但仍有待收餘額</p>
+              <p className="mt-1 text-xs text-ink/60">今天要補收的單</p>
             </div>
             <div className="rounded-3xl border border-champagne bg-white p-4 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/45">未收款</p>
               <p className="mt-2 text-2xl font-bold text-plum">{unpaidOrders}</p>
-              <p className="mt-1 text-xs text-ink/60">尚未收到任何金額</p>
+              <p className="mt-1 text-xs text-ink/60">今天優先處理</p>
             </div>
             <div className="rounded-3xl border border-champagne bg-white p-4 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/45">主力服務</p>
@@ -3488,7 +3489,7 @@ export function ReportsView({
         <div className="card p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-plum">今日交接清單</h2>
+              <h2 className="text-lg font-bold text-plum">今天要交接</h2>
               <p className="mt-1 text-sm text-ink/60">
                 直接給店長、主管或晚班接手的重點項目，按優先順序整理好了。
               </p>
@@ -3522,8 +3523,8 @@ export function ReportsView({
             </div>
           ) : (
             <EmptyState
-              title="目前沒有待交接項目"
-              action="當有未完成預約、待收訂單、回訪提醒或低庫存時，這裡會自動整理成交接清單。"
+              title="今天沒有需要交接的項目"
+              action="當有未完成預約、待收訂單、回訪提醒或低庫存時，這裡會自動整理成今天要交接的清單。"
             />
           )}
         </div>
@@ -3532,7 +3533,7 @@ export function ReportsView({
             <div>
               <h2 className="text-lg font-bold text-plum">交接摘要</h2>
               <p className="mt-1 text-sm text-ink/60">
-                可直接複製給店長、主管或下一班，保留當下狀態與優先順序。
+                可直接複製給店長、主管或下一班，保留今天要處理、可以等和要交接的狀態。
               </p>
             </div>
           </div>
@@ -3543,7 +3544,7 @@ export function ReportsView({
       </section>
       <section className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4 print:grid-cols-2">
         <CloseoutCard
-          title="未完成預約"
+          title="今天要收尾的預約"
           value={`${closeout.unfinishedAppointments.length}`}
           detail="今天還沒結束的預約，先收完再關帳。"
           links={[
@@ -3551,7 +3552,7 @@ export function ReportsView({
           ]}
         />
         <CloseoutCard
-          title="待收訂單"
+          title="今天要收的款"
           value={`${outstandingOrders.length}`}
           detail={`尚欠 ${currency.format(closeout.totalOutstanding)}，先把現金流收回來。`}
           links={[
@@ -3559,7 +3560,7 @@ export function ReportsView({
           ]}
         />
         <CloseoutCard
-          title="低庫存"
+          title="今天要補的庫存"
           value={`${closeout.lowStockItems.length}`}
           detail="先補常用品項，避免明天缺料。"
           links={[
@@ -3567,7 +3568,7 @@ export function ReportsView({
           ]}
         />
         <CloseoutCard
-          title="明日預備"
+          title="明天先備妥"
           value={`${closeout.tomorrowAppointments.length} / ${closeout.tomorrowShifts.length}`}
           detail="明天的預約與班表，先確認人力和備品。"
           links={[
@@ -3580,9 +3581,9 @@ export function ReportsView({
         <div className="card p-5 lg:col-span-2">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-plum">待收款優先順序</h2>
+              <h2 className="text-lg font-bold text-plum">今天先收款</h2>
               <p className="mt-1 text-sm text-ink/60">
-                先處理金額高、時間又久的欠款，最容易快速回收現金流。
+                先處理金額高、時間又久的欠款，最快回收現金流。
               </p>
             </div>
             <StatusPill tone="amber">{outstandingOrders.length} 筆</StatusPill>

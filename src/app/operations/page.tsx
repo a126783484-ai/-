@@ -131,7 +131,7 @@ export default async function OperationsCommandCenterPage() {
       ? "尚未完成 workspace 初始化，請重新登入或聯絡管理員。"
       : data.demoMode
         ? "預覽資料模式：目前顯示的是範例 seed 資料，Supabase 實際資料仍會優先顯示。"
-        : "營運指揮中心：先清今天未完成事項，再看明天預備。",
+        : "營運指揮中心：今天先處理、可以稍後的往後排，明天要用的先備妥。",
   } as const;
   const workspaceEmpty = isWorkspaceEmpty(data);
   const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
@@ -139,7 +139,7 @@ export default async function OperationsCommandCenterPage() {
   return (
     <AppShell
       title="營運指揮中心"
-      subtitle="把今天要交接的人、事、帳集中在一頁，方便晚班或店長接手。"
+      subtitle="把今天要處理、可以等和明天先備的事項集中在一頁，方便晚班或店長接手。"
       {...shellProps}
     >
       {data.needsWorkspace ? (
@@ -175,13 +175,13 @@ export default async function OperationsCommandCenterPage() {
       ) : null}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="未完成預約" value={closeout.unfinishedAppointments.length} hint="今天還沒結束的預約" />
-        <MetricCard label="待收訂單" value={closeout.unpaidOrders.length} hint={`待收 ${currency.format(closeout.totalOutstanding)}`} />
-        <MetricCard label="低庫存" value={closeout.lowStockItems.length} hint="低於安全庫存門檻" />
+        <MetricCard label="未完成預約" value={closeout.unfinishedAppointments.length} hint="今天先收尾" />
+        <MetricCard label="待收訂單" value={closeout.unpaidOrders.length} hint={`今天要收 ${currency.format(closeout.totalOutstanding)}`} />
+        <MetricCard label="低庫存" value={closeout.lowStockItems.length} hint="今天可補" />
         <MetricCard
           label="明日預備"
           value={`${closeout.tomorrowAppointments.length} / ${closeout.tomorrowShifts.length}`}
-          hint={`預約 ${closeout.tomorrowAppointments.length} · 班表 ${closeout.tomorrowShifts.length}`}
+          hint={`明天先確認預約 ${closeout.tomorrowAppointments.length} · 班表 ${closeout.tomorrowShifts.length}`}
         />
       </section>
 
@@ -189,7 +189,7 @@ export default async function OperationsCommandCenterPage() {
         <div className="card p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-plum">今日交接清單</h2>
+              <h2 className="text-lg font-bold text-plum">今天要交接</h2>
               <p className="mt-1 text-sm text-ink/60">
                 這些項目最適合直接交給下一班、店長或櫃台先接手處理。
               </p>
@@ -223,8 +223,8 @@ export default async function OperationsCommandCenterPage() {
             </div>
           ) : (
             <ActionCard
-              title="目前沒有待交接項目"
-              action="當有未完成預約、待收訂單、回訪提醒或低庫存時，這裡會自動整理成交接清單。"
+              title="今天沒有需要交接的項目"
+              action="當有未完成預約、待收訂單、回訪提醒或低庫存時，這裡會自動整理成今天要交接的清單。"
               links={[
                 { href: "/appointments", label: "查看預約" },
                 { href: "/checkout", label: "查看收款" },
@@ -237,7 +237,7 @@ export default async function OperationsCommandCenterPage() {
             <div>
               <h2 className="text-lg font-bold text-plum">交接摘要</h2>
               <p className="mt-1 text-sm text-ink/60">
-                可以直接複製給店長、主管或晚班同事。
+                可以直接複製給店長、主管或晚班同事，保留今天要處理、可以等和要交接的重點。
               </p>
             </div>
           </div>
@@ -251,7 +251,7 @@ export default async function OperationsCommandCenterPage() {
         <div className="card p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-plum">今日待完成預約</h2>
+              <h2 className="text-lg font-bold text-plum">今天要收尾的預約</h2>
               <p className="mt-1 text-sm text-ink/60">
                 只列出今天尚未完成的預約，按時間排序。共 {closeout.unfinishedAppointments.length} 筆，僅顯示前 5 筆。
               </p>
@@ -304,7 +304,7 @@ export default async function OperationsCommandCenterPage() {
         <div className="card p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-plum">待收款</h2>
+              <h2 className="text-lg font-bold text-plum">今天要收款</h2>
               <p className="mt-1 text-sm text-ink/60">
                 只列出還有欠款的訂單，優先處理金額高、時間久的項目。
               </p>
@@ -343,7 +343,7 @@ export default async function OperationsCommandCenterPage() {
             })}
             {!closeout.unpaidOrders.length ? (
               <ActionCard
-                title="目前沒有待收款訂單"
+                title="今天沒有要收的款"
                 action="若要建立新訂單或檢查收款，直接到結帳頁即可。"
                 links={[{ href: "/checkout", label: "前往結帳" }]}
               />
@@ -356,7 +356,7 @@ export default async function OperationsCommandCenterPage() {
         <div className="card p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-plum">低庫存</h2>
+              <h2 className="text-lg font-bold text-plum">今天要補貨</h2>
               <p className="mt-1 text-sm text-ink/60">
                 先補常用品項，避免明天出現缺料。
               </p>
@@ -389,7 +389,7 @@ export default async function OperationsCommandCenterPage() {
             ))}
             {!closeout.lowStockItems.length ? (
               <ActionCard
-                title="目前沒有低庫存品項"
+                title="今天沒有需要補貨的品項"
                 action="先把常用品項的安全庫存補齊，低於門檻時會自動跳到這裡。"
                 links={[{ href: "/inventory", label: "查看庫存" }]}
               />
@@ -400,7 +400,7 @@ export default async function OperationsCommandCenterPage() {
         <div className="card p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-plum">明日預備</h2>
+              <h2 className="text-lg font-bold text-plum">明天先備妥</h2>
               <p className="mt-1 text-sm text-ink/60">
                 先確認明天的預約與班表，避免收工後才發現人力或時段沒接上。
               </p>

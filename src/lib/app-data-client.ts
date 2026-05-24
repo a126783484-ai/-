@@ -231,16 +231,16 @@ export function buildDailyCloseoutSummary(
     .sort((left, right) => left.startTime.localeCompare(right.startTime));
 
   const auditLines = [
-    `今天未完成預約 ${unfinishedAppointments.length} 筆，待收訂單 ${unpaidOrders.length} 筆（${currency.format(
+    `今天先處理：未完成預約 ${unfinishedAppointments.length} 筆、待收訂單 ${unpaidOrders.length} 筆（${currency.format(
       unpaidOrders.reduce((sum, item) => sum + item.outstanding, 0),
-    )}）`,
-    `回訪提醒 ${followUpCustomers.length} 位，低庫存 ${lowStockItems.length} 項，明日預約 ${tomorrowAppointments.length} 筆 / 班表 ${tomorrowShifts.length} 筆`,
+    )}）、低庫存 ${lowStockItems.length} 項`,
+    `可以稍後：回訪提醒 ${followUpCustomers.length} 位、明日預約 ${tomorrowAppointments.length} 筆、明日班表 ${tomorrowShifts.length} 筆`,
     handoffItems.length
-      ? `優先交接：${handoffItems
+      ? `要交接/列印：${handoffItems
           .slice(0, 4)
           .map((item) => `${item.title}｜${item.detail}`)
           .join("；")}`
-      : "優先交接：目前沒有待交接項目",
+      : "要交接/列印：目前沒有待交接項目",
   ];
 
   return {
@@ -346,7 +346,7 @@ export function getWorkspaceSetupGuide(
     action:
       missingAreas.length === 1
         ? `先補 ${missingAreas[0]}，後續頁面就會更完整。`
-        : `目前還缺 ${missingAreas.slice(0, 3).join("、")}${missingAreas.length > 3 ? " 等" : ""}。先從前幾步開始，其他模組就會慢慢有內容。`,
+        : `先補 ${missingAreas.slice(0, 2).join("、")}，其他項目可以後補；這樣後續頁面就會更快開始有可操作內容。`,
     links,
   };
 }
