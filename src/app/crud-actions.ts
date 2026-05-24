@@ -6,6 +6,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { can } from "@/lib/permissions";
 import { buildMissingOrderLineServiceMessage } from "@/lib/order-line-errors";
+import {
+  buildInventoryConsumptionPlan,
+  validateInventoryConsumption,
+  type InventoryConsumptionLine,
+} from "@/lib/inventory-consumption";
 import { resolveOrderStatus } from "@/lib/orders";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
 import type { Database, Json } from "@/lib/database.types";
@@ -16,6 +21,9 @@ import type {
 } from "@/lib/types";
 
 type AppSupabaseClient = SupabaseClient<Database, "public">;
+type OrderLineDraft = Database["public"]["Tables"]["order_lines"]["Insert"] & {
+  category?: string;
+};
 type ActiveWorkspace = {
   supabase: AppSupabaseClient;
   userId: string;
@@ -29,6 +37,9 @@ const pathsToRefresh = [
   "/appointments",
   "/services",
   "/checkout",
+  "/inventory",
+  "/operations",
+  "/reports",
   "/settings",
 ];
 
@@ -603,12 +614,12 @@ async function buildOrderLines(
 ) {
   const { serviceIds, customName, customPrice, customQuantity } =
     orderLineInput(formData);
-  const lines: Database["public"]["Tables"]["order_lines"]["Insert"][] = [];
+  const lines: OrderLineDraft[] = [];
 
   if (serviceIds.length) {
     const { data: services, error } = await supabase
       .from("services")
-      .select("id,name,price")
+      .select("id,name,price,category_id")
       .eq("workspace_id", workspaceId)
       .in("id", serviceIds);
     if (error) throw new Error(`讀取訂單服務明細失敗：${error.message}`);
@@ -618,6 +629,19 @@ async function buildOrderLines(
       const missingServiceIds = serviceIds.filter((serviceId) => !foundIds.has(serviceId));
       throw new Error(buildMissingOrderLineServiceMessage(missingServiceIds));
     }
+    const categoryIds = [...new Set(found.map((service) => service.category_id).filter(Boolean))] as string[];
+    const categoryById = new Map<string, string>();
+    if (categoryIds.length) {
+      const { data: categories, error: categoryError } = await supabase
+        .from("service_categories")
+        .select("id,name")
+        .eq("workspace_id", workspaceId)
+        .in("id", categoryIds);
+      if (categoryError) throw new Error(`讀取服務分類失敗：${categoryError.message}`);
+      for (const category of categories ?? []) {
+        categoryById.set(category.id, category.name);
+      }
+    }
     lines.push(
       ...found.map((service) => ({
         order_id: "",
@@ -625,6 +649,7 @@ async function buildOrderLines(
         name: service.name,
         quantity: 1,
         unit_price: service.price,
+        category: service.category_id ? categoryById.get(service.category_id) : undefined,
       })),
     );
   }
@@ -641,6 +666,64 @@ async function buildOrderLines(
 
   if (!lines.length) throw new Error("請至少加入一筆訂單明細。");
   return lines;
+}
+
+async function loadInventoryForCheckout(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+) {
+  const { data, error } = await supabase
+    .from("inventory_items")
+    .select("id, workspace_id, brand, category, name, cost, retail_price, quantity, low_stock_threshold")
+    .eq("workspace_id", workspaceId);
+
+  if (error) {
+    throw new Error(`讀取庫存失敗：${error.message}`);
+  }
+
+  return (data ?? []).map((item) => ({
+    id: item.id,
+    workspaceId: item.workspace_id,
+    brand: item.brand ?? "",
+    category: item.category,
+    name: item.name,
+    cost: Number(item.cost),
+    retailPrice: Number(item.retail_price),
+    quantity: Number(item.quantity),
+    lowStockThreshold: Number(item.low_stock_threshold),
+  }));
+}
+
+async function consumeInventoryForOrder(
+  supabase: AppSupabaseClient,
+  orderId: string,
+  plan: ReturnType<typeof buildInventoryConsumptionPlan>,
+) {
+  for (const item of plan) {
+    const { data, error } = await (supabase as AppSupabaseClient & {
+      rpc: (
+        fn: string,
+        args: Record<string, unknown>,
+      ) => Promise<{ data: Array<{ movement_id: string }> | null; error: { message: string } | null }>;
+    }).rpc("record_inventory_movement", {
+      p_item_id: item.itemId,
+      p_movement_type: "consume",
+      p_quantity: item.quantity,
+      p_note: `訂單 ${orderId.slice(0, 8)}｜${item.reason}`,
+    });
+
+    if (error) {
+      throw new Error(`自動扣庫存失敗：${error.message}`);
+    }
+
+    const movementId = data?.[0]?.movement_id;
+    if (movementId) {
+      await supabase
+        .from("inventory_movements")
+        .update({ order_id: orderId })
+        .eq("id", movementId);
+    }
+  }
 }
 
 async function buildSingleOrderLine(
@@ -706,6 +789,18 @@ export async function saveOrder(formData: FormData) {
       },
       statusRaw ? (statusRaw as OrderStatus) : "",
     );
+    const inventory = await loadInventoryForCheckout(supabase, workspaceId);
+    const consumptionLines: InventoryConsumptionLine[] = lineTemplates.map((line) => ({
+      serviceId: line.service_id ?? "",
+      name: line.name,
+      quantity: line.quantity ?? 1,
+      category: line.category,
+    }));
+    const consumptionPlan = buildInventoryConsumptionPlan(consumptionLines, inventory);
+    const inventoryValidation = validateInventoryConsumption(consumptionPlan, inventory);
+    if (!inventoryValidation.ok) {
+      throw new Error(inventoryValidation.message);
+    }
 
     const { data: order, error: orderError } = await supabase
       .from("orders")
@@ -728,8 +823,12 @@ export async function saveOrder(formData: FormData) {
 
     const { error: linesError } = await supabase
       .from("order_lines")
-      .insert(lineTemplates.map((line) => ({ ...line, order_id: order.id })));
+      .insert(lineTemplates.map(({ category: _category, ...line }) => ({ ...line, order_id: order.id })));
     if (linesError) throw new Error(`建立訂單明細失敗：${linesError.message}`);
+
+    if (consumptionPlan.length) {
+      await consumeInventoryForOrder(supabase, order.id, consumptionPlan);
+    }
 
     if (appointmentId) {
       await supabase
@@ -753,10 +852,28 @@ export async function addOrderLine(formData: FormData) {
     const orderId = text(formData, "order_id");
     await assertWorkspaceRecord("orders", orderId, workspaceId, supabase);
     const lines = await buildSingleOrderLine(supabase, workspaceId, formData);
+    const inventory = await loadInventoryForCheckout(supabase, workspaceId);
+    const consumptionPlan = buildInventoryConsumptionPlan(
+      lines.map((line) => ({
+        serviceId: line.service_id ?? "",
+        name: line.name,
+        quantity: line.quantity ?? 1,
+        category: line.category,
+      })),
+      inventory,
+    );
+    const inventoryValidation = validateInventoryConsumption(consumptionPlan, inventory);
+    if (!inventoryValidation.ok) {
+      throw new Error(inventoryValidation.message);
+    }
+
     const { error } = await supabase
       .from("order_lines")
-      .insert(lines.map((line) => ({ ...line, order_id: orderId })));
+      .insert(lines.map(({ category: _category, ...line }) => ({ ...line, order_id: orderId })));
     if (error) throw new Error(`新增訂單明細失敗：${error.message}`);
+    if (consumptionPlan.length) {
+      await consumeInventoryForOrder(supabase, orderId, consumptionPlan);
+    }
     refreshApp();
   } catch (error) {
     console.error("addOrderLine failed", error);

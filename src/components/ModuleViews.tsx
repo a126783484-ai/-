@@ -429,6 +429,151 @@ function StaffScheduleChart({
   );
 }
 
+function ScheduleMatrix({
+  data,
+  shifts,
+  title = "班表總表",
+}: {
+  data: AppData;
+  shifts: Shift[];
+  title?: string;
+}) {
+  const dates = useMemo(() => {
+    const fromShifts = [...new Set(shifts.map((shift) => shift.date))].sort();
+    if (fromShifts.length >= 7) return fromShifts.slice(0, 14);
+
+    const today = new Date();
+    const generated = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() + index);
+      return date.toISOString().slice(0, 10);
+    });
+    return [...new Set([...fromShifts, ...generated])].sort().slice(0, 14);
+  }, [shifts]);
+
+  const activeStaff = data.staff.filter((member) => member.active);
+  const shiftByStaffDate = useMemo(() => {
+    const map = new Map<string, Shift[]>();
+    for (const shift of shifts) {
+      const key = `${shift.staffId}:${shift.date}`;
+      map.set(key, [...(map.get(key) ?? []), shift]);
+    }
+    return map;
+  }, [shifts]);
+
+  const rows = activeStaff.map((member) => ({
+    member,
+    cells: dates.map((date) => {
+      const dayShifts = shiftByStaffDate.get(`${member.id}:${date}`) ?? [];
+      return dayShifts.length
+        ? dayShifts.map((shift) => shiftSummary(shift)).join(" / ")
+        : "未排班";
+    }),
+  }));
+
+  const leaveCount = shifts.filter((shift) => shift.leaveType !== "work").length;
+  const uncoveredCells = rows.reduce(
+    (count, row) => count + row.cells.filter((cell) => cell === "未排班").length,
+    0,
+  );
+  const suggestions = [
+    uncoveredCells ? `尚有 ${uncoveredCells} 格未排班，先補尖峰日與可排技師。` : "目前表內日期都有排班或休假紀錄。",
+    leaveCount ? `休假 / 特休 / 補休共 ${leaveCount} 筆，列印前先確認是否影響接客量。` : "目前沒有休假紀錄。",
+    data.appointments.length > data.shifts.length ? "預約數高於班表筆數，需確認人力是否足夠。" : "預約與班表量目前沒有明顯落差。",
+  ];
+
+  function exportCsv() {
+    const csvRows = [
+      ["員工", "角色", ...dates.map(formatDate)],
+      ...rows.map((row) => [
+        row.member.name,
+        staffRoleSelectLabel(row.member.role),
+        ...row.cells,
+      ]),
+    ];
+    const csv = csvRows
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${data.workspace.name}-schedule.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <section className="mb-5 card p-5 print:rounded-none print:border-0 print:bg-transparent print:p-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-plum">{title}</h2>
+          <p className="mt-1 text-sm text-ink/60">員工在列、日期在欄，工作班與各種休假集中在同一張表。</p>
+        </div>
+        <div className="flex flex-wrap gap-2 print:hidden">
+          <button type="button" className="mobile-tap rounded-2xl bg-white px-4 py-2 font-semibold text-plum" onClick={exportCsv}>
+            匯出 Excel CSV
+          </button>
+          <button type="button" className="mobile-tap rounded-2xl bg-plum px-4 py-2 font-semibold text-white" onClick={() => window.print()}>
+            列印班表
+          </button>
+        </div>
+      </div>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+          <thead>
+            <tr className="border-b border-champagne text-xs font-semibold text-ink/60">
+              <th className="sticky left-0 bg-white px-3 py-2 text-plum print:static print:bg-transparent">員工</th>
+              {dates.map((date) => (
+                <th key={date} className="px-3 py-2 text-center">{formatDate(date)}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.member.id} className="border-b border-champagne/70">
+                <th className="sticky left-0 min-w-36 bg-white px-3 py-3 align-top print:static print:bg-transparent">
+                  <span className="block font-bold text-plum">{row.member.name}</span>
+                  <span className="block text-xs font-normal text-ink/55">{staffRoleSelectLabel(row.member.role)}</span>
+                </th>
+                {row.cells.map((cell, index) => {
+                  const tone = cell === "未排班"
+                    ? "bg-white text-ink/45"
+                    : cell.includes("特休")
+                      ? "bg-emerald-500/10 text-emerald-700"
+                      : cell.includes("補休")
+                        ? "bg-sky-500/10 text-sky-700"
+                        : cell.includes("病假")
+                          ? "bg-sage/25 text-plum"
+                          : cell.includes("事假")
+                            ? "bg-rose/10 text-rose"
+                            : cell.includes("國定假日")
+                              ? "bg-indigo-500/10 text-indigo-700"
+                              : cell.includes("休息")
+                                ? "bg-amber/25 text-plum"
+                                : "bg-plum/10 text-plum";
+                  return (
+                    <td key={`${row.member.id}-${dates[index]}`} className="min-w-28 px-2 py-2 align-top">
+                      <span className={`block rounded-xl px-2 py-2 text-center text-xs font-semibold ${tone}`}>
+                        {cell}
+                      </span>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-4 grid gap-2 text-sm text-ink/70 md:grid-cols-3 print:hidden">
+        {suggestions.map((suggestion) => (
+          <p key={suggestion} className="rounded-2xl bg-champagne/30 px-3 py-2">{suggestion}</p>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function namesFromIds(ids: string[], services: ServiceItem[]) {
   return (
     ids
@@ -3219,6 +3364,7 @@ export function StaffView({
               </p>
             </div>
           ) : null}
+          <ScheduleMatrix data={data} shifts={shifts} />
           <StaffScheduleChart
             data={data}
             shifts={shifts}
@@ -3816,9 +3962,10 @@ export function ReportsView({
           hint="需人工複核的退款單"
         />
       </section>
-      <section className="mt-5 card p-5 print:border-0 print:bg-transparent print:p-0">
+      <div className="mt-5">
+        <ScheduleMatrix data={data} shifts={data.shifts} title="班表 Excel 總表" />
         <StaffScheduleChart data={data} shifts={data.shifts} showPrintButton={false} />
-      </section>
+      </div>
       <section className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
         <div className="card p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
