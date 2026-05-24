@@ -77,6 +77,11 @@ type ShiftSummaryRow = Pick<
   "id" | "workspace_id" | "staff_id" | "shift_date" | "start_time" | "end_time" | "leave" | "leave_type"
 >;
 
+type ShiftQueryResult = {
+  data: ShiftSummaryRow[] | null;
+  error: { code?: string; message?: string } | null;
+};
+
 export interface AppData {
   user: { id: string; email: string | null };
   workspace: Workspace;
@@ -374,6 +379,11 @@ function toShift(row: ShiftSummaryRow): Shift {
   };
 }
 
+function isMissingShiftLeaveTypeColumn(error: { code?: string; message?: string } | null | undefined) {
+  if (!error) return false;
+  return error.code === "PGRST204" || error.message?.includes("leave_type") === true;
+}
+
 async function getUser() {
   const config = getSupabaseConfig();
 
@@ -467,7 +477,7 @@ export async function loadAppData(): Promise<AppData> {
     ordersResult,
     inventoryResult,
     inventoryMovementsResult,
-    shiftsResult,
+    shiftsResultWithLeaveType,
     staffInvitesResult,
   ] = await Promise.all([
     supabase
@@ -529,6 +539,29 @@ export async function loadAppData(): Promise<AppData> {
       .order("created_at", { ascending: false }),
   ]);
 
+  let shiftsResult: ShiftQueryResult = shiftsResultWithLeaveType as ShiftQueryResult;
+
+  if (isMissingShiftLeaveTypeColumn(shiftsResultWithLeaveType.error)) {
+    const fallbackShiftsResult = await supabase
+      .from("shifts")
+      .select("id, workspace_id, staff_id, shift_date, start_time, end_time, leave")
+      .eq("workspace_id", workspaceId)
+      .order("shift_date", { ascending: false })
+      .order("start_time", { ascending: false });
+
+    if (!fallbackShiftsResult.error) {
+      shiftsResult = {
+        data: (fallbackShiftsResult.data ?? []).map((row) => ({
+          ...row,
+          leave_type: row.leave ? "rest" : "work",
+        })) as ShiftSummaryRow[],
+        error: null,
+      };
+    } else {
+      console.error("workspace shift query fallback failed", fallbackShiftsResult.error);
+    }
+  }
+
   const firstError = [
     workspaceResult,
     staffResult,
@@ -539,11 +572,15 @@ export async function loadAppData(): Promise<AppData> {
     ordersResult,
     inventoryResult,
     inventoryMovementsResult,
-    shiftsResult,
   ].find((result) => result.error)?.error;
 
   if (firstError) {
     console.error("workspace data query failed", firstError);
+    return emptyAppData(userSummary);
+  }
+
+  if (isMissingShiftLeaveTypeColumn(shiftsResult.error)) {
+    console.error("workspace shift query failed", shiftsResult.error);
     return emptyAppData(userSummary);
   }
 

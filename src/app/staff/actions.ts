@@ -108,6 +108,11 @@ function buildSearchParams(input: Record<string, string>) {
   return new URLSearchParams(input).toString();
 }
 
+function isMissingShiftLeaveTypeColumn(error: { code?: string; message?: string } | null | undefined) {
+  if (!error) return false;
+  return error.code === "PGRST204" || error.message?.includes("leave_type") === true;
+}
+
 function fail(code: string): never {
   redirect(`/staff?${buildSearchParams({ error: code })}`);
 }
@@ -418,7 +423,31 @@ export async function saveStaffShiftAction(formData: FormData) {
           ...payload,
         });
 
-    if (result.error) {
+    if (result.error && isMissingShiftLeaveTypeColumn(result.error)) {
+      const legacyPayload = {
+        workspace_id: context.workspace.id,
+        staff_id: staffId,
+        shift_date: shiftDate,
+        start_time: startTime,
+        end_time: endTime,
+        leave,
+      };
+
+      const legacyResult = shiftId
+        ? await supabase
+            .from("shifts")
+            .update(legacyPayload)
+            .eq("workspace_id", context.workspace.id)
+            .eq("id", shiftId)
+        : await supabase.from("shifts").insert({
+            id: crypto.randomUUID(),
+            ...legacyPayload,
+          });
+
+      if (legacyResult.error) {
+        throw legacyResult.error;
+      }
+    } else if (result.error) {
       throw result.error;
     }
   } catch (error) {
