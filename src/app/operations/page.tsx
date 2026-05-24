@@ -15,6 +15,7 @@ import {
 import type { Customer } from "@/lib/types";
 import { currency, formatDate, formatTime } from "@/lib/utils";
 import { can } from "@/lib/permissions";
+import { buildBusinessHealthReport } from "@/lib/business-health";
 
 export const dynamic = "force-dynamic";
 const handoffKindLabels = {
@@ -103,6 +104,51 @@ function QuickActionLink({
       </span>
       <span className="mt-1 block font-bold text-plum">{detail}</span>
     </Link>
+  );
+}
+
+function businessHealthTone(status: ReturnType<typeof buildBusinessHealthReport>["status"]) {
+  if (status === "ready") return "sage" as const;
+  if (status === "watch") return "amber" as const;
+  return "rose" as const;
+}
+
+function BusinessHealthPanel({ data }: { data: Awaited<ReturnType<typeof loadAppData>> }) {
+  const report = buildBusinessHealthReport(data);
+
+  return (
+    <section className="card p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-plum">店長營業稽核</h2>
+          <p className="mt-1 text-sm text-ink/60">
+            先確認資料來源是否足夠支撐營業，再處理今天的預約、收款、庫存與班表。
+          </p>
+        </div>
+        <StatusPill tone={businessHealthTone(report.status)}>
+          {report.score}% · {report.title}
+        </StatusPill>
+      </div>
+      <div className="mt-4 rounded-3xl border border-champagne bg-white p-4 text-sm leading-6 text-ink/75">
+        {report.managerBrief.map((line) => (
+          <p key={line}>{line}</p>
+        ))}
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {report.areas.map((area) => (
+          <article key={area.key} className="rounded-3xl border border-champagne bg-blush/30 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="font-bold text-plum">{area.label}</h3>
+              <StatusPill tone={businessHealthTone(area.status)}>
+                {area.status === "ready" ? "穩定" : area.status === "watch" ? "注意" : "阻塞"}
+              </StatusPill>
+            </div>
+            <p className="mt-2 text-sm text-ink/70">{area.summary}</p>
+            <p className="mt-2 text-xs leading-5 text-ink/55">{area.action}</p>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -195,6 +241,10 @@ export default async function OperationsCommandCenterPage() {
           <QuickActionLink href="/customers" label="客戶" detail="開啟客戶頁" />
         </div>
       ) : null}
+
+      <div className="mt-5">
+        <BusinessHealthPanel data={data} />
+      </div>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="未完成預約" value={closeout.unfinishedAppointments.length} hint="今天先收尾" />

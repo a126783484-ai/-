@@ -56,6 +56,7 @@ import { shiftLeaveTypeLabels, shiftLeaveTypeStyles, shiftLeaveTypes, shiftSumma
 import { buildStaffInvitePath } from "@/lib/staff-invites";
 import { formatInventoryMovementQuantity, formatInventoryStock } from "@/lib/inventory-feedback";
 import { canManage, moduleAccessMessage, permissionScope } from "@/lib/permissions";
+import { buildBusinessHealthReport } from "@/lib/business-health";
 import { currency, formatDate, formatDateTime, formatTime } from "@/lib/utils";
 
 const liveNotice =
@@ -568,6 +569,64 @@ function ScheduleMatrix({
       <div className="mt-4 grid gap-2 text-sm text-ink/70 md:grid-cols-3 print:hidden">
         {suggestions.map((suggestion) => (
           <p key={suggestion} className="rounded-2xl bg-champagne/30 px-3 py-2">{suggestion}</p>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function businessHealthTone(status: ReturnType<typeof buildBusinessHealthReport>["status"]) {
+  if (status === "ready") return "sage" as const;
+  if (status === "watch") return "amber" as const;
+  return "rose" as const;
+}
+
+function BusinessHealthPanel({
+  data,
+  compact = false,
+}: {
+  data: AppData;
+  compact?: boolean;
+}) {
+  const report = useMemo(() => buildBusinessHealthReport(data), [data]);
+
+  return (
+    <section className="card p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-plum">營業來源稽核</h2>
+          <p className="mt-1 text-sm text-ink/60">
+            以店長視角檢查主檔、交易、庫存、班表是否能支撐真實營業與報表。
+          </p>
+        </div>
+        <StatusPill tone={businessHealthTone(report.status)}>
+          {report.score}% · {report.title}
+        </StatusPill>
+      </div>
+      <div className="mt-4 rounded-3xl border border-champagne bg-white p-4 text-sm leading-6 text-ink/75">
+        {report.managerBrief.map((line) => (
+          <p key={line}>{line}</p>
+        ))}
+      </div>
+      <div className={`mt-4 grid gap-3 ${compact ? "md:grid-cols-2" : "md:grid-cols-2 xl:grid-cols-4"}`}>
+        {report.areas.map((area) => (
+          <article key={area.key} className="rounded-3xl border border-champagne bg-blush/30 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="font-bold text-plum">{area.label}</h3>
+              <StatusPill tone={businessHealthTone(area.status)}>
+                {area.status === "ready" ? "穩定" : area.status === "watch" ? "注意" : "阻塞"}
+              </StatusPill>
+            </div>
+            <p className="mt-2 text-sm text-ink/70">{area.summary}</p>
+            {!compact || area.status !== "ready" ? (
+              <p className="mt-2 text-xs leading-5 text-ink/55">{area.action}</p>
+            ) : null}
+          </article>
+        ))}
+      </div>
+      <div className="mt-4 grid gap-2 text-sm text-ink/70 md:grid-cols-2 print:hidden">
+        {report.operatingRules.slice(0, compact ? 2 : 4).map((rule) => (
+          <p key={rule} className="rounded-2xl bg-white px-3 py-2">{rule}</p>
         ))}
       </div>
     </section>
@@ -1942,6 +2001,9 @@ export function DashboardView({ data }: { data: AppData }) {
           ]}
         />
       ) : null}
+      <div className="mt-5">
+        <BusinessHealthPanel data={data} compact />
+      </div>
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="今日預約數"
@@ -3935,6 +3997,9 @@ export function ReportsView({
           </pre>
         </div>
       </section>
+      <div className="mt-5 print:hidden">
+        <BusinessHealthPanel data={data} />
+      </div>
       <section className="mt-5 grid gap-4 md:grid-cols-5 print:grid-cols-2">
         <MetricCard
           label="月營收"

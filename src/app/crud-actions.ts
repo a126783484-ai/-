@@ -726,6 +726,44 @@ async function consumeInventoryForOrder(
   }
 }
 
+async function recordCustomerVisitAfterOrder(
+  supabase: AppSupabaseClient,
+  workspaceId: string,
+  customerId: string,
+  status: OrderStatus,
+  now = new Date(),
+) {
+  if (status === "refunded" || status === "unpaid") return;
+
+  const lastVisit = now.toISOString().slice(0, 10);
+  const nextReminderDate = new Date(now);
+  nextReminderDate.setDate(nextReminderDate.getDate() + 30);
+
+  const { data: customer, error: lookupError } = await supabase
+    .from("customers")
+    .select("next_reminder")
+    .eq("workspace_id", workspaceId)
+    .eq("id", customerId)
+    .maybeSingle();
+
+  if (lookupError) {
+    throw new Error(`讀取客戶回訪資料失敗：${lookupError.message}`);
+  }
+
+  const { error } = await supabase
+    .from("customers")
+    .update({
+      last_visit: lastVisit,
+      next_reminder: customer?.next_reminder ?? nextReminderDate.toISOString().slice(0, 10),
+    })
+    .eq("workspace_id", workspaceId)
+    .eq("id", customerId);
+
+  if (error) {
+    throw new Error(`更新客戶回訪資料失敗：${error.message}`);
+  }
+}
+
 async function buildSingleOrderLine(
   supabase: AppSupabaseClient,
   workspaceId: string,
@@ -837,6 +875,8 @@ export async function saveOrder(formData: FormData) {
         .eq("id", appointmentId)
         .eq("workspace_id", workspaceId);
     }
+
+    await recordCustomerVisitAfterOrder(supabase, workspaceId, customerId, status);
 
     refreshApp();
   } catch (error) {

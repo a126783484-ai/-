@@ -25,6 +25,28 @@ const inventory: InventoryItem[] = [
     quantity: 18,
     lowStockThreshold: 8,
   },
+  {
+    id: "lash",
+    workspaceId: "ws",
+    brand: "LashPro",
+    category: "睫毛材料",
+    name: "C 翹睫毛 0.07 10mm",
+    cost: 260,
+    retailPrice: 420,
+    quantity: 6,
+    lowStockThreshold: 5,
+  },
+  {
+    id: "lash-glue",
+    workspaceId: "ws",
+    brand: "LashPro",
+    category: "睫毛材料",
+    name: "低敏睫毛膠",
+    cost: 480,
+    retailPrice: 680,
+    quantity: 4,
+    lowStockThreshold: 3,
+  },
 ];
 
 describe("inventory consumption planning", () => {
@@ -59,5 +81,19 @@ describe("inventory consumption planning", () => {
     );
 
     expect(plan).toEqual([expect.objectContaining({ itemId: "cotton", quantity: 2 })]);
+  });
+
+  it("keeps lash services on lash materials instead of nail gel", () => {
+    const plan = buildInventoryConsumptionPlan(
+      [{ serviceId: "svc", name: "日式自然美睫 120 根", category: "美睫", quantity: 1 }],
+      inventory,
+    );
+
+    expect(plan).toEqual(expect.arrayContaining([
+      expect.objectContaining({ itemId: "lash", quantity: 1 }),
+      expect.objectContaining({ itemId: "lash-glue", quantity: 1 }),
+    ]));
+    expect(plan).toHaveLength(2);
+    expect(plan).not.toEqual(expect.arrayContaining([expect.objectContaining({ itemId: "gel" })]));
   });
 });

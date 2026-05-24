@@ -31,6 +31,17 @@ function findInventoryItem(
   });
 }
 
+function findInventoryItemMatching(
+  inventory: InventoryItem[],
+  matches: (haystack: string) => boolean,
+  excludedIds: Set<string>,
+) {
+  return inventory.find((item) => {
+    if (excludedIds.has(item.id)) return false;
+    return matches(compact(`${item.name} ${item.category} ${item.brand}`));
+  });
+}
+
 function addConsumption(
   plan: Map<string, InventoryConsumptionPlanItem>,
   item: InventoryItem | undefined,
@@ -97,9 +108,16 @@ export function buildInventoryConsumptionPlan(
     if (includesAny(text, ["美睫", "睫毛"])) {
       addConsumption(
         plan,
-        findInventoryItem(inventory, ["睫", "膠", "耗材"], excludedIds),
+        findInventoryItemMatching(inventory, (haystack) => includesAny(haystack, ["睫毛", "睫"]), excludedIds),
         quantity,
-        `${line.name} 美睫耗材`,
+        `${line.name} 睫毛材料`,
+        excludedIds,
+      );
+      addConsumption(
+        plan,
+        findInventoryItemMatching(inventory, (haystack) => haystack.includes("睫") && haystack.includes("膠"), excludedIds),
+        quantity,
+        `${line.name} 美睫膠材`,
         excludedIds,
       );
     }
