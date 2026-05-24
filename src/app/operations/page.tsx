@@ -14,6 +14,7 @@ import {
 } from "@/lib/orders";
 import type { Customer } from "@/lib/types";
 import { currency, formatDate, formatTime } from "@/lib/utils";
+import { can } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 const handoffKindLabels = {
@@ -112,6 +113,24 @@ type ReminderCustomer = {
 
 export default async function OperationsCommandCenterPage() {
   const data = await loadAppData();
+  const role = data.currentMember?.role ?? "staff";
+
+  if (!can(role, "dashboard")) {
+    return (
+      <AppShell
+        title="營運指揮中心"
+        subtitle="這裡會整理今天要處理、明天要先備的重點，但只開放給有營運權限的角色。"
+        workspace={data.workspace}
+        role={role}
+      >
+        <EmptyState
+          title="你的角色無法查看營運指揮中心"
+          action="只有店主、管理員與櫃台可以使用這個頁面。若你只是要看自己的排程，請改看技師工作台。"
+        />
+      </AppShell>
+    );
+  }
+
   const now = new Date();
   const closeout = buildDailyCloseoutSummary(data, now);
 

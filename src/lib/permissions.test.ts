@@ -29,4 +29,11 @@ describe("role permissions", () => {
     expect(canManage("front_desk", "appointments")).toBe(true);
     expect(permissionScope("front_desk", "appointments")).toBe("manage");
   });
+
+  it("keeps dashboard and reports limited to the intended roles", () => {
+    expect(can("front_desk", "dashboard")).toBe(true);
+    expect(can("technician", "dashboard")).toBe(false);
+    expect(can("admin", "reports")).toBe(true);
+    expect(can("staff", "reports")).toBe(false);
+  });
 });
