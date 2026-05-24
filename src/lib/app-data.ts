@@ -554,7 +554,7 @@ export async function loadAppData(): Promise<AppData> {
       shiftsResult = {
         data: (fallbackShiftsResult.data ?? []).map((row) => ({
           ...row,
-          leave_type: row.leave ? "rest" : "work",
+          leave_type: null as unknown as string,
         })) as ShiftSummaryRow[],
         error: null,
       };
