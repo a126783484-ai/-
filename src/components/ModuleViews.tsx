@@ -45,8 +45,7 @@ import {
   resolveOrderStatus,
 } from "@/lib/orders";
 import type { AppData } from "@/lib/app-data-client";
-import { getWorkspaceSetupGuide, isWorkspaceEmpty } from "@/lib/app-data-client";
-import { buildDailyCloseoutSummary } from "@/lib/app-data";
+import { buildDailyCloseoutSummary, getWorkspaceSetupGuide, isWorkspaceEmpty } from "@/lib/app-data-client";
 import type { Appointment, Customer, InventoryItem, Order, ServiceItem, Shift, StaffMember } from "@/lib/types";
 import { buildStaffInvitePath } from "@/lib/staff-invites";
 import { formatInventoryMovementQuantity, formatInventoryStock } from "@/lib/inventory-feedback";
