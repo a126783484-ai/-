@@ -2389,7 +2389,13 @@ export function InventoryView({
     const aLow = a.quantity <= a.lowStockThreshold;
     const bLow = b.quantity <= b.lowStockThreshold;
     if (aLow !== bLow) return aLow ? -1 : 1;
-    return a.quantity - b.quantity;
+    const aUrgent = a.quantity <= 1;
+    const bUrgent = b.quantity <= 1;
+    if (aUrgent !== bUrgent) return aUrgent ? -1 : 1;
+    const aGap = Math.max(a.lowStockThreshold - a.quantity, 0);
+    const bGap = Math.max(b.lowStockThreshold - b.quantity, 0);
+    if (aGap !== bGap) return bGap - aGap;
+    return a.quantity - b.quantity || a.name.localeCompare(b.name);
   });
   const lowStockCount = data.inventory.filter(
     (item) => item.quantity <= item.lowStockThreshold,
@@ -2405,19 +2411,27 @@ export function InventoryView({
   const movementOutflow = data.inventoryMovements
     .filter((movement) => movement.quantity < 0)
     .reduce((sum, movement) => sum + Math.abs(movement.quantity), 0);
-  const recentMovements = data.inventoryMovements.slice(0, 25);
+  const recentMovements = [...data.inventoryMovements]
+    .sort(
+      (left, right) =>
+        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime() ||
+        left.itemId.localeCompare(right.itemId) ||
+        right.quantity - left.quantity,
+    )
+    .slice(0, 25);
   const lowStockItems = inventoryRows.filter((item) => item.quantity <= item.lowStockThreshold);
+  const urgentLowStockCount = lowStockItems.filter((item) => item.quantity <= 1).length;
   const inventoryPrintSummary = [
     `${data.workspace.name}｜${formatDateTime(now.toISOString())} 庫存摘要`,
-    `品項 ${data.inventory.length}、低庫存 ${lowStockCount}、庫存成本 ${currency.format(totalValue)}、淨異動 ${netMovement.toFixed(2)} 件`,
+    `品項 ${data.inventory.length}、低庫存 ${lowStockCount}、其中 ${urgentLowStockCount} 項只剩 1 件或以下、庫存成本 ${currency.format(totalValue)}、淨異動 ${netMovement.toFixed(2)} 件`,
     lowStockItems.length
-      ? `需補貨：${lowStockItems
+      ? `補貨優先：${lowStockItems
           .slice(0, 5)
           .map((item) => `${item.name} ${formatInventoryStock(item.quantity, item.lowStockThreshold)}`)
           .join("；")}`
-      : "需補貨：目前沒有低庫存品項",
+      : "補貨優先：目前沒有低庫存品項",
     recentMovements.length
-      ? `最近異動：${recentMovements
+      ? `最近 5 筆異動：${recentMovements
           .slice(0, 5)
           .map((movement) => {
             const itemName = data.inventory.find((item) => item.id === movement.itemId)?.name ?? movement.itemId;
@@ -2486,6 +2500,51 @@ export function InventoryView({
         <MetricCard label="低庫存" value={`${lowStockCount}`} hint="已低於警戒值" />
         <MetricCard label="庫存成本" value={currency.format(totalValue)} hint="依成本估值" />
         <MetricCard label="淨異動" value={netMovement.toFixed(2)} hint={`出庫累計 ${movementOutflow.toFixed(2)}`} />
+      </section>
+      <section className="mt-5 card p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-plum">低庫存優先處理</h2>
+            <p className="mt-1 text-sm text-ink/60">
+              先補只剩 1 件或以下的品項，再依低庫存名單往下處理，避免明天臨時缺料。
+            </p>
+          </div>
+          <StatusPill tone={lowStockCount ? "amber" : "sage"}>
+            {lowStockCount ? `${lowStockCount} 項需補貨` : "目前沒有低庫存"}
+          </StatusPill>
+        </div>
+        {lowStockItems.length ? (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {lowStockItems.slice(0, 6).map((item) => {
+              const urgent = item.quantity <= 1;
+              return (
+                <article key={item.id} className="rounded-3xl border border-champagne bg-white p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-plum">{item.name}</p>
+                      <p className="mt-1 text-xs text-ink/60">
+                        {item.brand}｜{item.category}
+                      </p>
+                    </div>
+                    <StatusPill tone={urgent ? "rose" : "amber"}>
+                      {formatInventoryStock(item.quantity, item.lowStockThreshold)}
+                    </StatusPill>
+                  </div>
+                  <p className="mt-2 text-sm text-ink/70">
+                    {urgent ? "先補貨再排班，避免今天就用完。" : "先安排補貨，明天前補齊會比較穩。"}
+                  </p>
+                </article>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-4">
+            <EmptyState
+              title="目前沒有低庫存品項"
+              action="庫存都在安全範圍內時，這裡會保持簡潔；一旦低於警戒值就會自動列出優先補貨名單。"
+            />
+          </div>
+        )}
       </section>
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
         {canManageInventory ? (
@@ -2595,11 +2654,20 @@ export function InventoryView({
         />
       </div>
       <div id="inventory-log" className="mt-5 scroll-mt-28">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-plum">異動紀錄</h2>
+            <p className="mt-1 text-sm text-ink/60">
+              預設依最新時間排序，先看出庫與調整，再用搜尋和篩選回查歷史。
+            </p>
+          </div>
+          <StatusPill tone="sage">{recentMovements.length} 筆最近異動</StatusPill>
+        </div>
         <ModuleTable
           rows={recentMovements}
           searchPlaceholder="搜尋異動、備註、品項"
           filterOptions={["purchase", "consume", "adjust"]}
-          emptyTitle="尚無庫存異動紀錄"
+          emptyTitle="尚無庫存異動紀錄，先從第一筆入庫開始"
           columns={[
             {
               key: "time",
@@ -3515,6 +3583,11 @@ export function ReportsView({
         .map((item) => `${handoffKindLabels[item.kind]} ${item.title}｜${item.detail}`)
         .join("；")
     : "目前沒有需要交接的項目";
+  const urgentLowStockCount = closeout.lowStockItems.filter((item) => item.quantity <= 1).length;
+  const lowStockPreview = closeout.lowStockItems
+    .slice(0, 3)
+    .map((item) => `${item.name}｜剩 ${item.quantity}/${item.lowStockThreshold}`)
+    .join("；");
   const reportMonthLabel = new Intl.DateTimeFormat("zh-TW", {
     year: "numeric",
     month: "long",
@@ -3524,7 +3597,7 @@ export function ReportsView({
     `產出時間：${formatDateTime(now.toISOString())}`,
     `月營收：${currency.format(metrics.monthRevenue)} · 客單價：${currency.format(avg)}`,
     `待收金額：${currency.format(closeout.totalOutstanding)} · 待跟進：${followUpCount} 筆`,
-    `今天先處理：未完成預約 ${closeout.unfinishedAppointments.length} / 待收訂單 ${outstandingOrders.length} / 低庫存 ${closeout.lowStockItems.length}`,
+    `今天先處理：未完成預約 ${closeout.unfinishedAppointments.length} / 待收訂單 ${outstandingOrders.length} / 低庫存 ${closeout.lowStockItems.length}${urgentLowStockCount ? `（${urgentLowStockCount} 項只剩 1 件或以下）` : ""}`,
     `已退款：${refundedOrders.length} 筆`,
     paymentMethodBreakdown.length
       ? `付款方式：${paymentMethodBreakdown.map((item) => `${item.label} ${item.count} 筆`).join("／")}`
@@ -3547,11 +3620,8 @@ export function ReportsView({
           .join("；")}`
       : "待收款前 0 筆：目前沒有待收款訂單",
     closeout.lowStockItems.length
-      ? `低庫存：${closeout.lowStockItems
-          .slice(0, 3)
-          .map((item) => `${item.name}｜剩 ${item.quantity}/${item.lowStockThreshold}`)
-          .join("；")}`
-      : "低庫存：目前沒有品項低於安全庫存",
+      ? `低庫存優先補貨：${lowStockPreview}`
+      : "低庫存優先補貨：目前沒有品項低於安全庫存",
     closeout.tomorrowAppointments.length
       ? `明日預約：${closeout.tomorrowAppointments
           .slice(0, 3)
@@ -3603,7 +3673,7 @@ export function ReportsView({
           <div>
             <h2 className="text-lg font-bold text-plum">主管摘要 / 可列印版</h2>
             <p className="mt-1 text-sm text-ink/60">
-              這一段可以直接列印或複製給店長、老闆或合夥人，保留今天要做、可以等和要交接的重點。
+              這一段可以直接列印或複製給店長、老闆或合夥人，保留今天要處理、可以稍後和要交接的重點。
             </p>
           </div>
           <button
@@ -3611,7 +3681,7 @@ export function ReportsView({
             className="mobile-tap rounded-2xl bg-plum px-4 py-2 font-semibold text-white print:hidden"
             onClick={() => window.print()}
           >
-            列印 / 交接
+            列印 / 匯出
           </button>
         </div>
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -3750,7 +3820,14 @@ export function ReportsView({
         <CloseoutCard
           title="今天要補的庫存"
           value={`${closeout.lowStockItems.length}`}
-          detail="先補常用品項，避免明天缺料。"
+          detail={
+            closeout.lowStockItems.length
+              ? `先補 ${closeout.lowStockItems
+                  .slice(0, 2)
+                  .map((item) => `${item.name}（剩 ${item.quantity}/${item.lowStockThreshold}）`)
+                  .join("、")}，避免明天缺料。`
+              : "目前沒有低庫存品項，補貨清單保持乾淨。"
+          }
           links={[
             { href: "/inventory", label: "管理庫存" },
           ]}

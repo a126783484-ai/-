@@ -134,13 +134,22 @@ export function buildDailyCloseoutSummary(
 
   const lowStockItems = [...data.inventory]
     .filter((item) => item.quantity <= item.lowStockThreshold)
-    .sort(
-      (left, right) =>
-        left.quantity / Math.max(left.lowStockThreshold, 1) -
-          right.quantity / Math.max(right.lowStockThreshold, 1) ||
-        left.quantity - right.quantity ||
-        left.name.localeCompare(right.name),
-    );
+    .sort((left, right) => {
+      const leftUrgent = left.quantity <= 1;
+      const rightUrgent = right.quantity <= 1;
+      if (leftUrgent !== rightUrgent) {
+        return leftUrgent ? -1 : 1;
+      }
+
+      const leftGap = Math.max(left.lowStockThreshold - left.quantity, 0);
+      const rightGap = Math.max(right.lowStockThreshold - right.quantity, 0);
+      if (leftGap !== rightGap) {
+        return rightGap - leftGap;
+      }
+
+      return left.quantity - right.quantity || left.name.localeCompare(right.name);
+    });
+  const urgentLowStockCount = lowStockItems.filter((item) => item.quantity <= 1).length;
 
   const followUpCustomers = data.customers
     .map((customer) => {
@@ -233,7 +242,7 @@ export function buildDailyCloseoutSummary(
     ...lowStockItems.slice(0, 2).map((item) => ({
       kind: "inventory" as const,
       title: item.name,
-      detail: `剩 ${item.quantity}/${item.lowStockThreshold}，${item.quantity <= 1 ? "需要立即補貨" : "請安排補貨"}`,
+      detail: `剩 ${item.quantity}/${item.lowStockThreshold}${item.quantity <= 1 ? "，需要立即補貨" : "，請安排補貨"}`,
       tone: "amber" as const,
       href: "/inventory",
     })),
@@ -254,7 +263,7 @@ export function buildDailyCloseoutSummary(
   const auditLines = [
     `今天先處理：未完成預約 ${unfinishedAppointments.length} 筆、待收訂單 ${unpaidOrders.length} 筆（${currency.format(
       unpaidOrders.reduce((sum, item) => sum + item.outstanding, 0),
-    )}）、已退款 ${refundedOrders.length} 筆、低庫存 ${lowStockItems.length} 項`,
+    )}）、已退款 ${refundedOrders.length} 筆、低庫存 ${lowStockItems.length} 項${urgentLowStockCount ? `（${urgentLowStockCount} 項只剩 1 件或以下）` : ""}`,
     paymentMethodBreakdown.length
       ? `付款方式：${paymentMethodBreakdown
           .map((item) => `${item.label} ${item.count} 筆`)
