@@ -2231,6 +2231,8 @@ export function CustomersView({
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const editing = data.customers.find((customer) => customer.id === editingId);
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
+  const workspaceEmpty = isWorkspaceEmpty(data);
 
   useEffect(() => {
     if (notice?.kind === "success") {
@@ -2244,7 +2246,33 @@ export function CustomersView({
       subtitle="沉澱客戶偏好、禁忌與回訪提醒，讓美甲沙龍更容易做熟客經營。"
       {...shellProps(data)}
     >
+      {setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide title={setupGuide.title} action={setupGuide.action} links={setupGuide.links} />
+        </div>
+      ) : null}
+      {workspaceEmpty && !setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide
+            title="先建立第一位客戶"
+            action="先把店鋪設定與服務準備好，再建立第一位客戶；這樣後續的預約、回訪與收款才會有對象可用。"
+            links={[
+              { href: "/settings?message=settings_setup_hint", label: "先去設定" },
+              { href: "/services", label: "建立服務" },
+              { href: "/appointments", label: "建立預約" },
+            ]}
+          />
+        </div>
+      ) : null}
       <NoticeBanner notice={notice} />
+      {data.customers.length === 0 ? (
+        <div className="mb-5">
+          <EmptyState
+            title="目前還沒有客戶資料"
+            action="先用下方表單建立第一位客戶，之後預約、回訪提醒與標籤才會開始累積。"
+          />
+        </div>
+      ) : null}
       <div className="mb-5">
         <CustomerForm
           key={editing?.id ?? "new"}
@@ -3214,12 +3242,32 @@ export function TechnicianView({ data }: { data: AppData }) {
   const mine = technicianId
     ? data.appointments.filter((item) => item.technicianId === technicianId)
     : [];
+  const setupGuide = !data.needsWorkspace ? getWorkspaceSetupGuide(data) : null;
+  const workspaceEmpty = isWorkspaceEmpty(data);
   return (
     <AppShell
       title="技師工作台"
       subtitle="技師只看自己的今日預約、客戶注意事項、服務紀錄與服務前後照片欄位。"
       {...shellProps(data)}
     >
+      {setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide title={setupGuide.title} action={setupGuide.action} links={setupGuide.links} />
+        </div>
+      ) : null}
+      {workspaceEmpty && !setupGuide ? (
+        <div className="mb-5">
+          <SetupGuide
+            title="先建立可指派的預約"
+            action="先完成店鋪設定、服務與客戶資料，再建立第一筆預約並指派到技師，這裡才會開始顯示今日工作清單。"
+            links={[
+              { href: "/settings?message=settings_setup_hint", label: "先去設定" },
+              { href: "/services", label: "建立服務" },
+              { href: "/appointments", label: "建立預約" },
+            ]}
+          />
+        </div>
+      ) : null}
       <div className="grid gap-4">
         {mine.length ? (
           mine.map((appointment) => {
