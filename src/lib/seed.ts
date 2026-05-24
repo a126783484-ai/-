@@ -87,10 +87,11 @@ export const inventory: InventoryItem[] = [
 ];
 
 export const shifts: Shift[] = [
-  { id: "shift_ava", workspaceId: workspace.id, staffId: "st_ava", date: "2026-05-15", startTime: "11:00", endTime: "20:00", leave: false },
-  { id: "shift_nina", workspaceId: workspace.id, staffId: "st_nina", date: "2026-05-15", startTime: "13:00", endTime: "21:00", leave: false },
-  { id: "shift_lulu", workspaceId: workspace.id, staffId: "st_lulu", date: "2026-05-15", startTime: "10:30", endTime: "19:30", leave: false },
-  { id: "shift_ava_rest", workspaceId: workspace.id, staffId: "st_ava", date: "2026-05-16", startTime: "10:00", endTime: "18:00", leave: true }
+  { id: "shift_ava", workspaceId: workspace.id, staffId: "st_ava", date: "2026-05-15", startTime: "11:00", endTime: "20:00", leave: false, leaveType: "work" },
+  { id: "shift_nina", workspaceId: workspace.id, staffId: "st_nina", date: "2026-05-15", startTime: "13:00", endTime: "21:00", leave: false, leaveType: "work" },
+  { id: "shift_lulu", workspaceId: workspace.id, staffId: "st_lulu", date: "2026-05-15", startTime: "10:30", endTime: "19:30", leave: false, leaveType: "work" },
+  { id: "shift_ava_annual", workspaceId: workspace.id, staffId: "st_ava", date: "2026-05-16", startTime: "10:00", endTime: "18:00", leave: true, leaveType: "annual" },
+  { id: "shift_nina_comp", workspaceId: workspace.id, staffId: "st_nina", date: "2026-05-16", startTime: "09:00", endTime: "17:00", leave: true, leaveType: "comp_time" }
 ];
 
 export const inventoryMovements: InventoryMovement[] = [

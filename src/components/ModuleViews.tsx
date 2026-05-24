@@ -52,6 +52,7 @@ import {
 import type { AppData } from "@/lib/app-data-client";
 import { buildDailyCloseoutSummary, getWorkspaceSetupGuide, isWorkspaceEmpty } from "@/lib/app-data-client";
 import type { Appointment, Customer, InventoryItem, Order, ServiceItem, Shift, StaffMember } from "@/lib/types";
+import { shiftLeaveTypeLabels, shiftLeaveTypeStyles, shiftLeaveTypes, shiftSummary as formatShiftSummary } from "@/lib/shifts";
 import { buildStaffInvitePath } from "@/lib/staff-invites";
 import { formatInventoryMovementQuantity, formatInventoryStock } from "@/lib/inventory-feedback";
 import { canManage, moduleAccessMessage, permissionScope } from "@/lib/permissions";
@@ -228,7 +229,11 @@ function currentDateInput() {
 }
 
 function shiftSummary(shift: Shift) {
-  return shift.leave ? "休假 / 休息" : `${shift.startTime}–${shift.endTime}`;
+  return formatShiftSummary(shift.leaveType, shift.startTime, shift.endTime);
+}
+
+function shiftBlockLabel(shift: Shift) {
+  return shift.leaveType === "work" ? "工作班" : shiftLeaveTypeLabels[shift.leaveType];
 }
 
 function shiftTimeToMinutes(value: string) {
@@ -247,10 +252,12 @@ function StaffScheduleChart({
   data,
   shifts,
   onEditShift,
+  showPrintButton = true,
 }: {
   data: AppData;
   shifts: Shift[];
   onEditShift?: (shiftId: string) => void;
+  showPrintButton?: boolean;
 }) {
   const timelineTicks = [0, 4, 8, 12, 16, 20, 24];
   const chartDates = useMemo(() => {
@@ -276,19 +283,31 @@ function StaffScheduleChart({
         <div>
           <h2 className="text-lg font-bold text-plum">班表圖表</h2>
           <p className="mt-1 text-sm text-ink/60">
-            依日期分組的可列印時間軸。點選任一班表條目即可回到編輯狀態。
+            依日期分組的可列印時間軸。點選任一班表條目即可回到編輯狀態，休假類型會用不同顏色標示。
           </p>
         </div>
-        <button
-          type="button"
-          className="mobile-tap rounded-2xl bg-plum px-4 py-2 font-semibold text-white print:hidden"
-          onClick={() => window.print()}
-        >
-          列印圖表
-        </button>
+        {showPrintButton ? (
+          <button
+            type="button"
+            className="mobile-tap rounded-2xl bg-plum px-4 py-2 font-semibold text-white print:hidden"
+            onClick={() => window.print()}
+          >
+            列印圖表
+          </button>
+        ) : null}
       </div>
       <div className="mt-4 hidden rounded-2xl bg-champagne/30 px-4 py-3 text-sm text-ink/70 print:block">
         列印時將保留此圖表，方便直接張貼或攜出。
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {shiftLeaveTypes.map((leaveType) => (
+          <span
+            key={leaveType}
+            className={`rounded-full px-3 py-1 text-[11px] font-semibold ring-1 ${shiftLeaveTypeStyles[leaveType].badge}`}
+          >
+            {shiftLeaveTypeLabels[leaveType]}
+          </span>
+        ))}
       </div>
       {chartDates.length ? (
         <div className="mt-5 space-y-5">
@@ -341,28 +360,30 @@ function StaffScheduleChart({
                         {memberShifts.length ? (
                           memberShifts.map((shift) => {
                             const startMinutes = shiftTimeToMinutes(shift.startTime);
-                            const endMinutes = shift.leave
+                            const endMinutes = shift.leaveType === "work"
                               ? 1440
                               : Math.min(Math.max(shiftTimeToMinutes(shift.endTime), startMinutes + 30), 1440);
-                            const blockClassName = `absolute inset-y-2 rounded-xl px-3 py-2.5 text-left text-xs font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-plum/30 ${
-                              shift.leave ? "bg-amber text-plum" : "bg-plum text-white"
-                            }`;
-                            const blockStyle = shift.leave
-                              ? { left: "0.5rem", right: "0.5rem" }
-                              : {
-                                  left: shiftMinutesToPercent(startMinutes),
-                                  width: shiftMinutesToPercent(endMinutes - startMinutes),
-                                };
+                            const blockClassName = `absolute inset-y-2 rounded-xl px-3 py-2.5 text-left text-xs font-semibold shadow-sm transition focus:outline-none focus:ring-2 ring-1 ${shiftLeaveTypeStyles[shift.leaveType].block}`;
                             const content = (
                               <>
-                                <span className="block truncate">
-                                  {shift.leave ? "休假 / 休息" : shiftSummary(shift)}
+                                <span className="block truncate">{shiftBlockLabel(shift)}</span>
+                                <span className={`block truncate ${shift.leaveType === "work" ? "text-white/80" : "text-plum/70"}`}>
+                                  {shift.leaveType === "work" ? `${shift.startTime}–${shift.endTime}` : "全日顏色標示"}
                                 </span>
-                                <span className={`block truncate ${shift.leave ? "text-plum/70" : "text-white/80"}`}>
+                                <span className={`block truncate ${shift.leaveType === "work" ? "text-white/80" : "text-plum/70"}`}>
                                   {onEditShift ? "點選編輯" : "可列印 / 檢視"}
                                 </span>
                               </>
                             );
+                            const blockStyle = shift.leaveType === "work"
+                              ? {
+                                  left: shiftMinutesToPercent(startMinutes),
+                                  width: shiftMinutesToPercent(endMinutes - startMinutes),
+                                }
+                              : {
+                                  left: "0.5rem",
+                                  right: "0.5rem",
+                                };
 
                             return onEditShift ? (
                               <button
@@ -1648,14 +1669,18 @@ function ShiftForm({
             defaultValue={defaultEnd}
           />
         </label>
-        <label className="flex items-start gap-3 rounded-2xl bg-white p-4 font-semibold text-plum md:col-span-2">
-          <input
-            type="checkbox"
-            name="leave"
-            defaultChecked={shift?.leave ?? false}
-            className="size-5 accent-plum"
-          />
-          休假 / 休息
+        <label className="text-sm font-semibold text-plum md:col-span-2">
+          班別類型
+          <select name="leaveType" className={fieldClass()} defaultValue={shift?.leaveType ?? (shift?.leave ? "rest" : "work")}>
+            {shiftLeaveTypes.map((leaveType) => (
+              <option key={leaveType} value={leaveType}>
+                {shiftLeaveTypeLabels[leaveType]}
+              </option>
+            ))}
+          </select>
+          <p className="mt-2 text-xs leading-5 text-ink/60">
+            工作班依起迄時間顯示；休假類型會在班表圖上改成全日色塊，列印也會保留。
+          </p>
         </label>
       </div>
       <div className="mt-4">
@@ -3360,7 +3385,7 @@ export function StaffView({
                         <p className="text-sm text-ink/60">{formatDate(shift.date)} ｜ {shiftSummary(shift)}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        {shift.leave ? <StatusPill tone="amber">休息</StatusPill> : <StatusPill tone="sage">排班中</StatusPill>}
+                        {shift.leaveType === "work" ? <StatusPill tone="sage">排班中</StatusPill> : <StatusPill tone="amber">{shiftLeaveTypeLabels[shift.leaveType]}</StatusPill>}
                         <button
                           type="button"
                           className="mobile-tap w-full rounded-xl bg-white px-3 py-2 font-semibold text-plum sm:w-auto"
@@ -3790,6 +3815,9 @@ export function ReportsView({
           value={`${refundedOrders.length}`}
           hint="需人工複核的退款單"
         />
+      </section>
+      <section className="mt-5 card p-5 print:border-0 print:bg-transparent print:p-0">
+        <StaffScheduleChart data={data} shifts={data.shifts} showPrintButton={false} />
       </section>
       <section className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
         <div className="card p-5">

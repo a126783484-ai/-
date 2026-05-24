@@ -6,10 +6,11 @@ import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseConfig } from "@/lib/supabase";
 import { can } from "@/lib/permissions";
-import type { Role } from "@/lib/types";
+import type { Role, ShiftLeaveType } from "@/lib/types";
 import { getCurrentWorkspaceContext } from "@/lib/workspace";
 import type { Database } from "@/lib/database.types";
 import { isMissingStaffInviteTableError } from "@/lib/staff-invites";
+import { normalizeShiftLeaveType } from "@/lib/shifts";
 
 type AppSupabaseClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 type AdminSupabaseClient = NonNullable<ReturnType<typeof createSupabaseAdminClient>>;
@@ -362,13 +363,14 @@ export async function saveStaffShiftAction(formData: FormData) {
   const shiftDate = readDate(formData, "shiftDate");
   const startTime = readTime(formData, "startTime");
   const endTime = readTime(formData, "endTime");
-  const leave = readBoolean(formData, "leave");
+  const leaveType = normalizeShiftLeaveType(readOptional(formData, "leaveType")) as ShiftLeaveType;
+  const leave = leaveType !== "work";
 
   if (!shiftDate || !startTime || !endTime) {
     fail("staff_shift_invalid_input");
   }
 
-  if (!leave && startTime >= endTime) {
+  if (leaveType === "work" && startTime >= endTime) {
     fail("staff_shift_invalid_input");
   }
 
@@ -402,6 +404,7 @@ export async function saveStaffShiftAction(formData: FormData) {
       start_time: startTime,
       end_time: endTime,
       leave,
+      leave_type: leaveType,
     };
 
     const result = shiftId
