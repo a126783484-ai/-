@@ -81,14 +81,14 @@ const paymentMethodLabels: Record<(typeof paymentMethods)[number], string> = {
 const tiers = ["新客", "一般", "VIP", "VVIP"];
 const staffRoles = ["owner", "admin", "technician", "front_desk", "staff"] as const;
 const staffRoleLabels: Record<(typeof staffRoles)[number], string> = {
-  owner: "店主（全部權限）",
-  admin: "管理員（可管理員工與設定）",
-  technician: "技師（可排班與接單）",
-  front_desk: "櫃台（接待與預約）",
-  staff: "一般員工（支援與協作）",
+  owner: "店主（全權管理）",
+  admin: "管理員（店務管理）",
+  technician: "技師（排班 / 服務）",
+  front_desk: "櫃台（接待 / 預約）",
+  staff: "支援員工（備援 / 行政）",
 };
 const staffRoleHelpText =
-  "技師負責排班與接單，櫃台負責接待、預約與收款，一般員工適合支援與行政；管理員與店主可管理所有設定。";
+  "技師主要處理服務與班表，櫃台負責接待、預約與收款，支援員工適合備援與行政；管理員與店主可管理所有設定。";
 const inventoryMovementTypes = ["purchase", "consume", "adjust"] as const;
 type Notice = { kind: "error" | "success"; message: string };
 type LinkAction = { href: string; label: string };
@@ -1979,7 +1979,7 @@ export function AppointmentsView({
         <ModuleTable
           rows={data.appointments}
           searchPlaceholder="搜尋客戶、技師、來源、備註"
-          filterOptions={["pending", "confirmed", "completed", "no_show"]}
+          filterOptions={["pending", "confirmed", "in_service", "completed", "cancelled", "no_show"]}
           emptyTitle="目前沒有預約"
           columns={[
           {
@@ -2757,7 +2757,7 @@ export function CheckoutView({
         <ModuleTable
           rows={data.orders}
           searchPlaceholder="搜尋訂單、客戶、付款方式"
-          filterOptions={["paid", "partial", "unpaid", "card", "line_pay"]}
+          filterOptions={["paid", "partial", "unpaid", "refunded", "cash", "card", "transfer", "line_pay"]}
           emptyTitle="尚無訂單"
           columns={[
           {

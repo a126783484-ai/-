@@ -280,11 +280,6 @@ function isWorkspaceSetupIncomplete(
     | "categories"
     | "services"
     | "staff"
-    | "customers"
-    | "appointments"
-    | "orders"
-    | "inventory"
-    | "shifts"
   >,
 ) {
   return (
@@ -296,12 +291,7 @@ function isWorkspaceSetupIncomplete(
     data.workspace.businessHours.trim() === "{}" ||
     data.categories.length === 0 ||
     data.services.length === 0 ||
-    data.staff.length === 0 ||
-    data.customers.length === 0 ||
-    data.appointments.length === 0 ||
-    data.orders.length === 0 ||
-    data.inventory.length === 0 ||
-    (data.staff.length > 0 && data.shifts.length === 0)
+    data.staff.length === 0
   );
 }
 
@@ -340,13 +330,11 @@ export function getWorkspaceSetupGuide(
     .map((step) => step.area);
 
   return {
-    title: data.needsWorkspace
-      ? "尚未完成 workspace 初始化"
-      : "這個工作區還有幾個核心資料缺口",
+    title: data.needsWorkspace ? "尚未完成 workspace 初始化" : "這個工作區還有幾個核心設定缺口",
     action:
       missingAreas.length === 1
         ? `先補 ${missingAreas[0]}，後續頁面就會更完整。`
-        : `先補 ${missingAreas.slice(0, 2).join("、")}，其他項目可以後補；這樣後續頁面就會更快開始有可操作內容。`,
+        : `先補 ${missingAreas.slice(0, 2).join("、")}，其他項目可以後補；完成這些核心設定後，其他頁面就會更快開始有可操作內容。`,
     links,
   };
 }
