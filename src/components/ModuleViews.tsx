@@ -102,6 +102,7 @@ type FollowUpCustomer = {
   sortKey: string;
   ageDays: number;
 };
+type QuickJumpLink = { href: string; label: string };
 
 function appointmentStatusTone(status: (typeof appointmentStatuses)[number]) {
   if (status === "confirmed") return "sage" as const;
@@ -122,6 +123,25 @@ function staffRoleSelectLabel(role: (typeof staffRoles)[number]) {
 function NoticeBanner({ notice }: { notice?: Notice }) {
   if (!notice) return null;
   return <FormNotice kind={notice.kind}>{notice.message}</FormNotice>;
+}
+
+function QuickJumpBar({ title, links }: { title: string; links: QuickJumpLink[] }) {
+  return (
+    <nav className="sticky top-3 z-20 mb-5 rounded-2xl border border-champagne/80 bg-white/90 p-2 shadow-sm backdrop-blur print:hidden">
+      <p className="px-2 text-xs font-semibold uppercase tracking-[0.2em] text-ink/45">{title}</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {links.map((link) => (
+          <a
+            key={link.href}
+            href={link.href}
+            className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-sm font-semibold text-white transition hover:bg-plum/90"
+          >
+            {link.label}
+          </a>
+        ))}
+      </div>
+    </nav>
+  );
 }
 
 export function CloseoutCard({
@@ -1905,21 +1925,31 @@ export function AppointmentsView({
         </div>
       ) : null}
       <NoticeBanner notice={notice} />
+      <QuickJumpBar
+        title="快速跳轉"
+        links={[
+          { href: "#appointment-form", label: "新增 / 編輯預約" },
+          { href: "#appointment-statuses", label: "狀態摘要" },
+          { href: "#appointment-list", label: "預約清單" },
+        ]}
+      />
       <div className="mb-5 grid gap-3 md:grid-cols-2">
-        {canManageAppointments ? (
-          <AppointmentForm
-            key={editing?.id ?? "new"}
-            data={data}
-            appointment={editing}
-            onCancel={editing ? () => setEditingId(null) : undefined}
-          />
-        ) : (
-          <EmptyState
-            title="預約目前僅供查看"
-            action={appointmentsAccessMessage}
-          />
-        )}
-        <div className="card p-5">
+        <div id="appointment-form" className="scroll-mt-28">
+          {canManageAppointments ? (
+            <AppointmentForm
+              key={editing?.id ?? "new"}
+              data={data}
+              appointment={editing}
+              onCancel={editing ? () => setEditingId(null) : undefined}
+            />
+          ) : (
+            <EmptyState
+              title="預約目前僅供查看"
+              action={appointmentsAccessMessage}
+            />
+          )}
+        </div>
+        <div id="appointment-statuses" className="card scroll-mt-28 p-5">
           <h2 className="text-lg font-bold text-plum">預約資料會即時寫入資料庫</h2>
           <p className="mt-2 text-sm text-ink/65">
             新增或編輯預約會寫入 Supabase，並同步
@@ -1940,12 +1970,13 @@ export function AppointmentsView({
           </div>
         </div>
       </div>
-      <ModuleTable
-        rows={data.appointments}
-        searchPlaceholder="搜尋客戶、技師、來源、備註"
-        filterOptions={["pending", "confirmed", "completed", "no_show"]}
-        emptyTitle="目前沒有預約"
-        columns={[
+      <div id="appointment-list" className="scroll-mt-28">
+        <ModuleTable
+          rows={data.appointments}
+          searchPlaceholder="搜尋客戶、技師、來源、備註"
+          filterOptions={["pending", "confirmed", "completed", "no_show"]}
+          emptyTitle="目前沒有預約"
+          columns={[
           {
             key: "time",
             label: "日期 / 時間",
@@ -2021,8 +2052,9 @@ export function AppointmentsView({
                 },
               ]
             : []),
-        ]}
-      />
+          ]}
+        />
+      </div>
     </AppShell>
   );
 }
@@ -2074,8 +2106,15 @@ export function ServicesView({
         </div>
       ) : null}
       <NoticeBanner notice={notice} />
+      <QuickJumpBar
+        title="快速跳轉"
+        links={[
+          { href: "#service-form", label: "新增 / 編輯服務" },
+          { href: "#service-list", label: "服務清單" },
+        ]}
+      />
       {canManageServices ? (
-        <div className="mb-5">
+        <div id="service-form" className="mb-5 scroll-mt-28">
           <ServiceForm
             key={editing?.id ?? "new"}
             service={editing}
@@ -2084,19 +2123,20 @@ export function ServicesView({
           />
         </div>
       ) : (
-        <div className="mb-5">
+        <div id="service-form" className="mb-5 scroll-mt-28">
           <EmptyState
             title={servicesScope === "view" ? "服務目前僅供查看" : "你的角色無法管理服務"}
             action={servicesAccessMessage}
           />
         </div>
       )}
-      <ModuleTable
-        rows={data.services}
-        searchPlaceholder="搜尋服務名稱、分類、說明"
-        filterOptions={["美甲", "美睫", "美容", "SPA", "霧眉", "加購"]}
-        emptyTitle="尚未建立服務項目"
-        columns={[
+      <div id="service-list" className="scroll-mt-28">
+        <ModuleTable
+          rows={data.services}
+          searchPlaceholder="搜尋服務名稱、分類、說明"
+          filterOptions={["美甲", "美睫", "美容", "SPA", "霧眉", "加購"]}
+          emptyTitle="尚未建立服務項目"
+          columns={[
           {
             key: "name",
             label: "服務",
@@ -2170,8 +2210,9 @@ export function ServicesView({
                 },
               ]
             : []),
-        ]}
-      />
+          ]}
+        />
+      </div>
     </AppShell>
   );
 }
@@ -2382,6 +2423,15 @@ export function InventoryView({
         </div>
       ) : null}
       {notice ? <NoticeBanner notice={notice} /> : null}
+      <QuickJumpBar
+        title="快速跳轉"
+        links={[
+          { href: "#inventory-summary", label: "庫存摘要" },
+          { href: "#inventory-form", label: "新增 / 編輯品項" },
+          { href: "#inventory-list", label: "庫存清單" },
+          { href: "#inventory-log", label: "異動紀錄" },
+        ]}
+      />
       <section className="mb-5 hidden rounded-3xl border border-black/10 bg-transparent p-5 print:block">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -2396,7 +2446,7 @@ export function InventoryView({
           {inventoryPrintSummary}
         </pre>
       </section>
-      <section className="grid gap-4 md:grid-cols-4">
+      <section id="inventory-summary" className="scroll-mt-28 grid gap-4 md:grid-cols-4">
         <MetricCard label="品項數" value={`${data.inventory.length}`} hint="所有在庫品項" />
         <MetricCard label="低庫存" value={`${lowStockCount}`} hint="已低於警戒值" />
         <MetricCard label="庫存成本" value={currency.format(totalValue)} hint="依成本估值" />
@@ -2404,22 +2454,26 @@ export function InventoryView({
       </section>
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
         {canManageInventory ? (
-          <InventoryItemForm
-            key={editingItem?.id ?? "new"}
-            item={editingItem}
-            onCancel={editingItem ? () => setEditingId(null) : undefined}
-          />
+          <div id="inventory-form" className="scroll-mt-28">
+            <InventoryItemForm
+              key={editingItem?.id ?? "new"}
+              item={editingItem}
+              onCancel={editingItem ? () => setEditingId(null) : undefined}
+            />
+          </div>
         ) : null}
         <div className="space-y-5">
           {canManageInventory ? (
-            hasInventory ? (
-              <InventoryMovementForm data={data} />
-            ) : (
-              <EmptyState
-                title="先建立第一筆庫存品項"
-                action="建立品項後，就能直接記錄入庫、出庫與調整；目前異動功能會保持停用。"
-              />
-            )
+            <div id="inventory-movements" className="scroll-mt-28">
+              {hasInventory ? (
+                <InventoryMovementForm data={data} />
+              ) : (
+                <EmptyState
+                  title="先建立第一筆庫存品項"
+                  action="建立品項後，就能直接記錄入庫、出庫與調整；目前異動功能會保持停用。"
+                />
+              )}
+            </div>
           ) : (
             <EmptyState
               title={inventoryScope === "view" ? "庫存目前僅供查看" : "你沒有庫存管理權限"}
@@ -2436,7 +2490,7 @@ export function InventoryView({
           </div>
         </div>
       </div>
-      <div className="mt-5">
+      <div id="inventory-list" className="mt-5 scroll-mt-28">
         <ModuleTable
           rows={inventoryRows}
           searchPlaceholder="搜尋品牌、品項、分類"
@@ -2505,7 +2559,7 @@ export function InventoryView({
           ]}
         />
       </div>
-      <div className="mt-5">
+      <div id="inventory-log" className="mt-5 scroll-mt-28">
         <ModuleTable
           rows={recentMovements}
           searchPlaceholder="搜尋異動、備註、品項"
@@ -2600,6 +2654,14 @@ export function CheckoutView({
       {...shellProps(data)}
     >
       <NoticeBanner notice={notice} />
+      <QuickJumpBar
+        title="快速跳轉"
+        links={[
+          { href: "#checkout-summary", label: "結帳摘要" },
+          { href: "#checkout-form", label: "開單 / 收款" },
+          { href: "#checkout-list", label: "訂單清單" },
+        ]}
+      />
       {setupGuide ? (
         <div className="mb-5 print:hidden">
           <SetupGuide
@@ -2633,7 +2695,7 @@ export function CheckoutView({
           />
         </div>
       ) : null}
-      <section className="mb-5 hidden rounded-3xl border border-black/10 bg-transparent p-5 print:block">
+      <section id="checkout-summary" className="mb-5 hidden rounded-3xl border border-black/10 bg-transparent p-5 print:block scroll-mt-28">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold text-plum">訂單列印摘要</h2>
@@ -2654,16 +2716,17 @@ export function CheckoutView({
         <MetricCard label="部分付款 / 未收" value={`${partialOrders + unpaidOrders}`} hint="仍有待收金額的訂單" />
       </div>
       {canManageCheckout ? (
-        <div className="mb-5">
+        <div id="checkout-form" className="mb-5 scroll-mt-28">
           <OrderForm key={orderFormKey} data={data} />
         </div>
       ) : null}
-      <ModuleTable
-        rows={data.orders}
-        searchPlaceholder="搜尋訂單、客戶、付款方式"
-        filterOptions={["paid", "partial", "unpaid", "card", "line_pay"]}
-        emptyTitle="尚無訂單"
-        columns={[
+      <div id="checkout-list" className="scroll-mt-28">
+        <ModuleTable
+          rows={data.orders}
+          searchPlaceholder="搜尋訂單、客戶、付款方式"
+          filterOptions={["paid", "partial", "unpaid", "card", "line_pay"]}
+          emptyTitle="尚無訂單"
+          columns={[
           {
             key: "id",
             label: "訂單",
@@ -2756,8 +2819,9 @@ export function CheckoutView({
               );
             },
           },
-        ]}
-      />
+          ]}
+        />
+      </div>
     </AppShell>
   );
 }
