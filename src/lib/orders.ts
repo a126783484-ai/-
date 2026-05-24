@@ -1,4 +1,5 @@
 import type { Order, OrderStatus } from "./types";
+import { currency } from "./utils";
 
 function normalizeAmount(value: number) {
   return Number.isFinite(value) ? Math.round(value) : 0;
@@ -21,6 +22,17 @@ export function outstandingAmount(order: Pick<Order, "lines" | "discount" | "tip
 
 export function hasOutstandingBalance(order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount">) {
   return outstandingAmount(order) > 0;
+}
+
+export function orderCloseoutSummary(
+  order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount" | "createdAt">,
+  now = new Date(),
+) {
+  return {
+    outstanding: outstandingAmount(order),
+    ageDays: orderAgeInDays(order, now),
+    paymentState: orderPaymentState(order),
+  };
 }
 
 export function orderAgeInDays(order: Pick<Order, "createdAt">, now = new Date()) {
@@ -94,4 +106,13 @@ export function orderStatusTone(status: OrderStatus) {
   if (status === "partial") return "amber" as const;
   if (status === "refunded") return "plum" as const;
   return "rose" as const;
+}
+
+export function orderCloseoutLabel(
+  order: Pick<Order, "lines" | "discount" | "tip" | "paidAmount" | "createdAt">,
+  now = new Date(),
+) {
+  const summary = orderCloseoutSummary(order, now);
+  const ageLabel = summary.ageDays === 0 ? "今天新增" : `已建立 ${summary.ageDays} 天`;
+  return `${currency.format(summary.outstanding)} · ${ageLabel}`;
 }

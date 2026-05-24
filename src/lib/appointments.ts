@@ -1,6 +1,6 @@
 import { addMinutes, areIntervalsOverlapping, parseISO } from "date-fns";
-import { formatDate } from "./utils";
-import type { AppointmentStatus, ServiceItem, StaffMember } from "./types";
+import { formatDate, formatTime } from "./utils";
+import type { Appointment, AppointmentStatus, ServiceItem, StaffMember } from "./types";
 
 type AppointmentService = Pick<ServiceItem, "id" | "durationMin">;
 type ConflictAppointment = {
@@ -42,6 +42,12 @@ export const appointmentStatusDescriptions: Record<AppointmentStatus, string> = 
   cancelled: "已取消，不再占用技師時段。",
   no_show: "客戶未到，這筆預約不再占用技師時段。",
 };
+
+export const openAppointmentStatuses = ["pending", "confirmed", "in_service"] as const;
+
+export function isOpenAppointmentStatus(status: AppointmentStatus) {
+  return openAppointmentStatuses.includes(status as (typeof openAppointmentStatuses)[number]);
+}
 
 export function dateKey(value: string | Date) {
   const date = value instanceof Date ? value : new Date(value);
@@ -136,6 +142,27 @@ export function describeAppointmentConflict() {
   return "同一位技師在重疊時段只能有一筆有效預約；已取消與未到的預約不算衝突。";
 }
 
+export function isUnfinishedAppointment(appointment: Pick<Appointment, "status">) {
+  return isOpenAppointmentStatus(appointment.status);
+}
+
 export function statusLabel(status: AppointmentStatus) {
   return ({ pending: "待確認", confirmed: "已確認", in_service: "服務中", completed: "已完成", cancelled: "已取消", no_show: "未到" } as const)[status];
+}
+
+export function appointmentCloseoutLabel(appointment: Pick<Appointment, "startAt" | "status">, now = new Date()) {
+  const appointmentKey = dateKey(appointment.startAt);
+  const todayKey = dateKey(now);
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowKey = dateKey(tomorrow);
+
+  const dayLabel =
+    appointmentKey === todayKey
+      ? "今天"
+      : appointmentKey === tomorrowKey
+        ? "明天"
+        : formatDate(appointment.startAt);
+
+  return `${dayLabel} ${formatTime(appointment.startAt)} · ${statusLabel(appointment.status)}`;
 }

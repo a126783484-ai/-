@@ -22,6 +22,7 @@ import { FormNotice } from "@/components/FormNotice";
 import { ModuleTable } from "@/components/ModuleTable";
 import { MetricCard, StatusPill, EmptyState } from "@/components/ui";
 import {
+  appointmentCloseoutLabel,
   appointmentStatusDescriptions,
   describeAppointmentConflict,
   describeAppointmentDependencies,
@@ -32,8 +33,8 @@ import {
 } from "@/lib/appointments";
 import { dashboardMetrics } from "@/lib/analytics";
 import {
+  orderCloseoutLabel,
   orderFinancialSummary,
-  orderAgeInDays,
   orderLineSummary,
   orderPaymentState,
   orderStatusLabel,
@@ -41,11 +42,11 @@ import {
   orderSubtotal,
   orderTotal,
   outstandingAmount,
-  hasOutstandingBalance,
   resolveOrderStatus,
 } from "@/lib/orders";
 import type { AppData } from "@/lib/app-data-client";
 import { getWorkspaceSetupGuide, isWorkspaceEmpty } from "@/lib/app-data-client";
+import { buildDailyCloseoutSummary } from "@/lib/app-data";
 import type { Appointment, Customer, InventoryItem, Order, ServiceItem, Shift, StaffMember } from "@/lib/types";
 import { buildStaffInvitePath } from "@/lib/staff-invites";
 import { formatInventoryMovementQuantity, formatInventoryStock } from "@/lib/inventory-feedback";
@@ -121,6 +122,37 @@ function staffRoleSelectLabel(role: (typeof staffRoles)[number]) {
 function NoticeBanner({ notice }: { notice?: Notice }) {
   if (!notice) return null;
   return <FormNotice kind={notice.kind}>{notice.message}</FormNotice>;
+}
+
+export function CloseoutCard({
+  title,
+  value,
+  detail,
+  links,
+}: {
+  title: string;
+  value: string;
+  detail: string;
+  links: Array<{ href: string; label: string }>;
+}) {
+  return (
+    <div className="rounded-3xl border border-champagne bg-white p-4 shadow-sm print:border-black/10 print:bg-transparent print:shadow-none">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/45">{title}</p>
+      <p className="mt-2 text-2xl font-bold text-plum">{value}</p>
+      <p className="mt-1 text-sm text-ink/60">{detail}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {links.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="mobile-tap rounded-2xl bg-plum px-4 py-2 text-sm font-semibold text-white print:bg-white print:text-plum"
+          >
+            {link.label}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function SubmitButton({
@@ -3062,7 +3094,13 @@ export function TechnicianView({ data }: { data: AppData }) {
   );
 }
 
-export function ReportsView({ data }: { data: AppData }) {
+export function ReportsView({
+  data,
+  closeout: providedCloseout,
+}: {
+  data: AppData;
+  closeout?: ReturnType<typeof buildDailyCloseoutSummary>;
+}) {
   const now = new Date();
   const metrics = dashboardMetrics(
     now,
@@ -3076,19 +3114,8 @@ export function ReportsView({ data }: { data: AppData }) {
     ? metrics.monthRevenue / data.orders.length
     : 0;
   const topService = metrics.serviceRanking[0];
-  const outstandingOrders = data.orders
-    .map((order) => ({
-      order,
-      outstanding: outstandingAmount(order),
-      ageDays: orderAgeInDays(order, now),
-    }))
-    .filter((item) => hasOutstandingBalance(item.order))
-    .sort(
-      (a, b) =>
-        b.outstanding - a.outstanding ||
-        b.ageDays - a.ageDays ||
-        new Date(a.order.createdAt).getTime() - new Date(b.order.createdAt).getTime(),
-    );
+  const closeout = providedCloseout ?? buildDailyCloseoutSummary(data, now);
+  const outstandingOrders = closeout.unpaidOrders;
   const followUpCustomers = data.customers
     .map<FollowUpCustomer | null>((customer) => {
       const reminder = reminderDisplay(customer.nextReminder, now);
@@ -3144,6 +3171,7 @@ export function ReportsView({ data }: { data: AppData }) {
     `產出時間：${formatDateTime(now.toISOString())}`,
     `月營收：${currency.format(metrics.monthRevenue)} · 客單價：${currency.format(avg)}`,
     `待收金額：${currency.format(metrics.pendingPayment)} · 待跟進：${followUpCount} 筆`,
+    `今日收工：未完成預約 ${closeout.unfinishedAppointments.length} / 待收訂單 ${outstandingOrders.length} / 低庫存 ${closeout.lowStockItems.length} / 明日預備 ${closeout.tomorrowAppointments.length} 筆預約、${closeout.tomorrowShifts.length} 筆班表`,
     `訂單狀態：已結清 ${paidOrders} / 部分付款 ${partialOrders} / 未收款 ${unpaidOrders}`,
     topService
       ? `主力服務：${topService.name}（${topService.count} 次）`
@@ -3151,13 +3179,28 @@ export function ReportsView({ data }: { data: AppData }) {
     outstandingOrders.length
       ? `待收款前 ${Math.min(3, outstandingOrders.length)} 筆：${outstandingOrders
           .slice(0, 3)
-          .map(({ order, outstanding, ageDays }) => {
+          .map(({ order }) => {
             const customer = data.customers.find((item) => item.id === order.customerId);
             const technician = data.staff.find((item) => item.id === order.technicianId);
-            return `${customer?.name ?? "未命名客戶"}／${technician?.name ?? "未指派"}｜${currency.format(outstanding)}｜${ageDays === 0 ? "今天新增" : `已建立 ${ageDays} 天`}｜${orderLineSummary(order, 2)}`;
+            return `${customer?.name ?? "未命名客戶"}／${technician?.name ?? "未指派"}｜${orderCloseoutLabel(order, now)}｜${orderLineSummary(order, 2)}`;
           })
           .join("；")}`
       : "待收款前 0 筆：目前沒有待收款訂單",
+    closeout.lowStockItems.length
+      ? `低庫存：${closeout.lowStockItems
+          .slice(0, 3)
+          .map((item) => `${item.name}｜剩 ${item.quantity}/${item.lowStockThreshold}`)
+          .join("；")}`
+      : "低庫存：目前沒有品項低於安全庫存",
+    closeout.tomorrowAppointments.length
+      ? `明日預約：${closeout.tomorrowAppointments
+          .slice(0, 3)
+          .map((appointment) => {
+            const customer = data.customers.find((item) => item.id === appointment.customerId);
+            return `${appointmentCloseoutLabel(appointment, now)}｜${customer?.name ?? "未命名客戶"}`;
+          })
+          .join("；")}`
+      : "明日預約：目前沒有待確認的明日預約",
     followUpCustomers.length
       ? `回訪與提醒：${followUpCustomers
           .slice(0, 3)
@@ -3170,7 +3213,7 @@ export function ReportsView({ data }: { data: AppData }) {
   return (
     <AppShell
       title="報表分析"
-      subtitle="先看本月營收與待收，再看服務排行和需要追款、回訪的名單。"
+      subtitle="先看本月營收與待收，再看今日收工與需要追款、回訪的名單。"
       {...shellProps(data)}
     >
       {setupGuide ? (
@@ -3263,6 +3306,41 @@ export function ReportsView({ data }: { data: AppData }) {
           label="待跟進"
           value={`${followUpCount}`}
           hint="待收款與回訪名單合計"
+        />
+      </section>
+      <section className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4 print:grid-cols-2">
+        <CloseoutCard
+          title="未完成預約"
+          value={`${closeout.unfinishedAppointments.length}`}
+          detail="今天還沒結束的預約，先收完再關帳。"
+          links={[
+            { href: "/appointments", label: "查看預約" },
+          ]}
+        />
+        <CloseoutCard
+          title="待收訂單"
+          value={`${outstandingOrders.length}`}
+          detail={`尚欠 ${currency.format(closeout.totalOutstanding)}，先把現金流收回來。`}
+          links={[
+            { href: "/checkout", label: "前往結帳" },
+          ]}
+        />
+        <CloseoutCard
+          title="低庫存"
+          value={`${closeout.lowStockItems.length}`}
+          detail="先補常用品項，避免明天缺料。"
+          links={[
+            { href: "/inventory", label: "管理庫存" },
+          ]}
+        />
+        <CloseoutCard
+          title="明日預備"
+          value={`${closeout.tomorrowAppointments.length} / ${closeout.tomorrowShifts.length}`}
+          detail="明天的預約與班表，先確認人力和備品。"
+          links={[
+            { href: "/appointments", label: "看預約" },
+            { href: "/staff", label: "看班表" },
+          ]}
         />
       </section>
       <section className="mt-5 grid gap-5 lg:grid-cols-3 print:grid-cols-1">

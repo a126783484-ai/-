@@ -14,6 +14,8 @@ import type {
   StaffMember,
   Workspace,
 } from "@/lib/types";
+import { isUnfinishedAppointment } from "@/lib/appointments";
+import { orderCloseoutSummary } from "@/lib/orders";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { getSupabaseConfig } from "@/lib/supabase";
 import {
@@ -99,6 +101,22 @@ export interface WorkspaceSetupGuide {
   links: Array<{ href: string; label: string }>;
 }
 
+export interface DailyCloseoutSummary {
+  todayKey: string;
+  tomorrowKey: string;
+  unfinishedAppointments: Appointment[];
+  unpaidOrders: Array<{
+    order: Order;
+    outstanding: number;
+    ageDays: number;
+    paymentState: ReturnType<typeof orderCloseoutSummary>["paymentState"];
+  }>;
+  lowStockItems: InventoryItem[];
+  tomorrowAppointments: Appointment[];
+  tomorrowShifts: Shift[];
+  totalOutstanding: number;
+}
+
 export function dateKey(value: string | Date) {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -106,6 +124,66 @@ export function dateKey(value: string | Date) {
   }
 
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+export function buildDailyCloseoutSummary(
+  data: Pick<AppData, "appointments" | "orders" | "inventory" | "shifts">,
+  now = new Date(),
+): DailyCloseoutSummary {
+  const todayKey = dateKey(now);
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowKey = dateKey(tomorrow);
+
+  const unfinishedAppointments = data.appointments
+    .filter((appointment) => dateKey(appointment.startAt) === todayKey && isUnfinishedAppointment(appointment))
+    .sort((left, right) => left.startAt.localeCompare(right.startAt));
+
+  const unpaidOrders = data.orders
+    .map((order) => ({
+      order,
+      ...orderCloseoutSummary(order, now),
+    }))
+    .filter((order) => order.outstanding > 0)
+    .sort(
+      (left, right) =>
+        right.outstanding - left.outstanding ||
+        right.ageDays - left.ageDays ||
+        new Date(left.order.createdAt).getTime() - new Date(right.order.createdAt).getTime(),
+    );
+
+  const lowStockItems = [...data.inventory]
+    .filter((item) => item.quantity <= item.lowStockThreshold)
+    .sort(
+      (left, right) =>
+        left.quantity / Math.max(left.lowStockThreshold, 1) -
+          right.quantity / Math.max(right.lowStockThreshold, 1) ||
+        left.quantity - right.quantity ||
+        left.name.localeCompare(right.name),
+    );
+
+  const tomorrowAppointments = data.appointments
+    .filter(
+      (appointment) =>
+        dateKey(appointment.startAt) === tomorrowKey &&
+        isUnfinishedAppointment(appointment),
+    )
+    .sort((left, right) => left.startAt.localeCompare(right.startAt));
+
+  const tomorrowShifts = [...data.shifts]
+    .filter((shift) => shift.date === tomorrowKey)
+    .sort((left, right) => left.startTime.localeCompare(right.startTime));
+
+  return {
+    todayKey,
+    tomorrowKey,
+    unfinishedAppointments,
+    unpaidOrders,
+    lowStockItems,
+    tomorrowAppointments,
+    tomorrowShifts,
+    totalOutstanding: unpaidOrders.reduce((sum, item) => sum + item.outstanding, 0),
+  };
 }
 
 function emptyWorkspace(): Workspace {
