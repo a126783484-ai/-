@@ -83,14 +83,14 @@ const paymentMethodLabels: Record<(typeof paymentMethods)[number], string> = {
 const tiers = ["新客", "一般", "VIP", "VVIP"];
 const staffRoles = ["owner", "admin", "technician", "front_desk", "staff"] as const;
 const staffRoleLabels: Record<(typeof staffRoles)[number], string> = {
-  owner: "店主（全權管理 / 交接）",
+  owner: "店主（完整管理 / 交接）",
   admin: "管理員（店務管理 / 排班）",
-  technician: "技師（排班 / 服務 / 查看班表）",
-  front_desk: "櫃台（接待 / 預約 / 查看班表）",
-  staff: "支援員工（備援 / 行政）",
+  technician: "技師（預約 / 班表）",
+  front_desk: "櫃台（接待 / 預約 / 收款）",
+  staff: "支援員工（預約查看 / 行政備援）",
 };
 const staffRoleHelpText =
-  "店主與管理員可新增員工、調整角色與班表；櫃台與技師可查看班表圖表與列印摘要，適合接班與交接；支援員工適合備援與行政。";
+  "店主與管理員可新增員工、調整角色與班表；櫃台與技師可查看員工資料、班表圖表與列印摘要；支援員工只保留自己的預約可見範圍，適合備援與行政。";
 const inventoryMovementTypes = ["purchase", "consume", "adjust"] as const;
 type Notice = { kind: "error" | "success"; message: string };
 type LinkAction = { href: string; label: string };

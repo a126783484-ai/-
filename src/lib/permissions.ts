@@ -3,8 +3,8 @@ import type { Role } from "./types";
 const permissions = {
   owner: ["*"],
   admin: ["dashboard", "appointments", "customers", "services", "checkout", "inventory", "staff", "reports", "settings"],
-  technician: ["technician", "appointments:own", "customers:read", "services:read", "staff"],
-  front_desk: ["dashboard", "appointments", "customers", "checkout", "services:read", "staff"],
+  technician: ["technician", "appointments:own", "customers:read", "services:read", "staff:read"],
+  front_desk: ["dashboard", "appointments", "customers", "checkout", "services:read", "staff:read"],
   staff: ["technician", "appointments:own"]
 } satisfies Record<Role, string[]>;
 

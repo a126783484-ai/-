@@ -155,11 +155,6 @@ function isWorkspaceSetupIncomplete(
     | "categories"
     | "services"
     | "staff"
-    | "customers"
-    | "appointments"
-    | "orders"
-    | "inventory"
-    | "shifts"
   >,
 ) {
   return (
@@ -171,12 +166,7 @@ function isWorkspaceSetupIncomplete(
     data.workspace.businessHours.trim() === "{}" ||
     data.categories.length === 0 ||
     data.services.length === 0 ||
-    data.staff.length === 0 ||
-    data.customers.length === 0 ||
-    data.appointments.length === 0 ||
-    data.orders.length === 0 ||
-    data.inventory.length === 0 ||
-    (data.staff.length > 0 && data.shifts.length === 0)
+    data.staff.length === 0
   );
 }
 
