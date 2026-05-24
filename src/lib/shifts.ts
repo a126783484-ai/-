@@ -85,7 +85,8 @@ export function encodeLegacyLeaveShiftTimes(leaveType: Exclude<ShiftLeaveType, "
 export function decodeLegacyLeaveShiftType(leave: boolean, startTime: string, leaveType?: string | null) {
   if (!leave) return "work" as ShiftLeaveType;
   if (leaveType) return normalizeShiftLeaveType(leaveType);
-  return (legacyLeaveTypeByStartTime[startTime] ?? "rest") as ShiftLeaveType;
+  const normalizedStartTime = startTime.slice(0, 5);
+  return (legacyLeaveTypeByStartTime[normalizedStartTime] ?? "rest") as ShiftLeaveType;
 }
 
 export function shiftSummary(leaveType: ShiftLeaveType, startTime: string, endTime: string) {
