@@ -4,14 +4,14 @@ export const inventoryMessageText: Record<string, string> = {
 };
 
 export const inventoryErrorText: Record<string, string> = {
-  inventory_config_missing: "系統登入設定尚未完成，無法處理庫存異動。",
-  inventory_item_failed: "庫存品項儲存失敗，請稍後再試。",
-  inventory_item_forbidden: "你沒有權限建立或編輯庫存品項。",
-  inventory_item_invalid_input: "庫存品項資料格式不正確，請檢查品名、分類與數量。",
-  inventory_forbidden: "你沒有權限建立品項或調整庫存。",
-  inventory_invalid_input: "庫存異動資料格式不正確，請檢查品項、類型與數量。",
-  inventory_insufficient_stock: "庫存不足，無法完成出庫，請先補貨或改用調整。",
-  inventory_movement_failed: "庫存異動失敗，請稍後再試。"
+  inventory_config_missing: "處理庫存前，請先完成 Supabase 連線與庫存必要設定，再回來重試。",
+  inventory_item_failed: "庫存品項儲存失敗，請重新整理後再試。",
+  inventory_item_forbidden: "請聯絡店主或管理員，開啟你建立或編輯庫存品項的權限。",
+  inventory_item_invalid_input: "庫存品項資料格式不正確，請重新檢查品名、分類與數量後再儲存。",
+  inventory_forbidden: "請聯絡店主或管理員，開啟你建立品項或調整庫存的權限。",
+  inventory_invalid_input: "庫存異動資料格式不正確，請重新檢查品項、類型與數量後再送出。",
+  inventory_insufficient_stock: "庫存不足，無法完成出庫，請先補貨或改成數量調整後再試。",
+  inventory_movement_failed: "庫存異動失敗，請重新整理後再試。"
 };
 
 export function readInventoryParam(value: string | string[] | undefined) {

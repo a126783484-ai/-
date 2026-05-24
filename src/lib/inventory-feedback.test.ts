@@ -11,10 +11,10 @@ describe("inventory feedback helpers", () => {
   it("maps success and error codes", () => {
     expect(getInventoryMessage("inventory_item_saved")).toContain("已儲存");
     expect(getInventoryMessage("inventory_movement_recorded")).toContain("已記錄");
-    expect(getInventoryError("inventory_item_invalid_input")).toContain("資料格式不正確");
-    expect(getInventoryError("inventory_item_forbidden")).toContain("沒有權限");
-    expect(getInventoryError("inventory_movement_failed")).toContain("失敗");
-    expect(getInventoryError("inventory_insufficient_stock")).toContain("補貨");
+    expect(getInventoryError("inventory_item_invalid_input")).toContain("重新檢查");
+    expect(getInventoryError("inventory_item_forbidden")).toContain("聯絡店主");
+    expect(getInventoryError("inventory_movement_failed")).toContain("重新整理");
+    expect(getInventoryError("inventory_insufficient_stock")).toContain("改成數量調整");
   });
 
   it("ignores array search params", () => {

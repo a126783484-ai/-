@@ -7,9 +7,9 @@ export const settingsMessageText: Record<string, string> = {
 };
 
 export const settingsErrorText: Record<string, string> = {
-  settings_config_missing: "系統登入設定尚未完成，無法儲存店鋪設定。",
-  settings_forbidden: "你沒有權限修改店鋪設定。",
-  settings_save_failed: "店鋪設定儲存失敗，請稍後再試。"
+  settings_config_missing: "儲存店鋪設定前，請先完成 Supabase 連線與設定必要項目，再回來重試。",
+  settings_forbidden: "請聯絡店主或管理員，開啟你修改店鋪設定的權限。",
+  settings_save_failed: "店鋪設定儲存失敗，請重新整理後再試。"
 };
 
 export function readSettingsParam(value: string | string[] | undefined) {

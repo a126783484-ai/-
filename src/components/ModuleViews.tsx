@@ -810,7 +810,7 @@ function AppointmentForm({
                 ))}
             </div>
           ) : (
-            <p className="mt-2 text-sm text-ink/60">目前沒有可用服務，請先新增至少一項服務。</p>
+            <p className="mt-2 text-sm text-ink/60">目前沒有可用服務，請先新增至少一項服務，或改用自訂項目開單。</p>
           )}
         </fieldset>
         <label className="text-sm font-semibold text-plum md:col-span-2">
@@ -1034,7 +1034,7 @@ function OrderForm({ data }: { data: AppData }) {
                 </label>
               )) : (
               <div className="rounded-2xl border border-dashed border-champagne bg-white p-4 text-sm text-ink/60">
-                目前沒有啟用中的服務，請改用自訂項目開單。
+                目前沒有啟用中的服務，請先啟用至少一項服務，或改用自訂項目開單。
               </div>
             )}
           </div>
@@ -1561,7 +1561,7 @@ function ShiftForm({
           </select>
           <p className="mt-2 text-xs leading-5 text-ink/60">新班表預設只會指向在職員工；如果要回頭修改舊紀錄，才需要選到停用員工。</p>
           {!activeStaff.length ? (
-            <p className="mt-2 text-xs leading-5 text-rose">目前沒有在職員工，無法直接建立新班表，請先恢復至少一位員工為在職狀態。</p>
+            <p className="mt-2 text-xs leading-5 text-rose">目前沒有在職員工，無法直接建立新班表，請先恢復至少一位員工為在職狀態後再新增。</p>
           ) : null}
         </label>
         <label className="text-sm font-semibold text-plum">
@@ -1616,7 +1616,7 @@ function shellProps(data: AppData) {
     workspace: data.workspace,
     role: data.currentMember?.role ?? "owner",
     notice: data.needsWorkspace
-      ? "尚未完成 workspace 初始化，請重新登入或聯絡管理員。"
+      ? "尚未完成 workspace 初始化，請重新登入或聯絡管理員，先補齊 workspace 再操作。"
       : data.demoMode
         ? "預覽資料模式：目前顯示的是範例 seed 資料，Supabase 實際資料仍會優先顯示。"
         : liveNotice,
@@ -2917,7 +2917,7 @@ export function StaffView({
         ) : canManageStaff ? (
           <div className="card p-5">
             <h2 className="text-lg font-bold text-plum">員工邀請</h2>
-            <p className="mt-1 text-sm text-ink/60">目前尚未啟用員工邀請功能；你仍可直接新增員工資料，之後再視需要開啟邀請連結。</p>
+            <p className="mt-1 text-sm text-ink/60">目前尚未啟用員工邀請功能；請先完成資料庫更新再開啟邀請，或先直接新增員工資料。</p>
           </div>
         ) : null}
         {data.staffInviteFeatureEnabled && data.staffInvites.some((invite) => invite.status === "pending") ? (
@@ -3736,7 +3736,7 @@ export function SettingsView({
           ) : (
             <EmptyState
               title="尚未建立服務分類"
-              action="先到服務頁建立第一個服務，系統會依分類自動整理後續的報表與排程。"
+              action="先到服務頁建立第一個服務分類，再回來確認報表與排程會依分類自動整理。"
             />
           )}
           <div className="rounded-2xl bg-blush p-4 font-medium">
