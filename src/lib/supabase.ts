@@ -59,7 +59,7 @@ export function assertSupabaseProductionConfig(config: SupabaseConfig): asserts 
 export function getSupabaseConfig(): SupabaseConfig {
   const envUrl = firstDefined(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_URL);
   const envAnonKey = firstDefined(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY, process.env.SUPABASE_ANON_KEY);
-  const shouldForceProductionSupabase = isWrongSupabaseProject(envUrl);
+  const shouldForceProductionSupabase = !envUrl || !envAnonKey || isWrongSupabaseProject(envUrl);
 
   return {
     url: shouldForceProductionSupabase ? EXPECTED_PRODUCTION_SUPABASE_URL : envUrl,
