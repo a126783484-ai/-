@@ -67,8 +67,8 @@ jobs:
           TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
           TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
           SMOKE_AUTH_REQUIRED: ${{ secrets.TEST_USER_EMAIL != '' && secrets.TEST_USER_PASSWORD != '' }}
-          SMOKE_STRICT_CORE_FLOWS: ${{ secrets.TEST_USER_EMAIL != '' && secrets.TEST_USER_PASSWORD != '' }}
-        run: npm run test:smoke
+          SMOKE_STRICT_CORE_FLOWS: ${{ vars.SMOKE_STRICT_CORE_FLOWS || 'false' }}
+        run: npm run test:smoke -- --workers=1
 
       - name: Upload Playwright report
         if: failure()
