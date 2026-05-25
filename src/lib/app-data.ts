@@ -100,6 +100,9 @@ export interface AppData {
   shifts: Shift[];
   needsWorkspace: boolean;
   demoMode: boolean;
+  schemaHealth?: {
+    shiftLeaveTypeColumn: boolean;
+  };
 }
 
 export interface WorkspaceSetupGuide {
@@ -137,6 +140,9 @@ function emptyAppData(user: { id: string; email: string | null }): AppData {
     shifts: [],
     needsWorkspace: true,
     demoMode: false,
+    schemaHealth: {
+      shiftLeaveTypeColumn: true,
+    },
   };
 }
 
@@ -704,5 +710,8 @@ export async function loadAppData(): Promise<AppData> {
     shifts: (shiftsResult.data ?? []).map(toShift),
     needsWorkspace: false,
     demoMode: config.demoMode,
+    schemaHealth: {
+      shiftLeaveTypeColumn: !isMissingShiftLeaveTypeColumn(shiftsResultWithLeaveType.error),
+    },
   };
 }

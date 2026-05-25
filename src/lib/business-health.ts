@@ -107,6 +107,16 @@ export function buildBusinessHealthReport(data: AppData, now = new Date()): Busi
 
   const areas: BusinessHealthArea[] = [
     {
+      key: "schema",
+      label: "資料庫結構",
+      status: data.schemaHealth?.shiftLeaveTypeColumn === false ? "watch" : "ready",
+      summary:
+        data.schemaHealth?.shiftLeaveTypeColumn === false
+          ? "正式 DB 缺 shifts.leave_type，系統正在用 legacy 時間編碼解讀休假"
+          : "班表休假欄位已可用",
+      action: "正式營業前要套用 supabase/migrations/0009_shift_leave_type.sql，避免休假類型長期依賴相容模式。",
+    },
+    {
       key: "workspace",
       label: "店鋪主檔",
       status: data.workspace.name && data.workspace.phone && data.workspace.address && hasBusinessHours(data.workspace.businessHours) ? "ready" : "blocked",
@@ -187,6 +197,7 @@ export function buildBusinessHealthReport(data: AppData, now = new Date()): Busi
     "價格、折扣、小費、實收、訂單狀態只以訂單明細計算，不能人工猜。",
     "會耗材的服務結帳後必須留下 inventory_movements，否則報表不可視為完整。",
     "班表列印與匯出以 shifts 為唯一來源；休假要和工作班分色。",
+    "資料庫 migration 狀態要顯示在營業稽核；不能讓 fallback 隱藏正式環境缺口。",
     "AI 只能做排班建議、異常摘要、補資料提醒，不直接改金額與庫存。",
   ];
 

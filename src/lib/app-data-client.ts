@@ -47,6 +47,9 @@ export interface AppData {
   shifts: Shift[];
   needsWorkspace: boolean;
   demoMode: boolean;
+  schemaHealth?: {
+    shiftLeaveTypeColumn: boolean;
+  };
 }
 
 export interface WorkspaceSetupGuide {

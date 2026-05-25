@@ -183,6 +183,9 @@ export function buildSeedAppData(user: { id: string; email: string | null }): Ap
     inventoryMovements,
     shifts,
     needsWorkspace: false,
-    demoMode: true
+    demoMode: true,
+    schemaHealth: {
+      shiftLeaveTypeColumn: true,
+    },
   };
 }
