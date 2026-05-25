@@ -5,9 +5,10 @@ Use the lowest-cost model that can complete the task safely.
 
 ### Cheap tier
 Use for simple, narrow tasks:
+- `qwen2.5-coder:7b` through a local OpenAI-compatible server, preferred when available
 - `llama-3.1-8b-instant`
 - `groq/compound-mini`
-- `nousresearch/hermes-4-70b` through OpenRouter/Hermes worker
+- `nousresearch/hermes-4-70b` through OpenRouter/Hermes worker, only when a paid/cloud route is explicitly enabled
 
 ### Medium tier
 Use only when the task needs more context or multi-step reasoning:
@@ -54,6 +55,7 @@ Only send:
 
 ## Hermes worker role
 Hermes is a low-cost execution worker, not the primary reviewer or merger.
+Prefer free/open-source local routing first. Cloud OpenRouter routing is optional and must be explicitly enabled with an API key.
 
 Use Hermes for:
 - reading CI/test output and summarizing next actions

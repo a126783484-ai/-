@@ -27,6 +27,9 @@ const ENV = {
   OPENROUTER_HARD_MODEL: process.env.OPENROUTER_HARD_MODEL || 'nousresearch/hermes-4-405b',
   OPENROUTER_APP_URL: process.env.OPENROUTER_APP_URL || 'https://github.com/Johnnie1266789/beauty-os',
   OPENROUTER_APP_TITLE: process.env.OPENROUTER_APP_TITLE || 'Beauty OS AI Developer',
+  LOCAL_WORKER_BASE_URL: process.env.LOCAL_WORKER_BASE_URL || 'http://127.0.0.1:11434/v1',
+  LOCAL_WORKER_MODEL: process.env.LOCAL_WORKER_MODEL || 'qwen2.5-coder:7b',
+  LOCAL_WORKER_API_KEY: process.env.LOCAL_WORKER_API_KEY || 'ollama',
   AI_MERGE_ALLOWED: process.env.AI_MERGE_ALLOWED === 'true',
   AI_SELF_REPAIR_ALLOWED: process.env.AI_SELF_REPAIR_ALLOWED === 'true',
   AI_DEVELOPMENT_ALLOWED: process.env.AI_DEVELOPMENT_ALLOWED === 'true',
@@ -328,6 +331,16 @@ function modelRequestConfig(tier) {
         'HTTP-Referer': ENV.OPENROUTER_APP_URL,
         'X-Title': ENV.OPENROUTER_APP_TITLE,
       },
+    };
+  }
+
+  if (provider === 'local') {
+    return {
+      provider: 'local',
+      url: `${ENV.LOCAL_WORKER_BASE_URL.replace(/\/$/, '')}/chat/completions`,
+      key: ENV.LOCAL_WORKER_API_KEY,
+      model: ENV.LOCAL_WORKER_MODEL,
+      headers: {},
     };
   }
 
