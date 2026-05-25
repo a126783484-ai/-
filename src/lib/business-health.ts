@@ -114,7 +114,7 @@ export function buildBusinessHealthReport(data: AppData, now = new Date()): Busi
         data.schemaHealth?.shiftLeaveTypeColumn === false
           ? "正式 DB 缺 shifts.leave_type，系統正在用 legacy 時間編碼解讀休假"
           : "班表休假欄位已可用",
-      action: "正式營業前要套用 supabase/migrations/0009_shift_leave_type.sql，避免休假類型長期依賴相容模式。",
+      action: "正式營業前執行 SUPABASE_DB_URL=... npm run db:apply-shift-leave-type，避免休假類型長期依賴相容模式。",
     },
     {
       key: "workspace",

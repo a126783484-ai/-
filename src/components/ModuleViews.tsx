@@ -362,8 +362,8 @@ function StaffScheduleChart({
                           memberShifts.map((shift) => {
                             const startMinutes = shiftTimeToMinutes(shift.startTime);
                             const endMinutes = shift.leaveType === "work"
-                              ? 1440
-                              : Math.min(Math.max(shiftTimeToMinutes(shift.endTime), startMinutes + 30), 1440);
+                              ? Math.min(Math.max(shiftTimeToMinutes(shift.endTime), startMinutes + 30), 1440)
+                              : 1440;
                             const blockClassName = `absolute inset-y-2 rounded-xl px-3 py-2.5 text-left text-xs font-semibold shadow-sm transition focus:outline-none focus:ring-2 ring-1 ${shiftLeaveTypeStyles[shift.leaveType].block}`;
                             const content = (
                               <>

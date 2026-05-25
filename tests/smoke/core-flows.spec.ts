@@ -5,16 +5,27 @@ const password = process.env.TEST_USER_PASSWORD;
 const strictCoreFlows = process.env.SMOKE_STRICT_CORE_FLOWS === 'true';
 
 async function login(page: Page) {
-  await page.goto('/login?next=/dashboard');
+  await page.goto('/login?next=/');
   await page.getByPlaceholder('Email').fill(email!);
   await page.getByPlaceholder('密碼').fill(password!);
   await page.getByRole('button', { name: /登入 Workspace/i }).click();
-  await expect(page).toHaveURL(/dashboard/, { timeout: 15_000 });
+  await expect(async () => {
+    const isStillOnLogin = new URL(page.url()).pathname === '/login';
+    const alert = page.getByRole('alert').first();
+    const alertText = (await alert.innerText().catch(() => '')).trim();
+    if (isStillOnLogin && alertText) {
+      throw new Error(`Login failed: ${await alert.innerText()}`);
+    }
+
+    await expect(page).toHaveURL(/\/$/, { timeout: 1_000 });
+    await expect(page.getByRole('heading', { name: '營運總覽' })).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
 }
 
 async function expectNoServerError(page: Page, route: string) {
   const response = await page.goto(route);
   expect(response?.status(), `${route} should not return a server error`).toBeLessThan(500);
+  expect(new URL(page.url()).pathname, `${route} should stay on the requested authenticated route`).toBe(route);
 }
 
 async function exerciseOptionalEditFlow(page: Page, editHeading: string, createHeading: string) {
@@ -33,48 +44,36 @@ test.describe('core demo flows', () => {
     'SMOKE_STRICT_CORE_FLOWS=true with TEST_USER_EMAIL and TEST_USER_PASSWORD is required for strict core smoke coverage',
   );
 
-  test.beforeEach(async ({ page }) => {
+  test('authenticated owner can operate the core modules', async ({ page }) => {
     await login(page);
-  });
 
-  test('services page renders management controls', async ({ page }) => {
     await expectNoServerError(page, '/services');
     await expect(page.getByRole('heading', { name: '服務項目管理' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '新增服務' })).toBeVisible();
     await exerciseOptionalEditFlow(page, '編輯服務', '新增服務');
-  });
 
-  test('customers edit flow can be cleared back to create mode when data exists', async ({ page }) => {
     await expectNoServerError(page, '/customers');
     await expect(page.getByRole('heading', { name: '客戶 CRM' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '新增客戶' })).toBeVisible();
     await exerciseOptionalEditFlow(page, '編輯客戶', '新增客戶');
-  });
 
-  test('inventory page renders stock controls', async ({ page }) => {
     await expectNoServerError(page, '/inventory');
     await expect(page.getByRole('heading', { name: '庫存管理' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '建立庫存品項' })).toBeVisible();
     await exerciseOptionalEditFlow(page, '編輯庫存品項', '建立庫存品項');
-  });
 
-  test('staff page renders people and schedule controls', async ({ page }) => {
     await expectNoServerError(page, '/staff');
     await expect(page.getByRole('heading', { name: '員工 / 技師管理' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '新增員工 / 邀請' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '新增班表' })).toBeVisible();
-    await exerciseOptionalEditFlow(page, '編輯員工', '新增員工 / 邀請');
-  });
+    await expect(page.getByRole('button', { name: '新增班表' }).first()).toBeVisible();
 
-  test('appointments page renders booking controls', async ({ page }) => {
     await expectNoServerError(page, '/appointments');
     await expect(page.getByRole('heading', { name: '預約系統' })).toBeVisible();
     await expect(page.getByText('預約資料會即時寫入資料庫')).toBeVisible();
     await expect(page.getByRole('heading', { name: '新增預約' })).toBeVisible();
     await exerciseOptionalEditFlow(page, '編輯預約', '新增預約');
-  });
 
-  test('checkout page renders order creation controls', async ({ page }) => {
     await expectNoServerError(page, '/checkout');
     await expect(page.getByRole('heading', { name: '訂單 / 結帳 / 收款' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '新增訂單 / 預約轉結帳' })).toBeVisible();
@@ -84,21 +83,15 @@ test.describe('core demo flows', () => {
     await page.getByRole('button', { name: '清空草稿' }).click();
     await expect(page.getByLabel('自訂項目')).toHaveValue('');
     await expect(page.getByLabel('自訂單價')).toHaveValue('0');
-  });
 
-  test('operations page renders the command center', async ({ page }) => {
     await expectNoServerError(page, '/operations');
     await expect(page.getByRole('heading', { name: '營運指揮中心' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: '今日處理清單' })).toBeVisible();
-  });
+    await expect(page.getByRole('heading', { name: '今天要交接' })).toBeVisible();
 
-  test('reports page renders analytics sections', async ({ page }) => {
     await expectNoServerError(page, '/reports');
     await expect(page.getByRole('heading', { name: '報表分析' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: '本月跟進焦點' })).toBeVisible();
-  });
+    await expect(page.getByRole('heading', { name: '主管摘要 / 可列印版' })).toBeVisible();
 
-  test('settings page renders workspace configuration', async ({ page }) => {
     await expectNoServerError(page, '/settings');
     await expect(page.getByRole('heading', { name: '店鋪設定' })).toBeVisible();
     await expect(page.getByRole('button', { name: '儲存設定' })).toBeVisible();

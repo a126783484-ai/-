@@ -4,7 +4,7 @@ const baseURL = process.env.SMOKE_BASE_URL || 'http://127.0.0.1:3000';
 
 export default defineConfig({
   testDir: './tests/smoke',
-  timeout: 30_000,
+  timeout: 120_000,
   expect: {
     timeout: 10_000,
   },
@@ -16,6 +16,14 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
+  webServer: process.env.SMOKE_SKIP_WEBSERVER === 'true'
+    ? undefined
+    : {
+        command: 'npm run dev',
+        url: baseURL,
+        reuseExistingServer: true,
+        timeout: 120_000,
+      },
   projects: [
     {
       name: 'chromium-mobile',

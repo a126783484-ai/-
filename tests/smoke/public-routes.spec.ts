@@ -13,7 +13,7 @@ test.describe('public smoke routes', () => {
   });
 
   test('dashboard route does not server-error for anonymous visitor', async ({ page }) => {
-    const response = await page.goto('/dashboard');
+    const response = await page.goto('/');
     expect(response?.status(), 'dashboard should not return a server error').toBeLessThan(500);
   });
 });

@@ -1,7 +1,6 @@
 "use client";
 
 import { signInAction } from "@/app/account/actions";
-import { getAuthError } from "@/lib/auth-feedback";
 
 interface LoginFormProps {
   next: string;
@@ -20,7 +19,7 @@ export function LoginForm({ next, initialError, initialMessage }: LoginFormProps
 
       {initialError ? (
         <div className="rounded-2xl bg-rose/10 p-4 text-sm font-semibold text-rose" role="alert">
-          {getAuthError(initialError)}
+          {initialError}
         </div>
       ) : null}
 
