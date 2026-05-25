@@ -16,11 +16,17 @@ import { dirname, isAbsolute, join } from 'node:path';
 
 const ENV = {
   GROQ_API_KEY: process.env.GROQ_API_KEY,
+  OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
   GITHUB_TOKEN: process.env.GITHUB_TOKEN,
   REPO_DIR: process.env.BEAUTY_OS_REPO || process.cwd(),
   REPO: process.env.GITHUB_REPOSITORY || 'Johnnie1266789/beauty-os',
+  AI_API_PROVIDER: process.env.AI_API_PROVIDER || process.env.API_WORKER_PROVIDER || 'groq',
   AI_LANE: process.env.AI_LANE || 'product',
   AI_MODEL_ROUTER: process.env.AI_MODEL_ROUTER || 'cost-optimized',
+  OPENROUTER_WORKER_MODEL: process.env.OPENROUTER_WORKER_MODEL || 'nousresearch/hermes-4-70b',
+  OPENROUTER_HARD_MODEL: process.env.OPENROUTER_HARD_MODEL || 'nousresearch/hermes-4-405b',
+  OPENROUTER_APP_URL: process.env.OPENROUTER_APP_URL || 'https://github.com/Johnnie1266789/beauty-os',
+  OPENROUTER_APP_TITLE: process.env.OPENROUTER_APP_TITLE || 'Beauty OS AI Developer',
   AI_MERGE_ALLOWED: process.env.AI_MERGE_ALLOWED === 'true',
   AI_SELF_REPAIR_ALLOWED: process.env.AI_SELF_REPAIR_ALLOWED === 'true',
   AI_DEVELOPMENT_ALLOWED: process.env.AI_DEVELOPMENT_ALLOWED === 'true',
@@ -155,8 +161,12 @@ async function withRetry(fn, maxRetries = 3, delay = 1000) {
 
 function safetyCheck() {
   const missing = [];
+  const provider = ENV.AI_API_PROVIDER.toLowerCase();
 
-  if (!ENV.GROQ_API_KEY) missing.push('GROQ_API_KEY (secret)');
+  if (provider === 'groq' && !ENV.GROQ_API_KEY) missing.push('GROQ_API_KEY (secret)');
+  if ((provider === 'openrouter' || provider === 'hermes') && !ENV.OPENROUTER_API_KEY) {
+    missing.push('OPENROUTER_API_KEY (secret)');
+  }
   if (!ENV.GITHUB_TOKEN) missing.push('GITHUB_TOKEN (secret)');
   if (!ENV.SUPERVISION_ENABLED) missing.push('SUPERVISION_ENABLED=true');
   if (!ENV.AI_DEVELOPMENT_ALLOWED) missing.push('AI_DEVELOPMENT_ALLOWED=true');
@@ -306,18 +316,44 @@ function nextModel(tier) {
   return pool[index];
 }
 
-async function callGroq(systemPrompt, userPrompt, { maxTokens = 900, tier = 'cheap', fallbackCount = 0, maxFallbacks = ENV.AI_MAX_FALLBACKS } = {}) {
-  const model = nextModel(tier);
+function modelRequestConfig(tier) {
+  const provider = ENV.AI_API_PROVIDER.toLowerCase();
+  if (provider === 'openrouter' || provider === 'hermes') {
+    return {
+      provider: 'openrouter',
+      url: 'https://openrouter.ai/api/v1/chat/completions',
+      key: ENV.OPENROUTER_API_KEY,
+      model: tier === 'hard' ? ENV.OPENROUTER_HARD_MODEL : ENV.OPENROUTER_WORKER_MODEL,
+      headers: {
+        'HTTP-Referer': ENV.OPENROUTER_APP_URL,
+        'X-Title': ENV.OPENROUTER_APP_TITLE,
+      },
+    };
+  }
+
+  return {
+    provider: 'groq',
+    url: 'https://api.groq.com/openai/v1/chat/completions',
+    key: ENV.GROQ_API_KEY,
+    model: nextModel(tier),
+    headers: {},
+  };
+}
+
+async function callModel(systemPrompt, userPrompt, { maxTokens = 900, tier = 'cheap', fallbackCount = 0, maxFallbacks = ENV.AI_MAX_FALLBACKS } = {}) {
+  const config = modelRequestConfig(tier);
+  const { model } = config;
   const tokenBudget = TOKEN_BUDGETS[tier] || TOKEN_BUDGETS.cheap;
   const cappedTokens = Math.min(maxTokens, tokenBudget);
 
-  log(`Calling Groq with ${model} (${tier}, ${cappedTokens} tokens)`);
+  log(`Calling ${config.provider} with ${model} (${tier}, ${cappedTokens} tokens)`);
 
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const response = await fetch(config.url, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${ENV.GROQ_API_KEY}`,
+      Authorization: `Bearer ${config.key}`,
       'Content-Type': 'application/json',
+      ...config.headers,
     },
     body: JSON.stringify({
       model,
@@ -336,8 +372,8 @@ async function callGroq(systemPrompt, userPrompt, { maxTokens = 900, tier = 'che
     const shouldFallback = (message.includes('Rate limit') || message.includes('not found') || message.includes('does not exist')) && fallbackCount < maxFallbacks;
     if (shouldFallback) {
       const nextTier = tier === 'cheap' ? 'medium' : tier === 'medium' ? 'hard' : tier;
-      log(`Groq fallback ${fallbackCount + 1}/${maxFallbacks} for ${model}: ${message}`, 'warn');
-      return callGroq(systemPrompt, userPrompt, {
+      log(`${config.provider} fallback ${fallbackCount + 1}/${maxFallbacks} for ${model}: ${message}`, 'warn');
+      return callModel(systemPrompt, userPrompt, {
         maxTokens,
         tier: nextTier,
         fallbackCount: fallbackCount + 1,
@@ -345,9 +381,9 @@ async function callGroq(systemPrompt, userPrompt, { maxTokens = 900, tier = 'che
       });
     }
     if (fallbackCount >= maxFallbacks) {
-      throw new Error(`Groq API (${model}) fallback limit reached after ${maxFallbacks} attempts: ${message}`);
+      throw new Error(`${config.provider} API (${model}) fallback limit reached after ${maxFallbacks} attempts: ${message}`);
     }
-    throw new Error(`Groq API (${model}): ${message}`);
+    throw new Error(`${config.provider} API (${model}): ${message}`);
   }
 
   return data.choices[0].message.content;
@@ -500,7 +536,7 @@ async function writeCode(task, context = {}) {
     fileCount: relevantFiles.length,
   });
 
-  return callGroq(prompt.system, prompt.user, { tier, maxTokens: TOKEN_BUDGETS[tier] });
+  return callModel(prompt.system, prompt.user, { tier, maxTokens: TOKEN_BUDGETS[tier] });
 }
 
 function applyChanges(code, laneConfig) {

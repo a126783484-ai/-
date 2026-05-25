@@ -28,6 +28,7 @@ Keep Beauty OS AI automation paused, low-cost, reviewable, and unable to pollute
 ## Operational safety
 - Prefer cheap models for simple tasks.
 - Send only task description, relevant file list, selected diff, and minimal required context.
+- Treat Hermes/OpenRouter as a bounded worker: it may draft patches and reports, but it may not merge, deploy, or bypass review.
 - Block writes when repo-path validation fails.
 - Record every blocked path with a reason instead of writing to disk.
 - Validate repo paths before every write.
