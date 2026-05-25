@@ -3,6 +3,12 @@ alter table public.shifts
 
 update public.shifts
 set leave_type = case
+  when not leave then 'work'
+  when left(start_time::text, 5) = '00:15' then 'personal'
+  when left(start_time::text, 5) = '00:30' then 'sick'
+  when left(start_time::text, 5) = '00:45' then 'comp_time'
+  when left(start_time::text, 5) = '01:00' then 'national_holiday'
+  when left(start_time::text, 5) = '01:15' then 'annual'
   when leave then 'rest'
   else 'work'
 end

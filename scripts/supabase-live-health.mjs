@@ -111,7 +111,22 @@ function checkDatabaseState() {
     }
   }
 
-  const rlsTables = ['workspaces', 'workspace_members', 'staff_invites', 'customers', 'appointments', 'services', 'orders', 'order_lines', 'inventory_items', 'inventory_movements'];
+  const shiftLeaveTypeColumn = runPsql(`
+    select count(*)
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'shifts'
+      and column_name = 'leave_type';
+  `);
+  if (shiftLeaveTypeColumn !== null) {
+    if (shiftLeaveTypeColumn.trim() === '1') {
+      add('pass', 'SUPABASE_SHIFT_LEAVE_TYPE_COLUMN_PRESENT', 'shifts.leave_type column exists.');
+    } else {
+      add('error', 'SUPABASE_SHIFT_LEAVE_TYPE_COLUMN_MISSING', 'shifts.leave_type column is missing; apply supabase/migrations/0009_shift_leave_type.sql.');
+    }
+  }
+
+  const rlsTables = ['workspaces', 'workspace_members', 'workspace_member_invites', 'customers', 'appointments', 'services', 'orders', 'order_lines', 'inventory_items', 'inventory_movements', 'shifts'];
   const rlsRows = runPsql(`
     select relname
     from pg_class
@@ -136,7 +151,7 @@ function checkDatabaseState() {
     select tablename || ':' || policyname
     from pg_policies
     where schemaname = 'public'
-      and tablename in ('workspaces', 'workspace_members', 'staff_invites')
+      and tablename in ('workspaces', 'workspace_members', 'workspace_member_invites')
     order by tablename, policyname;
   `);
   if (policyRows !== null) {
