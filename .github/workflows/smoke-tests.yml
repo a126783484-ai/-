@@ -66,7 +66,9 @@ jobs:
           SMOKE_BASE_URL: http://127.0.0.1:3000
           TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
           TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
-        run: npx playwright test
+          SMOKE_AUTH_REQUIRED: ${{ secrets.TEST_USER_EMAIL != '' && secrets.TEST_USER_PASSWORD != '' }}
+          SMOKE_STRICT_CORE_FLOWS: ${{ vars.SMOKE_STRICT_CORE_FLOWS || 'false' }}
+        run: npm run test:smoke -- --workers=1
 
       - name: Upload Playwright report
         if: failure()
