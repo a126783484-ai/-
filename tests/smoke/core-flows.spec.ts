@@ -121,11 +121,34 @@ async function saveAndRestoreWorkspaceColor(page: Page) {
   await expect(page.getByText('店鋪設定已儲存，營業規則與品牌色已同步更新。')).toBeVisible();
 }
 
+async function assertNoticeBanner(page: Page, expected: string) {
+  await expect(page.getByText(expected)).toBeVisible();
+}
+
 test.describe('core demo flows', () => {
   test.skip(
     !strictCoreFlows || !email || !password,
     'SMOKE_STRICT_CORE_FLOWS=true with TEST_USER_EMAIL and TEST_USER_PASSWORD is required for strict core smoke coverage',
   );
+
+  test('core module notice banners render with correct text from search params', async ({ page }) => {
+    await login(page);
+
+    await page.goto('/services?message=service_created');
+    await assertNoticeBanner(page, '服務項目已建立，可直接用於預約與報價。');
+
+    await page.goto('/inventory?message=inventory_item_saved');
+    await assertNoticeBanner(page, '庫存品項已儲存。');
+
+    await page.goto('/staff?message=staff_updated');
+    await assertNoticeBanner(page, '員工資料已更新。');
+
+    await page.goto('/appointments?message=appointment_created');
+    await assertNoticeBanner(page, '預約已建立，客戶、技師與服務都已寫入。');
+
+    await page.goto('/checkout?message=order_created');
+    await assertNoticeBanner(page, '訂單已成功建立。');
+  });
 
   test('authenticated owner can operate the core modules', async ({ page }) => {
     await login(page);
