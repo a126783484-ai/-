@@ -17,7 +17,7 @@ on:
           - test-basic
   push:
     paths:
-      - "vm-command-request.txt"
+      - "runner-health-trigger.txt"
 
 permissions:
   contents: read
@@ -32,25 +32,11 @@ jobs:
     runs-on: [self-hosted, beauty-os-vm]
     timeout-minutes: 20
     env:
-      VM_ACTION: ${{ github.event_name == 'workflow_dispatch' && inputs.action || '' }}
+      VM_ACTION: ${{ github.event_name == 'workflow_dispatch' && inputs.action || 'health' }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Resolve request action
-        if: github.event_name == 'push'
-        run: |
-          ACTION="$(head -n 1 vm-command-request.txt | tr -d '[:space:]')"
-          case "$ACTION" in
-            health|processes|runner-status|repo-status|system-services|test-basic)
-              echo "VM_ACTION=$ACTION" >> "$GITHUB_ENV"
-              ;;
-            *)
-              echo "Unsupported action in vm-command-request.txt: $ACTION"
-              exit 2
-              ;;
-          esac
 
       - name: Run VM command bridge
         run: bash scripts/vm-command-bridge.sh
