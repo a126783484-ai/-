@@ -1,4 +1,8 @@
-export const checkoutMessageText: Record<string, string> = {};
+export const checkoutMessageText: Record<string, string> = {
+  order_created: "訂單已成功建立。",
+  order_line_added: "已成功新增一筆明細。",
+  order_line_removed: "已成功移除一筆明細。",
+};
 
 export const checkoutErrorText: Record<string, string> = {
   order_config_missing: "建立訂單前，請先完成 Supabase 連線與結帳必要設定，再回來重試。",

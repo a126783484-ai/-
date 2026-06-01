@@ -885,12 +885,12 @@ export async function saveOrder(formData: FormData) {
     }
 
     await recordCustomerVisitAfterOrder(supabase, workspaceId, customerId, status);
-
-    refreshApp();
   } catch (error) {
     console.error("saveOrder failed", error);
     redirectWithError("/checkout", checkoutErrorCode(error));
   }
+  refreshApp();
+  redirect(`/checkout?${buildSearchParams({ message: "order_created" })}`);
 }
 
 export async function addOrderLine(formData: FormData) {
@@ -922,11 +922,12 @@ export async function addOrderLine(formData: FormData) {
     if (consumptionPlan.length) {
       await consumeInventoryForOrder(supabase, orderId, consumptionPlan);
     }
-    refreshApp();
   } catch (error) {
     console.error("addOrderLine failed", error);
     redirectWithError("/checkout", checkoutErrorCode(error));
   }
+  refreshApp();
+  redirect(`/checkout?${buildSearchParams({ message: "order_line_added" })}`);
 }
 
 export async function removeOrderLine(formData: FormData) {
@@ -942,11 +943,12 @@ export async function removeOrderLine(formData: FormData) {
       .eq("id", lineId)
       .eq("order_id", orderId);
     if (error) throw new Error(`移除訂單明細失敗：${error.message}`);
-    refreshApp();
   } catch (error) {
     console.error("removeOrderLine failed", error);
     redirectWithError("/checkout", checkoutErrorCode(error));
   }
+  refreshApp();
+  redirect(`/checkout?${buildSearchParams({ message: "order_line_removed" })}`);
 }
 
 export async function updateWorkspaceSettings(formData: FormData) {
