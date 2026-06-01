@@ -793,6 +793,12 @@ async function buildSingleOrderLine(
   throw new Error("請先選擇服務或輸入自訂項目。");
 }
 
+function omitOrderLineCategory<T extends { category?: string }>(line: T) {
+  const { category, ...rest } = line;
+  void category;
+  return rest;
+}
+
 export async function saveOrder(formData: FormData) {
   try {
     const { supabase, workspaceId, role } = await getActiveWorkspace();
@@ -861,7 +867,7 @@ export async function saveOrder(formData: FormData) {
 
     const { error: linesError } = await supabase
       .from("order_lines")
-      .insert(lineTemplates.map(({ category: _category, ...line }) => ({ ...line, order_id: order.id })));
+      .insert(lineTemplates.map((line) => ({ ...omitOrderLineCategory(line), order_id: order.id })));
     if (linesError) throw new Error(`建立訂單明細失敗：${linesError.message}`);
 
     if (consumptionPlan.length) {
@@ -909,7 +915,7 @@ export async function addOrderLine(formData: FormData) {
 
     const { error } = await supabase
       .from("order_lines")
-      .insert(lines.map(({ category: _category, ...line }) => ({ ...line, order_id: orderId })));
+      .insert(lines.map((line) => ({ ...omitOrderLineCategory(line), order_id: orderId })));
     if (error) throw new Error(`新增訂單明細失敗：${error.message}`);
     if (consumptionPlan.length) {
       await consumeInventoryForOrder(supabase, orderId, consumptionPlan);

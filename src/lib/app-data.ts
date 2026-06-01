@@ -12,7 +12,6 @@ import type {
   ServiceCategory,
   ServiceItem,
   Shift,
-  ShiftLeaveType,
   StaffInvite,
   StaffMember,
   Workspace,
