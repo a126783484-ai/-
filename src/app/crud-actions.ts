@@ -411,10 +411,12 @@ export async function deleteOrArchiveCustomer(formData: FormData) {
 }
 
 export async function saveService(formData: FormData) {
+  let isUpdate = false;
   try {
     const { supabase, workspaceId, role } = await getActiveWorkspace();
     requirePermission(role, "services", "你沒有權限建立或更新服務項目。");
     const id = optionalText(formData, "id");
+    isUpdate = !!id;
     const name = text(formData, "name");
     const price = integerValue(formData, "price");
     const durationMin = integerValue(formData, "duration_min", 30);
@@ -447,11 +449,11 @@ export async function saveService(formData: FormData) {
       : await supabase.from("services").insert(payload);
 
     if (result.error) throw new Error(`儲存服務失敗：${result.error.message}`);
-    refreshApp();
   } catch (error) {
     console.error("saveService failed", error);
     redirectWithError("/services", serviceErrorCode(error));
   }
+  redirect(`/services?${buildSearchParams({ message: isUpdate ? "service_updated" : "service_created" })}`);
 }
 
 export async function setServiceEnabled(formData: FormData) {
@@ -466,11 +468,11 @@ export async function setServiceEnabled(formData: FormData) {
       .eq("id", id)
       .eq("workspace_id", workspaceId);
     if (error) throw new Error(`更新服務狀態失敗：${error.message}`);
-    refreshApp();
   } catch (error) {
     console.error("setServiceEnabled failed", error);
     redirectWithError("/services", serviceErrorCode(error));
   }
+  redirect(`/services?${buildSearchParams({ message: "service_enabled_toggled" })}`);
 }
 
 async function appointmentPayload(
