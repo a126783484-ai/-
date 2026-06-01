@@ -2,6 +2,9 @@ name: Hermes Status
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - "hermes-status-trigger.txt"
 
 permissions:
   contents: read
