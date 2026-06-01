@@ -23,10 +23,12 @@ async function login(page: import('@playwright/test').Page) {
 }
 
 test.describe('authenticated smoke flow', () => {
-  test.skip(
-    !authSmokeRequired || !email || !password,
-    'SMOKE_AUTH_REQUIRED=true with TEST_USER_EMAIL and TEST_USER_PASSWORD is required for authenticated smoke tests',
-  );
+  test.beforeEach(() => {
+    test.skip(
+      !authSmokeRequired || !email || !password,
+      'SMOKE_AUTH_REQUIRED=true with TEST_USER_EMAIL and TEST_USER_PASSWORD is required for authenticated smoke tests',
+    );
+  });
 
   test('test user can login and reach dashboard', async ({ page }) => {
     await login(page);
