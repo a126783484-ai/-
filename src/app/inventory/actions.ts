@@ -9,10 +9,10 @@ import type { InventoryMovementType } from "@/lib/types";
 
 type AppSupabaseClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
-function readRequired(formData: FormData, key: string) {
+function readRequired(formData: FormData, key: string, errorCode = "inventory_invalid_input") {
   const value = formData.get(key);
   if (typeof value !== "string" || value.trim().length === 0) {
-    fail("inventory_invalid_input");
+    fail(errorCode);
   }
   return value.trim();
 }
@@ -96,8 +96,8 @@ export async function saveInventoryItemAction(formData: FormData) {
   }
 
   const id = readOptional(formData, "id");
-  const name = readRequired(formData, "name");
-  const category = readRequired(formData, "category");
+  const name = readRequired(formData, "name", "inventory_item_invalid_input");
+  const category = readRequired(formData, "category", "inventory_item_invalid_input");
   const brand = readOptional(formData, "brand");
   const cost = readNumber(formData, "cost");
   const retailPrice = readNumber(formData, "retail_price");
