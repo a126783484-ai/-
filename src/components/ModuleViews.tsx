@@ -7,14 +7,14 @@ import {
   addOrderLine,
   deleteOrArchiveCustomer,
   removeOrderLine,
-  saveAppointment,
   saveCustomer,
   saveOrder,
   saveService,
   setServiceEnabled,
-  updateAppointmentStatus,
   updateWorkspaceSettings,
 } from "@/app/crud-actions";
+import { createAppointmentAction } from "@/app/appointments/actions";
+import { updateAppointmentAction, updateAppointmentStatusAction } from "@/app/appointments/update-actions";
 import { recordInventoryMovementAction, saveInventoryItemAction } from "@/app/inventory/actions";
 import { createStaffAction, createStaffInviteAction, updateStaffAction, saveStaffShiftAction } from "@/app/staff/actions";
 import { AppShell } from "@/components/AppShell";
@@ -903,8 +903,8 @@ function AppointmentForm({
     dependencySummary.missingStaff ? "可指派員工" : null,
   ].filter(Boolean);
   return (
-    <form action={saveAppointment} className="card p-5">
-      <input type="hidden" name="id" value={appointment?.id ?? ""} />
+    <form action={appointment ? updateAppointmentAction : createAppointmentAction} className="card p-5">
+      {appointment ? <input type="hidden" name="appointmentId" value={appointment.id} /> : null}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h2 className="text-lg font-bold text-plum">
           {appointment ? "編輯預約" : "新增預約"}
@@ -965,7 +965,7 @@ function AppointmentForm({
           客戶
           <select
             required
-            name="customer_id"
+            name="customerId"
             className={fieldClass()}
             defaultValue={appointment?.customerId ?? ""}
             disabled={data.customers.length === 0}
@@ -985,7 +985,7 @@ function AppointmentForm({
           技師
           <select
             required
-            name="technician_id"
+            name="technicianId"
             className={fieldClass()}
             defaultValue={
               appointment?.technicianId ??
@@ -1010,36 +1010,25 @@ function AppointmentForm({
           <input
             required
             type="datetime-local"
-            name="start_at"
+            name="startAt"
             className={fieldClass()}
             defaultValue={
               compactDateTime(appointment?.startAt) || fallbackStart
             }
           />
+          <p className="mt-1 text-xs font-normal text-ink/60">結束時間由所選服務自動計算，不需手動填寫。</p>
         </label>
         <label className="text-sm font-semibold text-plum">
-          結束時間
-          <input
-            required
-            type="datetime-local"
-            name="end_at"
-            className={fieldClass()}
-            defaultValue={compactDateTime(appointment?.endAt)}
-          />
-        </label>
-        <label className="text-sm font-semibold text-plum">
-          狀態
-          <select
-            name="status"
-            className={fieldClass()}
-            defaultValue={appointment?.status ?? "pending"}
-          >
-            {appointmentStatuses.map((status) => (
-              <option key={status} value={status}>
-                {statusLabel(status)}
-              </option>
-            ))}
-          </select>
+          目前狀態
+          {appointment ? (
+            <div className="mt-2">
+              <StatusPill tone={appointmentStatusTone(appointment.status)}>
+                {statusLabel(appointment.status)}
+              </StatusPill>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm font-normal text-ink/60">建立後預設為「待確認」</p>
+          )}
         </label>
         <label className="text-sm font-semibold text-plum">
           來源
@@ -1057,7 +1046,7 @@ function AppointmentForm({
           <legend className="px-2 text-sm font-bold text-plum">
             服務（可複選）
           </legend>
-          <p className="mt-1 text-xs text-ink/60">所選服務會一起算進這筆預約，請把實際要做的項目勾選完整。</p>
+          <p className="mt-1 text-xs text-ink/60">所選服務會一起算進這筆預約，結束時間由服務所需分鐘數自動加總。</p>
           {data.services.some((service) => service.enabled || selectedServiceIds.has(service.id)) ? (
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               {data.services
@@ -1069,7 +1058,7 @@ function AppointmentForm({
                   >
                     <input
                       type="checkbox"
-                      name="service_ids"
+                      name="serviceIds"
                       value={service.id}
                       defaultChecked={appointment?.serviceIds.includes(
                         service.id,
@@ -1086,7 +1075,7 @@ function AppointmentForm({
                 ))}
             </div>
           ) : (
-            <p className="mt-2 text-sm text-ink/60">目前沒有可用服務，請先新增至少一項服務，或改用自訂項目開單。</p>
+            <p className="mt-2 text-sm text-ink/60">目前沒有可用服務，請先新增至少一項服務後再建立預約。</p>
           )}
         </fieldset>
         <label className="text-sm font-semibold text-plum md:col-span-2">
@@ -1100,7 +1089,7 @@ function AppointmentForm({
         <div className="md:col-span-2 rounded-3xl bg-white/80 p-4 text-sm text-ink/70">
           <p className="font-semibold text-plum">狀態提醒</p>
           <p className="mt-1">
-            狀態只影響流程標記，不會自動改客戶、技師、時間或服務；要改排程內容請直接編輯預約。
+            狀態只影響流程標記，不會自動改客戶、技師、時間或服務；要改排程內容請直接編輯預約，要改狀態請在下方預約清單操作。
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {appointmentStatuses.map((status) => (
@@ -1125,6 +1114,9 @@ function AppointmentForm({
       <div className="mt-4">
         <SubmitButton className="w-full sm:w-auto" disabled={!dependencySummary.ready}>{appointment ? "更新預約" : "建立預約"}</SubmitButton>
       </div>
+      {!dependencySummary.ready ? (
+        <p className="mt-2 text-sm text-ink/60">先建立缺少的資料後，即可建立或更新預約。</p>
+      ) : null}
     </form>
   );
 }
@@ -2298,8 +2290,8 @@ export function AppointmentsView({
                       >
                         編輯
                       </button>
-                      <form action={updateAppointmentStatus} className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-                        <input type="hidden" name="id" value={row.id} />
+                      <form action={updateAppointmentStatusAction} className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                        <input type="hidden" name="appointmentId" value={row.id} />
                         <select
                           name="status"
                           className="mobile-tap w-full rounded-xl border border-champagne px-2 py-2 sm:w-40"
