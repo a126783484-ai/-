@@ -1,0 +1,24 @@
+name: Hermes Status
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  hermes-status:
+    name: Inspect Hermes on VM
+    runs-on: [self-hosted, beauty-os-vm]
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Inspect Hermes status
+        run: bash scripts/hermes-status.sh
