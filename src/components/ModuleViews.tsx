@@ -1993,31 +1993,35 @@ export function DashboardView({ data }: { data: AppData }) {
           ]}
         />
       ) : null}
-      <div className="mt-5">
-        <BusinessHealthPanel data={data} compact />
-      </div>
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          label="今日預約數"
-          value={metrics.todayAppointments}
-          hint="含待確認與已確認"
-        />
-        <MetricCard
-          label="今日營收"
-          value={currency.format(metrics.todayRevenue)}
-          hint="依訂單建立日統計"
-        />
-        <MetricCard
-          label="本月營收"
-          value={currency.format(metrics.monthRevenue)}
-          hint="可接正式報表週期"
-        />
-        <MetricCard
-          label="待付款"
-          value={currency.format(metrics.pendingPayment)}
-          hint="未付款 / 部分付款"
-        />
-      </section>
+      {!data.needsWorkspace && !setupGuide ? (
+        <>
+          <div className="mt-5">
+            <BusinessHealthPanel data={data} compact />
+          </div>
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard
+              label="今日預約數"
+              value={metrics.todayAppointments}
+              hint="含待確認與已確認"
+            />
+            <MetricCard
+              label="今日營收"
+              value={currency.format(metrics.todayRevenue)}
+              hint="依訂單建立日統計"
+            />
+            <MetricCard
+              label="本月營收"
+              value={currency.format(metrics.monthRevenue)}
+              hint="可接正式報表週期"
+            />
+            <MetricCard
+              label="待付款"
+              value={currency.format(metrics.pendingPayment)}
+              hint="未付款 / 部分付款"
+            />
+          </section>
+        </>
+      ) : null}
       <section className="mt-5 grid gap-5 xl:grid-cols-[1.25fr_.75fr]">
         <div className="card p-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -3941,6 +3945,8 @@ export function ReportsView({
           />
         </div>
       ) : null}
+      {!data.needsWorkspace && !setupGuide && !workspaceEmpty ? (
+        <>
       <section className="card p-5 print:border-0 print:bg-transparent print:p-0">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -4309,6 +4315,8 @@ export function ReportsView({
           </div>
         )}
       </section>
+        </>
+      ) : null}
     </AppShell>
   );
 }
