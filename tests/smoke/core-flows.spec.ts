@@ -137,17 +137,32 @@ test.describe('core demo flows', () => {
     await page.goto('/services?message=service_created');
     await assertNoticeBanner(page, '服務項目已建立，可直接用於預約與報價。');
 
+    await page.goto('/services?error=service_forbidden');
+    await assertNoticeBanner(page, '請聯絡店主或管理員，開啟你建立服務項目的權限。');
+
     await page.goto('/inventory?message=inventory_item_saved');
     await assertNoticeBanner(page, '庫存品項已儲存。');
+
+    await page.goto('/inventory?error=inventory_insufficient_stock');
+    await assertNoticeBanner(page, '庫存不足，無法完成出庫，請先補貨或改成數量調整後再試。');
 
     await page.goto('/staff?message=staff_updated');
     await assertNoticeBanner(page, '員工資料已更新。');
 
+    await page.goto('/staff?error=staff_forbidden');
+    await assertNoticeBanner(page, '請聯絡店主或管理員，開啟你更新員工資料的權限。');
+
     await page.goto('/appointments?message=appointment_created');
     await assertNoticeBanner(page, '預約已建立，客戶、技師與服務都已寫入。');
 
+    await page.goto('/appointments?error=appointment_conflict');
+    await assertNoticeBanner(page, '同一位技師在這段時間已有重疊預約，請改時間或改派其他技師。');
+
     await page.goto('/checkout?message=order_created');
     await assertNoticeBanner(page, '訂單已成功建立。');
+
+    await page.goto('/checkout?error=order_forbidden');
+    await assertNoticeBanner(page, '請聯絡店主或管理員，開啟你建立訂單的權限。');
   });
 
   test('authenticated owner can operate the core modules', async ({ page }) => {

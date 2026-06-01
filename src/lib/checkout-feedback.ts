@@ -17,7 +17,7 @@ export function readCheckoutParam(value: string | string[] | undefined) {
 
 export function getCheckoutMessage(code: string | undefined) {
   if (!code) return undefined;
-  return checkoutMessageText[code];
+  return checkoutMessageText[code] ?? checkoutMessageText.order_created;
 }
 
 export function getCheckoutError(code: string | undefined) {
