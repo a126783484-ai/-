@@ -1,0 +1,100 @@
+name: VM Health Check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  vm-health-check:
+    name: Check Beauty OS self-hosted VM
+    runs-on: [self-hosted, beauty-os-vm]
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Basic VM status
+        run: |
+          {
+            echo "# VM Health Check"
+            echo ""
+            echo "## Basic"
+            echo "- Timestamp UTC: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            echo "- Hostname: $(hostname)"
+            echo "- User: $(whoami)"
+            echo "- Working directory: $(pwd)"
+            echo ""
+            echo "## Uptime"
+            uptime || true
+            echo ""
+            echo "## Memory"
+            free -h || true
+            echo ""
+            echo "## Disk"
+            df -h . || true
+          } | tee vm-health-summary.md
+
+      - name: Detect AI/dev processes safely
+        run: |
+          {
+            echo "" 
+            echo "## Matching process names"
+            echo "Only process command names are printed. Full command args are intentionally hidden to avoid leaking secrets."
+            ps -eo pid,ppid,user,stat,etime,comm \
+              | awk 'BEGIN{IGNORECASE=1} /codex|hermes|opencode|claude|node|npm|pnpm|yarn|pm2|ollama|openrouter|groq|playwright|next|vercel/ {print}' \
+              || true
+          } | tee -a vm-health-summary.md
+
+      - name: Check tmux, screen, PM2, Docker, systemd, cron
+        run: |
+          {
+            echo ""
+            echo "## tmux"
+            tmux ls 2>/dev/null || echo "no tmux or no permission"
+            echo ""
+            echo "## screen"
+            screen -ls 2>/dev/null || echo "no screen or no permission"
+            echo ""
+            echo "## PM2"
+            pm2 list 2>/dev/null || echo "no pm2 or no permission"
+            echo ""
+            echo "## Docker"
+            docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' 2>/dev/null || echo "no docker or no permission"
+            echo ""
+            echo "## systemd matching services"
+            systemctl --type=service --state=running --no-pager 2>/dev/null \
+              | awk 'BEGIN{IGNORECASE=1} /codex|hermes|opencode|node|pm2|ollama|n8n|runner/ {print}' \
+              || echo "no matching running service or no permission"
+            echo ""
+            echo "## user cron presence"
+            if crontab -l >/dev/null 2>&1; then
+              echo "user crontab exists; not printing contents to avoid leaking secrets"
+            else
+              echo "no user crontab or no permission"
+            fi
+          } | tee -a vm-health-summary.md
+
+      - name: Repository state
+        run: |
+          {
+            echo ""
+            echo "## Git status"
+            git status --short || true
+            echo ""
+            echo "## Current branch"
+            git branch --show-current || true
+            echo ""
+            echo "## Recent commits"
+            git log --oneline -10 || true
+          } | tee -a vm-health-summary.md
+
+      - name: Write job summary
+        if: always()
+        run: cat vm-health-summary.md >> "$GITHUB_STEP_SUMMARY"
