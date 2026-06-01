@@ -1,0 +1,39 @@
+name: VM Command Bridge
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Safe VM action to run"
+        required: true
+        default: "health"
+        type: choice
+        options:
+          - health
+          - processes
+          - runner-status
+          - repo-status
+          - system-services
+          - test-basic
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  vm-command:
+    name: Run safe VM command
+    runs-on: [self-hosted, beauty-os-vm]
+    timeout-minutes: 20
+    env:
+      VM_ACTION: ${{ inputs.action }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run VM command bridge
+        run: bash scripts/vm-command-bridge.sh
