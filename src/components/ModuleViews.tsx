@@ -1677,15 +1677,26 @@ function InventoryItemForm({
   );
 }
 
-function StaffForm({ staff }: { staff?: StaffMember }) {
+function StaffForm({ staff, onCancel }: { staff?: StaffMember; onCancel?: () => void }) {
   const action = staff ? updateStaffAction : createStaffAction;
 
   return (
     <form action={action} className="card p-5">
       <input type="hidden" name="memberId" value={staff?.id ?? ""} />
-      <h2 className="text-lg font-bold text-plum">
-        {staff ? "編輯員工" : "新增員工 / 邀請"}
-      </h2>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <h2 className="text-lg font-bold text-plum">
+          {staff ? "編輯員工" : "新增員工 / 邀請"}
+        </h2>
+        {staff && onCancel ? (
+          <button
+            type="button"
+            className="mobile-tap w-full rounded-2xl bg-white px-4 py-2 text-sm font-semibold text-plum sm:w-auto"
+            onClick={onCancel}
+          >
+            取消編輯
+          </button>
+        ) : null}
+      </div>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         {!staff ? (
           <label className="text-sm font-semibold text-plum">
@@ -3516,7 +3527,7 @@ export function StaffView({
           </div>
         ) : null}
         <div className="mb-5 grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
-          {canManageStaff ? <StaffForm key={editing?.id ?? "new"} staff={editing} /> : null}
+          {canManageStaff ? <StaffForm key={editing?.id ?? "new"} staff={editing} onCancel={editing ? () => setEditingId(null) : undefined} /> : null}
           <div className="card p-5">
             <h2 className="text-lg font-bold text-plum">人事概況</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

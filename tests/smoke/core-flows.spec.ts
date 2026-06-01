@@ -38,6 +38,89 @@ async function exerciseOptionalEditFlow(page: Page, editHeading: string, createH
   await expect(page.getByRole('heading', { name: createHeading })).toBeVisible();
 }
 
+async function toggleFirstServiceAndRestore(page: Page) {
+  const toggleButtons = page.getByRole('button', { name: /^(停用|啟用)$/ });
+  if ((await toggleButtons.count()) === 0) return;
+
+  const firstToggle = toggleButtons.first();
+  const originalLabel = (await firstToggle.innerText()).trim();
+  const restoreLabel = originalLabel === '停用' ? '啟用' : '停用';
+
+  await firstToggle.click();
+  await expect(page.getByText('服務啟用狀態已更新。')).toBeVisible();
+  await expect(page.getByRole('button', { name: restoreLabel }).first()).toBeVisible();
+
+  await page.getByRole('button', { name: restoreLabel }).first().click();
+  await expect(page.getByText('服務啟用狀態已更新。')).toBeVisible();
+}
+
+async function recordAndRevertInventoryMovement(page: Page) {
+  const movementButton = page.getByRole('button', { name: '記錄異動' });
+  if ((await movementButton.count()) === 0) return;
+
+  const itemSelect = page.getByLabel('品項');
+  if (!(await itemSelect.count())) return;
+
+  await itemSelect.selectOption({ index: 1 }).catch(() => undefined);
+  const selectedItem = await itemSelect.inputValue().catch(() => '');
+  if (!selectedItem) return;
+
+  await page.getByLabel('類型').selectOption('purchase');
+  await page.getByLabel('數量 / 異動量（調整可填負數）').fill('1');
+  await page.getByLabel('備註').fill('smoke-increment');
+  await movementButton.click();
+  await expect(page.getByText('庫存異動已記錄。')).toBeVisible();
+  await expect(page.getByText('smoke-increment')).toBeVisible();
+
+  await page.getByLabel('類型').selectOption('adjust');
+  await page.getByLabel('數量 / 異動量（調整可填負數）').fill('-1');
+  await page.getByLabel('備註').fill('smoke-revert');
+  await movementButton.click();
+  await expect(page.getByText('庫存異動已記錄。')).toBeVisible();
+  await expect(page.getByText('smoke-revert')).toBeVisible();
+}
+
+async function rotateAppointmentStatus(page: Page) {
+  const statusForm = page.locator('form').filter({
+    has: page.getByRole('button', { name: '更新狀態' }),
+  }).first();
+  if ((await statusForm.count()) === 0) return;
+
+  const statusSelect = statusForm.locator('select[name="status"]');
+  if ((await statusSelect.count()) === 0) return;
+
+  const originalStatus = await statusSelect.inputValue().catch(() => '');
+  if (!originalStatus) return;
+
+  const statuses = ['pending', 'confirmed', 'in_service', 'completed', 'cancelled', 'no_show'];
+  const nextStatus = statuses.find((status) => status !== originalStatus);
+  if (!nextStatus) return;
+
+  await statusSelect.selectOption(nextStatus);
+  await statusForm.getByRole('button', { name: '更新狀態' }).click();
+  await expect(page.getByText('預約狀態已更新。')).toBeVisible();
+
+  await statusSelect.selectOption(originalStatus);
+  await statusForm.getByRole('button', { name: '更新狀態' }).click();
+  await expect(page.getByText('預約狀態已更新。')).toBeVisible();
+}
+
+async function saveAndRestoreWorkspaceColor(page: Page) {
+  const brandColorInput = page.locator('input[name="brandColor"]');
+  if ((await brandColorInput.count()) === 0) return;
+
+  const originalColor = (await brandColorInput.inputValue().catch(() => '#c87486')).toLowerCase();
+  const alternateColor = originalColor === '#c87486' ? '#4d3556' : '#c87486';
+
+  await brandColorInput.fill(alternateColor);
+  await page.getByRole('button', { name: '儲存設定' }).click();
+  await expect(page.getByText('店鋪設定已儲存，營業規則與品牌色已同步更新。')).toBeVisible();
+
+  await brandColorInput.fill(originalColor);
+  await page.getByRole('button', { name: '儲存設定' }).click();
+  await expect(page.getByText('店鋪設定已儲存，營業規則與品牌色已同步更新。')).toBeVisible();
+}
+
 test.describe('core demo flows', () => {
   test.skip(
     !strictCoreFlows || !email || !password,
@@ -51,6 +134,7 @@ test.describe('core demo flows', () => {
     await expect(page.getByRole('heading', { name: '服務項目管理' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '新增服務' })).toBeVisible();
     await exerciseOptionalEditFlow(page, '編輯服務', '新增服務');
+    await toggleFirstServiceAndRestore(page);
 
     await expectNoServerError(page, '/customers');
     await expect(page.getByRole('heading', { name: '客戶 CRM' })).toBeVisible();
@@ -61,18 +145,21 @@ test.describe('core demo flows', () => {
     await expect(page.getByRole('heading', { name: '庫存管理' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '建立庫存品項' })).toBeVisible();
     await exerciseOptionalEditFlow(page, '編輯庫存品項', '建立庫存品項');
+    await recordAndRevertInventoryMovement(page);
 
     await expectNoServerError(page, '/staff');
     await expect(page.getByRole('heading', { name: '員工 / 技師管理' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '新增員工 / 邀請' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '新增班表' })).toBeVisible();
     await expect(page.getByRole('button', { name: '新增班表' }).first()).toBeVisible();
+    await exerciseOptionalEditFlow(page, '編輯員工', '新增員工 / 邀請');
 
     await expectNoServerError(page, '/appointments');
     await expect(page.getByRole('heading', { name: '預約系統' })).toBeVisible();
     await expect(page.getByText('預約資料會即時寫入資料庫')).toBeVisible();
     await expect(page.getByRole('heading', { name: '新增預約' })).toBeVisible();
     await exerciseOptionalEditFlow(page, '編輯預約', '新增預約');
+    await rotateAppointmentStatus(page);
 
     await expectNoServerError(page, '/checkout');
     await expect(page.getByRole('heading', { name: '訂單 / 結帳 / 收款' })).toBeVisible();
@@ -95,5 +182,6 @@ test.describe('core demo flows', () => {
     await expectNoServerError(page, '/settings');
     await expect(page.getByRole('heading', { name: '店鋪設定' })).toBeVisible();
     await expect(page.getByRole('button', { name: '儲存設定' })).toBeVisible();
+    await saveAndRestoreWorkspaceColor(page);
   });
 });
