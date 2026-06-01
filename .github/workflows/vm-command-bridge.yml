@@ -15,6 +15,9 @@ on:
           - repo-status
           - system-services
           - test-basic
+  push:
+    paths:
+      - ".vm-commands/request.json"
 
 permissions:
   contents: read
@@ -29,7 +32,7 @@ jobs:
     runs-on: [self-hosted, beauty-os-vm]
     timeout-minutes: 20
     env:
-      VM_ACTION: ${{ inputs.action }}
+      VM_ACTION: ${{ github.event_name == 'workflow_dispatch' && inputs.action || '' }}
 
     steps:
       - name: Checkout repository
