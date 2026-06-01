@@ -127,3 +127,14 @@ test.describe('authenticated smoke flow', () => {
     ]);
   });
 });
+
+test.describe('login form validation', () => {
+  test('invalid credentials show error alert', async ({ page }) => {
+    await page.goto('/login');
+    await page.getByPlaceholder('Email').fill('bad@creds.com');
+    await page.getByPlaceholder('密碼').fill('hunter2');
+    await page.getByRole('button', { name: /登入 Workspace/i }).click();
+    await expect(page).toHaveURL(/\/login/);
+    await expect(page.getByRole('alert')).toBeVisible({ timeout: 15_000 });
+  });
+});

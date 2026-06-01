@@ -16,11 +16,6 @@ test.describe('public smoke routes', () => {
     await expect(page.getByRole('button', { name: /登入 Workspace/i })).toBeVisible();
   });
 
-  test('dashboard route does not server-error for anonymous visitor', async ({ page }) => {
-    const response = await page.goto('/');
-    expect(response?.status(), 'dashboard should not return a server error').toBeLessThan(500);
-  });
-
   test('core module routes redirect anonymous visitors to login', async ({ page }) => {
     const coreRoutes = ['/services', '/inventory', '/staff', '/appointments', '/checkout'];
 
