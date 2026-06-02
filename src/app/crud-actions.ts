@@ -411,10 +411,12 @@ export async function deleteOrArchiveCustomer(formData: FormData) {
 }
 
 export async function saveService(formData: FormData) {
+  let isUpdate = false;
   try {
     const { supabase, workspaceId, role } = await getActiveWorkspace();
     requirePermission(role, "services", "你沒有權限建立或更新服務項目。");
     const id = optionalText(formData, "id");
+    isUpdate = !!id;
     const name = text(formData, "name");
     const price = integerValue(formData, "price");
     const durationMin = integerValue(formData, "duration_min", 30);
@@ -447,11 +449,11 @@ export async function saveService(formData: FormData) {
       : await supabase.from("services").insert(payload);
 
     if (result.error) throw new Error(`儲存服務失敗：${result.error.message}`);
-    refreshApp();
   } catch (error) {
     console.error("saveService failed", error);
     redirectWithError("/services", serviceErrorCode(error));
   }
+  redirect(`/services?${buildSearchParams({ message: isUpdate ? "service_updated" : "service_created" })}`);
 }
 
 export async function setServiceEnabled(formData: FormData) {
@@ -466,11 +468,11 @@ export async function setServiceEnabled(formData: FormData) {
       .eq("id", id)
       .eq("workspace_id", workspaceId);
     if (error) throw new Error(`更新服務狀態失敗：${error.message}`);
-    refreshApp();
   } catch (error) {
     console.error("setServiceEnabled failed", error);
     redirectWithError("/services", serviceErrorCode(error));
   }
+  redirect(`/services?${buildSearchParams({ message: "service_enabled_toggled" })}`);
 }
 
 async function appointmentPayload(
@@ -793,6 +795,12 @@ async function buildSingleOrderLine(
   throw new Error("請先選擇服務或輸入自訂項目。");
 }
 
+function omitOrderLineCategory<T extends { category?: string }>(line: T) {
+  const { category, ...rest } = line;
+  void category;
+  return rest;
+}
+
 export async function saveOrder(formData: FormData) {
   try {
     const { supabase, workspaceId, role } = await getActiveWorkspace();
@@ -861,7 +869,7 @@ export async function saveOrder(formData: FormData) {
 
     const { error: linesError } = await supabase
       .from("order_lines")
-      .insert(lineTemplates.map(({ category: _category, ...line }) => ({ ...line, order_id: order.id })));
+      .insert(lineTemplates.map((line) => ({ ...omitOrderLineCategory(line), order_id: order.id })));
     if (linesError) throw new Error(`建立訂單明細失敗：${linesError.message}`);
 
     if (consumptionPlan.length) {
@@ -877,12 +885,12 @@ export async function saveOrder(formData: FormData) {
     }
 
     await recordCustomerVisitAfterOrder(supabase, workspaceId, customerId, status);
-
-    refreshApp();
   } catch (error) {
     console.error("saveOrder failed", error);
     redirectWithError("/checkout", checkoutErrorCode(error));
   }
+  refreshApp();
+  redirect(`/checkout?${buildSearchParams({ message: "order_created" })}`);
 }
 
 export async function addOrderLine(formData: FormData) {
@@ -909,16 +917,17 @@ export async function addOrderLine(formData: FormData) {
 
     const { error } = await supabase
       .from("order_lines")
-      .insert(lines.map(({ category: _category, ...line }) => ({ ...line, order_id: orderId })));
+      .insert(lines.map((line) => ({ ...omitOrderLineCategory(line), order_id: orderId })));
     if (error) throw new Error(`新增訂單明細失敗：${error.message}`);
     if (consumptionPlan.length) {
       await consumeInventoryForOrder(supabase, orderId, consumptionPlan);
     }
-    refreshApp();
   } catch (error) {
     console.error("addOrderLine failed", error);
     redirectWithError("/checkout", checkoutErrorCode(error));
   }
+  refreshApp();
+  redirect(`/checkout?${buildSearchParams({ message: "order_line_added" })}`);
 }
 
 export async function removeOrderLine(formData: FormData) {
@@ -934,11 +943,12 @@ export async function removeOrderLine(formData: FormData) {
       .eq("id", lineId)
       .eq("order_id", orderId);
     if (error) throw new Error(`移除訂單明細失敗：${error.message}`);
-    refreshApp();
   } catch (error) {
     console.error("removeOrderLine failed", error);
     redirectWithError("/checkout", checkoutErrorCode(error));
   }
+  refreshApp();
+  redirect(`/checkout?${buildSearchParams({ message: "order_line_removed" })}`);
 }
 
 export async function updateWorkspaceSettings(formData: FormData) {

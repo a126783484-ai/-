@@ -1,5 +1,7 @@
 export const serviceMessageText: Record<string, string> = {
-  service_created: "服務項目已建立，可直接用於預約與報價。"
+  service_created: "服務項目已建立，可直接用於預約與報價。",
+  service_updated: "服務項目已更新，價格、時間與啟用狀態已同步。",
+  service_enabled_toggled: "服務啟用狀態已更新。",
 };
 
 export const serviceErrorText: Record<string, string> = {

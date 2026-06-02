@@ -24,10 +24,13 @@ Keep Beauty OS AI automation paused, low-cost, reviewable, and unable to pollute
 - Human review is always required.
 - Draft PRs remain draft until a human explicitly reviews them.
 - Auto-merge is off unless a human turns it on later and the PR is still eligible.
+- Before any merge candidate is considered ready, authenticated smoke must pass when `TEST_USER_EMAIL` and `TEST_USER_PASSWORD` are available. If those credentials are unavailable, the smoke test must skip explicitly and the report must say so.
+- Low-risk product changes may be pushed only after lint, typecheck, unit test, build, and authenticated smoke verification have completed successfully or been explicitly skipped for missing credentials.
 
 ## Operational safety
 - Prefer cheap models for simple tasks.
 - Send only task description, relevant file list, selected diff, and minimal required context.
+- Treat Hermes/OpenRouter as a bounded worker: it may draft patches and reports, but it may not merge, deploy, or bypass review.
 - Block writes when repo-path validation fails.
 - Record every blocked path with a reason instead of writing to disk.
 - Validate repo paths before every write.

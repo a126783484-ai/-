@@ -233,29 +233,31 @@ export default async function OperationsCommandCenterPage() {
           />
         </div>
       ) : null}
-      {!data.needsWorkspace && !setupGuide && !workspaceEmpty ? (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <QuickActionLink href="/appointments" label="預約" detail="開啟預約頁" />
-          <QuickActionLink href="/checkout" label="收款" detail="開啟結帳頁" />
-          <QuickActionLink href="/inventory" label="庫存" detail="開啟庫存頁" />
-          <QuickActionLink href="/customers" label="客戶" detail="開啟客戶頁" />
-        </div>
+      {!data.needsWorkspace && !setupGuide ? (
+        <>
+          {!workspaceEmpty ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <QuickActionLink href="/appointments" label="預約" detail="開啟預約頁" />
+              <QuickActionLink href="/checkout" label="收款" detail="開啟結帳頁" />
+              <QuickActionLink href="/inventory" label="庫存" detail="開啟庫存頁" />
+              <QuickActionLink href="/customers" label="客戶" detail="開啟客戶頁" />
+            </div>
+          ) : null}
+          <div className="mt-5">
+            <BusinessHealthPanel data={data} />
+          </div>
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard label="未完成預約" value={closeout.unfinishedAppointments.length} hint="今天先收尾" />
+            <MetricCard label="待收訂單" value={closeout.unpaidOrders.length} hint={`今天要收 ${currency.format(closeout.totalOutstanding)}`} />
+            <MetricCard label="低庫存" value={closeout.lowStockItems.length} hint="今天可補" />
+            <MetricCard
+              label="明日預備"
+              value={`${closeout.tomorrowAppointments.length} / ${closeout.tomorrowShifts.length}`}
+              hint={`明天先確認預約 ${closeout.tomorrowAppointments.length} · 班表 ${closeout.tomorrowShifts.length}`}
+            />
+          </section>
+        </>
       ) : null}
-
-      <div className="mt-5">
-        <BusinessHealthPanel data={data} />
-      </div>
-
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="未完成預約" value={closeout.unfinishedAppointments.length} hint="今天先收尾" />
-        <MetricCard label="待收訂單" value={closeout.unpaidOrders.length} hint={`今天要收 ${currency.format(closeout.totalOutstanding)}`} />
-        <MetricCard label="低庫存" value={closeout.lowStockItems.length} hint="今天可補" />
-        <MetricCard
-          label="明日預備"
-          value={`${closeout.tomorrowAppointments.length} / ${closeout.tomorrowShifts.length}`}
-          hint={`明天先確認預約 ${closeout.tomorrowAppointments.length} · 班表 ${closeout.tomorrowShifts.length}`}
-        />
-      </section>
 
       <section className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
         <div className="card p-5">

@@ -28,10 +28,6 @@ function statusWeight(status: BusinessHealthStatus) {
   return 0;
 }
 
-function normalizeText(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function hasBusinessHours(value: string) {
   const normalized = value.trim();
   if (!normalized || normalized === "{}" || normalized === "\"{}\"") return false;
