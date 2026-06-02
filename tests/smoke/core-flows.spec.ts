@@ -213,6 +213,9 @@ test.describe('core demo flows', () => {
     await expect(page.getByLabel('自訂項目')).toHaveValue('');
     await expect(page.getByLabel('自訂單價')).toHaveValue('0');
 
+    await expect(page.locator('select[name="appointment_id"]')).toBeVisible();
+    await expect(page.getByText('服務明細')).toBeVisible();
+
     await expectNoServerError(page, '/operations');
     await expect(page.getByRole('heading', { name: '營運指揮中心' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '今天要交接' })).toBeVisible();
