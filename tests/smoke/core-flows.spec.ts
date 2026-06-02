@@ -203,9 +203,12 @@ test.describe('core demo flows', () => {
     await expect(page.getByRole('heading', { name: '訂單 / 結帳 / 收款' })).toBeVisible();
     await expect(page.getByRole('heading', { name: '新增訂單 / 預約轉結帳' })).toBeVisible();
     await expect(page.getByText('即時預覽')).toBeVisible();
+    await expect(page.getByText('尚未加入明細')).toBeVisible();
     await page.getByLabel('自訂項目').fill('測試草稿');
     await page.getByLabel('自訂單價').fill('250');
+    await expect(page.getByText('1 筆明細')).toBeVisible();
     await page.getByRole('button', { name: '清空草稿' }).click();
+    await expect(page.getByText('尚未加入明細')).toBeVisible();
     await expect(page.getByLabel('自訂項目')).toHaveValue('');
     await expect(page.getByLabel('自訂單價')).toHaveValue('0');
 
